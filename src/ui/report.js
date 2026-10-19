@@ -58,7 +58,7 @@ export async function drawReport(d, { dark = false } = {}) {
   ctx.fillText(fit(ctx, formatWon(d.saved), 800, 120, W - 280), 140, 430);
   ctx.font = `600 36px ${FONT}`;
   // 100% 넘는 저축률은 환불 때문이라고 짧게 붙임(자세한 설명은 미리보기 아래 문구)
-  const rateText = d.rate != null ? `저축률 ${d.rate < 0 ? '−' : ''}${Math.abs(d.rate)}%${d.rate > 100 ? ' · 환불 덕분' : ''}` : '수입 기록 없음';
+  const rateText = d.rate != null ? `저축률 ${d.rate < 0 ? '−' : ''}${Math.abs(d.rate)}%${d.rate > 100 ? ' · 환불 덕분' : ''}` : '수입 기록이 없어요';
   ctx.fillText(rateText, 140, 520);
   if (d.diff != null) {
     const dt = `지출 지난달보다 ${d.diff > 0 ? `${d.diff}% ↑` : d.diff < 0 ? `${-d.diff}% ↓` : '같음'}`;

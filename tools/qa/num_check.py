@@ -39,7 +39,7 @@ with sync_playwright() as p:
     pg.evaluate("""() => { const d = window.__gagyebu.data;
       for (const ym of ['2026-05','2026-06','2026-07','2026-08','2026-09','2026-10']) d.saveTx({ date: ym + '-16', amount: 550000, kind: 'expense', categoryId: 'housing', memo: '월세 집주인' });
       d.saveTx({ date: '2026-10-02', amount: -49000, kind: 'expense', categoryId: 'fashion', memo: '반품', importHash: '0123456789abcdef' });
-      // D2: 저축 목표 카드 문장(한 달에 …씩 / 목표일이 지났어요 · … 남음 / … 남았어요 / 다 모음)도 검사 대상에 들게
+      // D2: 저축 목표 카드 문장(한 달에 …씩 모으면 돼요 / 목표일이 지났어요 · … 남았어요 / … 남았어요 / 다 모음)도 검사 대상에 들게
       d.saveGoal({ name: '여행', emoji: '✈️', target: 3000000, saved: 1250000, due: '2027-06-30', order: 0 });
       d.saveGoal({ name: '노트북', emoji: '💻', target: 1800000, saved: 400000, due: '2026-09-30', order: 1 });
       d.saveGoal({ name: '비상금', emoji: '🛟', target: 1000000, saved: 111000, order: 2 });

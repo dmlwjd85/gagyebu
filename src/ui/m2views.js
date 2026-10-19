@@ -95,7 +95,7 @@ export function goalsCard(m) {
         <div class="min-w-0 flex-1">
           <button class="relative block w-full text-left min-h-[44px] text-body font-semibold break-words" data-goal-edit="${esc(g.id)}" aria-label="${esc(g.name)} 목표 고치기">${esc(g.name)}</button>
           <p class="tabular-nums" role="progressbar" aria-label="${esc(g.name)} 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p.pct}" aria-valuetext="${p.pct}%, ${formatWon(g.saved || 0)} / ${formatWon(g.target)}"><b class="text-head">${p.pct}%</b> <span class="text-caption">${shortWon(g.saved || 0)} / ${shortWon(g.target)}원</span></p>
-          <p class="text-caption text-ink-sub tabular-nums">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${formatWon(p.left)} 남음` : `한 달에 ${formatWon(p.perMonth)}씩 · ${p.months}달 남음`) : `${formatWon(p.left)} 남았어요`}</p>
+          <p class="text-caption text-ink-sub tabular-nums">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${formatWon(p.left)} 남았어요` : `한 달에 ${formatWon(p.perMonth)}씩 모으면 돼요 · ${p.months}달 남았어요`) : `${formatWon(p.left)} 남았어요`}</p>
           <button class="chip mt-1" data-goal-add="${esc(g.id)}">＋ 모으기</button></div></li>`;
     }).join('')}</ul>` : '<p class="mt-2 text-body text-ink-sub">여행·비상금처럼 모으고 싶은 돈을 정해 보세요. 진행 링으로 보여 줄게요.</p>'}
   </section>`;
