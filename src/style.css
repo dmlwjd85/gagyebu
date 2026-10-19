@@ -311,8 +311,11 @@
 @media (max-width: 339px) { .hsym { display: none; } .app-shell { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); } }
 /* 360px 미만(320폰, 360폰 125% 확대 등): 테마 버튼은 설정 > 화면에도 있으니 위 메뉴에서 빼서 한 줄 유지(남은 버튼은 모두 44px) */
 @media (max-width: 359px) { .app-top [data-action="theme"] { display: none; } }
-/* 오프라인 표시: 자리를 차지하지 않게 설정 버튼 귀퉁이의 작은 표시로 */
-.offline-badge { position: absolute; top: 2px; right: 0; font-size: 12px; line-height: 1; pointer-events: none; }
+/* 오프라인 표시: 자리를 차지하지 않게(위 메뉴 높이·줄 수 그대로) 오른쪽 버튼들 아래 가장자리에 겹친 '오프라인' 글자 배지.
+   흰 글자/짙은 주황 배경 대비 약 5:1, 라이트·다크 모두 같은 색. 스크린리더는 role=status 문구를 읽음 */
+.offline-badge { position: absolute; right: 0; bottom: 0; padding: 1px 6px; border-radius: 999px; background: #B45309; color: #fff;
+  font-size: 10px; line-height: 14px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; pointer-events: none;
+  box-shadow: 0 0 0 2px var(--surface-solid, #fff); z-index: 1; }
 /* 낮은 창(높이 700px 이하)에서 대화상자 위아래 여백을 줄여 폼이 화면 안에 들어가게(QA L8: 360×640 반복 폼 2px 넘침) */
 @media (max-height: 700px) {
   .dlg-wrap.dlg-wrap { padding-top: 8px; padding-bottom: 8px; }

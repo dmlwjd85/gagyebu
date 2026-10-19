@@ -37,7 +37,7 @@ export function topBar(m, { month = true } = {}) {
       <button class="icon-btn" data-month="1" aria-label="다음 달" ${m.viewYm >= m.curYm ? 'disabled' : ''}>›</button>` : ''}
     </div>
     <div class="relative flex flex-wrap items-center gap-1 max-[419px]:gap-0 ml-auto">
-      ${m.offline ? '<span class="offline-badge" role="status" title="오프라인: 연결되면 자동으로 올릴게요"><span aria-hidden="true">☁️</span><span class="sr-only">오프라인. 기록은 저장해 두고 연결되면 자동으로 올릴게요.</span></span>' : ''}
+      ${m.offline ? '<span class="offline-badge" role="status" title="오프라인: 연결되면 자동으로 올릴게요"><span aria-hidden="true">오프라인</span><span class="sr-only">오프라인. 기록은 저장해 두고 연결되면 자동으로 올릴게요.</span></span>' : ''}
       <button class="icon-btn" data-nav="search" aria-label="검색">🔍</button>
       <button class="icon-btn" data-action="theme" aria-label="${m.dark ? '라이트 모드로 전환' : '다크 모드로 전환'}">${m.dark ? '☀️' : '🌙'}</button>
       <button class="icon-btn" data-nav="settings" aria-label="설정">⚙️</button>
