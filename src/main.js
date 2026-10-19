@@ -556,7 +556,9 @@ const reducedMotionNow = () => window.matchMedia?.('(prefers-reduced-motion: red
 const vv = window.visualViewport;
 const kbdCheck = () => {
   const typing = document.activeElement?.matches?.('input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable=true]');
-  document.documentElement.classList.toggle('kbd-open', !!(vv && typing && window.innerHeight - vv.height > 150));
+  // 기준: 보이는 높이가 창 높이의 85% 미만으로 줄고(가로 화면처럼 낮은 창도 비율로), 60px 넘게 줄었을 때
+  const shrink = vv ? window.innerHeight - vv.height : 0;
+  document.documentElement.classList.toggle('kbd-open', !!(vv && typing && shrink > 60 && vv.height < window.innerHeight * 0.85));
 };
 vv?.addEventListener('resize', kbdCheck);
 document.addEventListener('focusin', kbdCheck);
