@@ -582,15 +582,18 @@ function syncRailShift() {
   document.documentElement.style.setProperty('--rail-shift', `${g}px`);
 }
 // 낮은 화면(높이 500px 이하, 폰·태블릿 폭): 본문을 내리면 아래 메뉴를 숨기고, 올리거나 맨 끝에 닿으면 다시 보임(QA M5)
+// 숨김은 transform 만 쓰고 틀(.app-frame)이 overflow: clip 이라 숨김·보임이 바뀌어도 문서 길이가 그대로 → 맨 끝에서 위치가 튀지 않음(QA N7, style.css).
+// 맨 끝 판정은 움직임이 6px 미만이어도 먼저 함(마지막 짧은 움직임으로 끝에 닿아도 숨김으로 남아 아래가 비지 않게).
 const lowMq = window.matchMedia('(max-height: 500px) and (max-width: 1023px)');
 let lastY = window.scrollY;
 window.addEventListener('scroll', () => {
   const y = window.scrollY, root = document.documentElement;
   if (!lowMq.matches) { root.classList.remove('nav-autohide'); lastY = y; return; }
+  const room = document.scrollingElement.scrollHeight - window.innerHeight - y;
+  if (room <= 2) { root.classList.remove('nav-autohide'); lastY = y; return; }
   const dy = y - lastY;
   if (Math.abs(dy) < 6) return;
-  const atEnd = y + window.innerHeight >= document.scrollingElement.scrollHeight - 2;
-  root.classList.toggle('nav-autohide', dy > 0 && y > 24 && !atEnd);
+  root.classList.toggle('nav-autohide', dy > 0 && y > 24);
   lastY = y;
 }, { passive: true });
 lowMq.addEventListener?.('change', () => document.documentElement.classList.remove('nav-autohide'));

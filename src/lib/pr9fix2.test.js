@@ -32,8 +32,8 @@ describe('M5 낮은 화면: 내리면 아래 메뉴 숨김, 올리면 보임', (
     expect(css).toMatch(/html\.nav-autohide \.tabbar:not\(:focus-within\) \{ transform: translateY\(100%\); \}/);
     expect(main).toMatch(/matchMedia\('\(max-height: 500px\) and \(max-width: 1023px\)'\)/);
   });
-  it('내릴 때(24px 이후)만 숨기고, 올리거나 맨 끝에 닿으면 다시 보임', () => {
-    expect(main).toMatch(/toggle\('nav-autohide', dy > 0 && y > 24 && !atEnd\)/);
+  it('내릴 때(24px 이후)만 숨기고, 올리면 다시 보임(맨 끝 근처 처리는 pr9fix3.test.js N7)', () => {
+    expect(main).toMatch(/toggle\('nav-autohide', dy > 0 && y > 24\)/);
   });
   it('움직임 줄이기 설정이면 전환 없이', () => expect(css).toMatch(/prefers-reduced-motion: reduce\) \{ \.tabbar \{ transition: none; \}/));
 });
