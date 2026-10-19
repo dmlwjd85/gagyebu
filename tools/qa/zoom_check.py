@@ -4,7 +4,8 @@
  - scale : 폭 160~1920px × 본문 글자 85~160%
  - tip   : 팁이 메뉴·기록·토스트를 가리지 않는지
  - huge  : 아주 큰 금액(9억대 수입·1억대 지출)을 더해서 검사
- 화면마다 아래 메뉴 5개(화면 안·눌림), 금액·날짜 줄갈림/말줄임/잘림, 팁 가림, 가로 넘침, 낮은 화면 메뉴 비율을 잼.
+ 화면마다 아래 메뉴 5개(화면 안·눌림), 금액·날짜 줄갈림/말줄임/잘림, 팁 가림, 가로 넘침, 낮은 화면 메뉴 비율(맨 위·실제 휠로 160px 내린 뒤·60px 올린 뒤)을 잼.
+ scale 에서는 큰 숫자(data-fit)의 글자 크기를 (폭·화면·순번)별로 배율 순서대로 비교해, 배율을 올렸는데 작아지거나 도넛 금액이 라벨보다 작으면 실패.
  QA 108조합(줌 ≤200%)·scale 에서 하나라도 문제가 있으면 종료 코드 1. 에뮬레이터는 이 실행 전용 프로젝트만 씀(emu.py).
 """
 import sys, json, os
@@ -17,7 +18,8 @@ ONLINE = os.environ.get('ONLINE', '1') == '1'
 WIDTHS = {320:568,360:640,390:844,414:896,768:1024,1024:768,1280:800,1440:900,1920:1080}
 ZOOMS = [25,33,50,67,80,90,100,110,125,150,175,200,300,400]
 VIEWS = ['home', 'calendar', 'chart', 'budget', 'search', 'recurring', 'settings']
-CHECK = r"""(opts) => {
+MENU_JS = r"""window.__menu = () => { const H = window.innerHeight; return Math.round([document.querySelector('.app-top'), document.querySelector('.tabbar')].filter((e) => e && getComputedStyle(e).display !== 'none').reduce((a, e) => { const r = e.getBoundingClientRect(); return a + Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0)); }, 0) / H * 1000) / 10; }"""
+CHECK = r"""(opts) => { const MENU = window.__menu;
   const W = document.documentElement.clientWidth, H = window.innerHeight, out = {tabs: null, amt: [], tip: null, menu: null};
   const vis = (e) => { const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none') return false; const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
   // 1) 아래 메뉴 5개: 화면 안 + 가운데를 누르면 그 버튼
@@ -69,12 +71,12 @@ CHECK = r"""(opts) => {
     const top = (tr.height > 4 && cy > 0 && cy < H) ? document.elementFromPoint(cx, cy) : null;
     out.tip = { pos, overHeader: ov('.app-top'), overTab: ov('.tabbar'), overRecent: ov('[aria-labelledby=recent-h]'), covered: top ? !tip.contains(top) : null };
   }
-  // 4) 낮은 화면: 본문을 조금 내린 상태에서 화면에 늘 붙어 있는 메뉴가 차지하는 비율
-  const sc = getComputedStyle(root).overflowY !== 'visible' ? root : document.scrollingElement;
-  sc.scrollTop = 160;
-  const stuck = [document.querySelector('.app-top'), tb].filter((e) => e && vis(e)).reduce((a, e) => { const r = e.getBoundingClientRect(); return a + Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0)); }, 0);
-  sc.scrollTop = 0;
-  out.menu = Math.round(stuck / H * 100);
+  // 4) 메뉴 비율(맨 위): 화면 안에 보이는 위 메뉴+아래 메뉴 높이 / 화면 높이
+  out.menu = MENU();
+  // 5) 큰 숫자(data-fit) 글자 크기: 같은 화면·같은 순번끼리 배율별로 비교(배율↑인데 작아지면 실패), 도넛 금액 < 라벨이면 실패
+  out.fits = [...root.querySelectorAll('[data-fit]')].filter(vis).map((e, i) => { const fs = parseFloat(getComputedStyle(e).fontSize);
+    const lab = e.dataset.fitLabel === 'prev' && e.previousElementSibling ? parseFloat(getComputedStyle(e.previousElementSibling).fontSize) : null;
+    return [i, Math.round(fs * 10) / 10, lab, (e.textContent || '').trim().slice(0, 14), e.className.toString().split(' ').find((c) => /^text-|^stat|^num|^amount/.test(c)) || '']; });
   out.docOver = document.documentElement.scrollWidth - W;
   out.hdrLines = (() => { const h = document.querySelector('.app-top header'); if (!h) return null; const tops = new Set([...h.querySelectorAll('button,.offline-badge,svg')].filter(vis).map((e) => { const r = e.getBoundingClientRect(); return Math.round((r.top + r.height / 2) / 22); })); return tops.size; })();
   return out;
@@ -82,6 +84,7 @@ CHECK = r"""(opts) => {
 with sync_playwright() as p:
     b = p.chromium.launch()
     c = b.new_context(viewport={'width': 360, 'height': 780}, locale='ko-KR', reduced_motion='reduce')
+    c.add_init_script(MENU_JS)
     if ONLINE: c.add_init_script("Object.defineProperty(Navigator.prototype,'onLine',{get:()=>true})")
     pg = c.new_page()
     pg.goto(URL); pg.wait_for_selector('text=테스트 계정으로 로그인', timeout=30000)
@@ -107,7 +110,15 @@ with sync_playwright() as p:
                 pg.evaluate("localStorage.removeItem('tips')")
                 pg.evaluate("window.__gagyebu.go('settings')"); pg.wait_for_timeout(100)
             pg.evaluate(f"window.__gagyebu.go('{v}')"); pg.wait_for_timeout(350)
-            r = pg.evaluate(CHECK, {}); r.update(tag=tag, view=v, W=round(W), H=round(H), scale=scale); res.append(r)
+            r = pg.evaluate(CHECK, {}); r.update(tag=tag, view=v, W=round(W), H=round(H), scale=scale)
+            if H <= 500 and MODE != 'tip':
+                # 실제 휠로 160px 내린 뒤 / 다시 60px 올린 뒤의 메뉴 비율
+                pg.mouse.move(max(1, W / 2), max(1, H / 2)); pg.mouse.wheel(0, 160); pg.wait_for_timeout(300)
+                r['menuDown'] = pg.evaluate('window.__menu()'); r['scrolled'] = pg.evaluate('Math.round(document.scrollingElement.scrollTop || document.querySelector("#main").scrollTop)')
+                pg.mouse.wheel(0, -60); pg.wait_for_timeout(300)
+                r['menuUp'] = pg.evaluate('window.__menu()')
+                pg.evaluate('document.scrollingElement.scrollTop = 0; document.querySelector("#main").scrollTop = 0'); pg.wait_for_timeout(100)
+            res.append(r)
     if MODE == 'matrix':
         for w, h in WIDTHS.items():
             for z in ZOOMS:
@@ -128,11 +139,37 @@ over = [r for r in res if r['docOver'] > 0]
 low = [r for r in res if r['H'] <= 500]
 hdr2 = [r for r in res if (r['hdrLines'] or 0) > 1]
 print(f'측정 {len(res)}건 | 탭 실패 {len(bad_tabs)} | 금액·날짜 문제 {len(bad_amt)} | 팁 가림 {len(bad_tip)} | 가로넘침 {len(over)} | 위메뉴 2줄 {len(hdr2)}')
-if low: print(f'낮은 화면(H≤500) {len(low)}건: 메뉴 비율 최대 {max(r["menu"] for r in low)}%, 평균 {sum(r["menu"] for r in low)/len(low):.0f}%')
+def stat(rows, k):
+    v = [r[k] for r in rows if r.get(k) is not None]
+    return f'최대 {max(v)}% 평균 {sum(v)/len(v):.1f}%' if v else '-'
+if low:
+    print(f'낮은 화면(H≤500) {len(low)}건 — 메뉴 비율(위+아래 메뉴가 화면 안에 보이는 높이/화면 높이): 맨 위 {stat(low,"menu")} | 160px 내린 뒤 {stat(low,"menuDown")} | 다시 60px 올린 뒤 {stat(low,"menuUp")}')
+    for z in ['@300%', '@400%']:
+        g = [r for r in low if z in r['tag']]
+        if g: print(f'   {z}: 맨 위 {stat(g,"menu")} | 내린 뒤 {stat(g,"menuDown")} | 올린 뒤 {stat(g,"menuUp")}')
+    g = [r for r in low if not ('@300%' in r['tag'] or '@400%' in r['tag'])]
+    if g: print(f'   ≤200%: 맨 위 {stat(g,"menu")} | 내린 뒤 {stat(g,"menuDown")} | 올린 뒤 {stat(g,"menuUp")}')
+    noscroll = [r for r in low if r.get('scrolled') is not None and r['scrolled'] < 100]
+    if noscroll: print(f'   (내용이 짧아 160px까지 못 내려간 화면 {len(noscroll)}건 — 맨 끝에 닿으면 아래 메뉴가 다시 보임)')
+# 큰 숫자 단조성: (폭, 화면, 순번)별로 배율 순서대로 글자 크기가 줄어들면 실패
+from collections import defaultdict
+grp = defaultdict(list)
+for r in res:
+    for f in r.get('fits') or []: grp[(r['W'], r['H'], r['view'], f[0])].append((r['scale'], f[1], f[3], f[4]))
+shrink = []
+for k, v in grp.items():
+    v.sort()
+    for (s0, f0, t0, c0), (s1, f1, t1, c1) in zip(v, v[1:]):
+        if s1 > s0 and f1 < f0 - 0.2 and t0 == t1: shrink.append(f'{k[0]}x{k[1]} {k[2]} #{k[3]} {c1} "{t1}": 글자{int(s0*100)}% {f0}px → {int(s1*100)}% {f1}px')
+labelbad = [f'{r["tag"]} {r["view"]} "{f[3]}" {f[1]}px < 라벨 {f[2]}px' for r in res for f in (r.get('fits') or []) if f[2] and f[1] < f[2] - 0.05]
+nfit = sum(len(r.get('fits') or []) for r in res)
+if MODE == 'scale':
+    print(f'큰 숫자(data-fit) 측정 {nfit}개·{len(grp)}묶음 | 배율↑인데 작아짐 {len(shrink)} | 도넛 금액<라벨 {len(labelbad)}')
+    for x in shrink[:12] + labelbad[:6]: print('  ', x)
 tabw = [t['w'] for r in res if r['tabs'] for t in r['tabs']]
 if tabw: print(f'탭 폭 최소 {min(tabw)}px, 높이 최소 {min(t["h"] for r in res if r["tabs"] for t in r["tabs"])}px')
 for r in (bad_tabs[:4] + bad_amt[:12] + bad_tip[:4] + over[:4] + hdr2[:6]):
     print(' ', r['tag'], r['view'], 'tabs', [t['n'] for t in (r['tabs'] or []) if not t['ok']], 'amt', r['amt'], 'tip', r['tip'], 'over', r['docOver'], 'hdr', r['hdrLines'])
 qa = [r for r in res if MODE != 'matrix' or int(r['tag'].split('@')[1][:-1]) <= 200]
 fail = [r for r in qa if (r['tabs'] and not all(t['ok'] for t in r['tabs'])) or r['amtN'] or r['docOver'] > 0 or (r['tip'] and (r['tip']['pos'] == 'fixed' or r['tip']['overHeader'] or r['tip']['overTab'] or r['tip']['covered']))]
-sys.exit(1 if fail else 0)
+sys.exit(1 if fail or shrink or labelbad else 0)

@@ -78,7 +78,7 @@ export function recurringView(m) {
     </section>
     ${subs.length ? `<section class="card-solid p-4" aria-labelledby="sub-h"><h2 id="sub-h" class="text-head">구독 같아요</h2>
       <p class="mt-1 text-caption text-ink-sub">같은 곳에 같은 금액이 매달 비슷한 날에 나갔어요. 반복으로 등록할까요?</p>
-      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex items-center gap-3 min-h-[52px]"><span class="flex-1 min-w-0 text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · 매달 ${s.day}일쯤 · ${numSpan(formatWon(s.amount))}</span></span>
+      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex flex-wrap items-center gap-x-3 min-h-[52px]"><span class="flex-1 min-w-[min(100%,9em)] text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · 매달 ${s.day}일쯤 · ${numSpan(formatWon(s.amount))}</span></span>
         <button class="chip" data-rec-from="${esc(s.name)}" data-amount="${s.amount}" data-day="${s.day}" data-cat="${esc(s.categoryId ?? '')}" aria-label="${esc(s.name)} 반복으로 등록">등록</button></li>`).join('')}</ul></section>` : ''}
   </div>`;
 }

@@ -7,24 +7,33 @@ export const haptic = (ms = 8) => { if (localStorage.getItem('haptic') !== 'off'
 // 문장 속 금액: 숫자 폭을 고르게(tabular-nums) + 금액 중간에서 줄이 갈리지 않게
 export const numSpan = (txt) => `<span data-fit class="num tabular-nums">${txt}</span>`;
 
-// 큰 금액 한 줄 맞춤: 금액은 자르거나(…) 쪼개지 않고, 칸보다 넓을 때만 글자를 조금씩 줄여 칸 안에 다 보이게(최소 55%)
+// 큰 금액 한 줄 맞춤: 금액은 자르거나(…) 쪼개지 않고, 칸보다 넓을 때만 '딱 들어가는 크기'로 한 번에 줄임(최소 55%).
+// - 글자 폭은 Range로, 기준 크기(100px)에서 잰 '글자 1px당 폭'으로 크기를 계산한 뒤 0.1px 단위로 '칸에 들어가는 가장 큰 크기'를 찾음
+//   → 같은 칸이면 배율을 올려도 결과가 줄지 않음(작은 배율에서 들어가던 크기보다 작아질 수 없음)
+// - 들어갈 자리는 자기(블록일 때)와 조상 4단계의 안쪽 폭 중 가장 좁은 값(가운데 정렬 부모는 내용만큼 넓어지므로)
+// - data-fit-label="prev": 바로 위 라벨(예: 도넛 '총지출')이 금액보다 커지지 않게, 금액을 줄였으면 라벨도 같은 크기 이하로
+const innerW = (e) => { const cs = getComputedStyle(e); return e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
+const REF = 100;
 export function fitNum(el) {
   if (!el || !el.isConnected) return;
-  el.style.fontSize = '';
-  const base = parseFloat(getComputedStyle(el).fontSize);
-  // 가운데 정렬(flex items-center 등)로 상자 자체가 부모보다 넓어지는 경우도 넘침으로 봄
-  // 문장 속 금액(inline)은 자기 폭이 없으니(clientWidth 0) 부모 폭만 봄 → 한 줄을 통째로 차지해도 넘칠 때만 줄임
-  // 가운데 정렬 부모는 내용만큼 넓어지므로 조상 몇 단계까지 보고 가장 좁은 안쪽 폭을 기준으로
-  const room = () => {
-    let r = el.clientWidth || Infinity;
-    for (let p = el.parentElement, i = 0; p && i < 4 && p.id !== 'main'; p = p.parentElement, i++) {
-      const ps = getComputedStyle(p);
-      r = Math.min(r, p.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight));
-    }
-    return r;
-  };
-  const need = () => Math.max(el.scrollWidth, el.getBoundingClientRect().width);
-  for (let k = 1; k <= 9 && need() > room() + 0.5; k++) el.style.fontSize = `${base * (1 - k * 0.05)}px`;
+  const lab = el.dataset.fitLabel === 'prev' ? el.previousElementSibling : null;
+  // 글자 줄임 효과(움직임 줄이기 설정의 전역 0.01ms 전환 포함)가 끼면 재는 순간 이전 크기가 읽히므로 전환을 끔
+  el.style.transition = 'none'; el.style.fontSize = '';
+  if (lab) { lab.style.transition = 'none'; lab.style.fontSize = ''; }
+  const cs = getComputedStyle(el), base = parseFloat(cs.fontSize);
+  let room = cs.display.startsWith('inline') ? Infinity : innerW(el);
+  for (let p = el.parentElement, i = 0; p && i < 4 && p.id !== 'main'; p = p.parentElement, i++) room = Math.min(room, innerW(p));
+  const rg = document.createRange(); rg.selectNodeContents(el);
+  if (!(room > 0) || rg.getBoundingClientRect().width <= room + 0.5) return;
+  el.style.fontSize = `${REF}px`;
+  const per = rg.getBoundingClientRect().width / REF; // 글자 1px당 폭
+  const min = base * 0.55, fits = (v) => { el.style.fontSize = `${v}px`; return rg.getBoundingClientRect().width <= room + 0.5; };
+  // 비례 계산값에서 0.1px씩 맞춰 '들어가는 가장 큰 크기'로(글꼴 힌팅 때문에 폭이 크기에 딱 비례하지 않음)
+  let size = per ? Math.max(min, Math.min(base, Math.floor((room / per) * 10) / 10)) : base;
+  for (let i = 0; i < 12 && size > min && !fits(size); i++) size = Math.max(min, Math.round((size - 0.1) * 10) / 10);
+  for (let i = 0; i < 30 && size + 0.1 < base && fits(size + 0.1); i++) size = Math.round((size + 0.1) * 10) / 10;
+  el.style.fontSize = `${size}px`;
+  if (lab && parseFloat(getComputedStyle(lab).fontSize) > size) lab.style.fontSize = `${size}px`;
 }
 export const fitNums = (root = document) => $$('[data-fit]', root).forEach(fitNum);
 
