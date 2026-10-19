@@ -94,3 +94,12 @@ describe('N2 지운 달은 arrayUnion/arrayRemove로(통째로 다시 쓰지 않
     expect(src).toMatch(/\{ merge: true \}/);
   });
 });
+
+describe('N4 다른 기기에서 반복을 지운 사이 오프라인에서 지운 자동 기록', () => {
+  it('지우기 묶음이 거부되면 반복이 정말 없는지 서버에서 보고, 없으면 기록만 지움', () => {
+    const src = read('src/store.js');
+    const body = src.slice(src.indexOf('export function deleteTx'), src.indexOf('export function saveCategory'));
+    expect(body).toMatch(/getDocFromServer\(u\('recurring', x\.r\.id\)\)/);
+    expect(body).toMatch(/if \(!r\.exists\(\)\) return deleteDoc\(u\('transactions', id\)\)/);
+  });
+});

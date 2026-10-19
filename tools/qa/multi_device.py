@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """두 기기(하나는 오프라인) 반복 자동 기록 검사(QA 3차 N2·N4).
 사용: 에뮬레이터 + VITE_USE_EMULATOR 미리보기를 띄운 뒤
-  python3 tools/qa/multi_device.py [A 주소] [B 주소(기본 A와 같음)]   · 환경 변수 CASES(기본 S,K)
+  python3 tools/qa/multi_device.py [A 주소] [B 주소(기본 A와 같음)]   · 환경 변수 CASES(기본 S,N,K)
 경우
  S) B 오프라인: 9월 자동 기록을 지움 → B가 자정을 넘김(10월 자동 기록 대기열) → A 온라인: 10월 기록을 지움 → B 연결
     → 서버에 관리비 기록이 하나도 없고(지운 10월이 되살아나지 않음), 지운 달은 09·10 둘 다 남아야 함
@@ -16,7 +16,7 @@ from rec_lib import *  # noqa: F401,F403
 
 A = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
 B = emu.app_url(sys.argv[2]) if len(sys.argv) > 2 else A
-CASES = os.environ.get('CASES', 'S,K').split(',')
+CASES = os.environ.get('CASES', 'S,N,K').split(',')
 R = {}
 with sync_playwright() as p:
     b = p.chromium.launch(args=['--lang=ko-KR'])

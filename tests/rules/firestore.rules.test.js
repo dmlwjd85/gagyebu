@@ -748,6 +748,13 @@ describe('N2 지운 달(skipped): 넣기·빼기는 원자적으로, 두 기기(
     const d = (await getDoc(doc(db, recPath))).data();
     expect(d.skipped).toEqual(['2026-09', '2026-10']); expect(d.name).toBe('관리비2'); expect('accountId' in d).toBe(false);
   });
+  test('N4 반복이 다른 기기에서 지워졌을 때: 지우기 묶음은 거부되지만 기록만 지우기는 허용(앱이 이렇게 다시 함)', async () => {
+    await seed({}, ['2026-10']);
+    await env.withSecurityRulesDisabled((c) => deleteDoc(doc(c.firestore(), recPath)));
+    const db = alice();
+    await assertFails(deleteAuto(db, '2026-10', []));
+    await assertSucceeds(deleteDoc(doc(db, txPath('2026-10'))));
+  });
   test('arrayUnion으로도 형식 밖 값은 거부', async () => {
     await seed({ skipped: ['2026-09'] });
     for (const bad of ['2026-13', '1234567890123', 202610]) await assertFails(updateDoc(doc(alice(), recPath), { skipped: arrayUnion(bad) }));

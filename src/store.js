@@ -281,7 +281,9 @@ export function retryKept() {
 // 다른 기기(오프라인으로 자정을 넘긴 기기 등)가 같은 달을 다시 자동 기록해도 규칙이 거부 → 지운 기록이 살아나지 않음(QA D1)
 // 지운 달은 arrayUnion으로 넣고, 24개를 넘길 오래된 달만 arrayRemove로 뺌(QA 3차 N2):
 // 목록을 통째로 다시 쓰면 오프라인이던 기기가 연결될 때 다른 기기가 넣은 달을 지워 버림
-// 거부되면 서버에서 반복을 다시 읽어서, 다른 기기가 지운 달을 더 넣어 24개를 넘겼으면 서버 목록 기준으로 오래된 달을 빼고 한 번 더
+// 거부되면 서버에서 반복을 다시 읽어서(QA 3차 N4)
+//  - 반복이 다른 기기에서 지워졌으면: 다시 만들 반복이 없으니 기록만 지움
+//  - 다른 기기가 지운 달을 더 넣어 24개를 넘겼으면: 서버 목록 기준으로 오래된 달을 빼고 한 번 더
 function recSkipBatch(id, x, known) {
   const b = writeBatch(db), rec = u('recurring', x.r.id), drop = skipTrim(known, x.ym);
   b.delete(u('transactions', id));
@@ -297,7 +299,7 @@ export function deleteTx(id) {
       if (e?.code !== 'permission-denied') throw e;
       let r;
       try { r = await getDocFromServer(u('recurring', x.r.id)); } catch { throw e; }
-      if (!r.exists()) throw e;
+      if (!r.exists()) return deleteDoc(u('transactions', id));
       const known = r.data().skipped || [];
       if (!skipTrim(known, x.ym).length) throw e; // 상한 문제가 아님: 그대로 알림
       return recSkipBatch(id, x, known);
