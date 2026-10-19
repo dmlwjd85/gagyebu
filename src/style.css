@@ -183,7 +183,11 @@
     .tab { min-height: 44px; min-width: 0; width: 100%; max-width: 64px; }
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .tabbar .fab { width: min(44px, 100%); height: 44px; border-radius: 22px; margin-top: 0; font-size: 24px; }
+    /* 본문을 내리는 동안은 아래 메뉴도 화면 밖으로(올리거나 맨 끝에 닿으면 다시 보임, 키보드로 메뉴에 들어가면 보임) — main.js */
+    .tabbar { transition: transform .2s ease-out; }
+    html.nav-autohide .tabbar:not(:focus-within) { transform: translateY(100%); }
   }
+  @media (max-height: 500px) and (max-width: 1023px) and (prefers-reduced-motion: reduce) { .tabbar { transition: none; } }
   /* 화면 키보드가 올라온 동안(입력칸 포커스 + 보이는 높이가 크게 줄어듦, main.js에서 감지): 아래 메뉴를 숨겨 입력칸·본문 자리를 확보 */
   @media (max-width: 1023px) { html.kbd-open .tabbar { display: none; } }
 

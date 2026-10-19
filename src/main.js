@@ -579,6 +579,19 @@ function syncRailShift() {
   const g = m && getComputedStyle(m).scrollbarGutter.includes('both') ? (m.offsetWidth - m.clientWidth) / 2 : 0;
   document.documentElement.style.setProperty('--rail-shift', `${g}px`);
 }
+// 낮은 화면(높이 500px 이하, 폰·태블릿 폭): 본문을 내리면 아래 메뉴를 숨기고, 올리거나 맨 끝에 닿으면 다시 보임(QA M5)
+const lowMq = window.matchMedia('(max-height: 500px) and (max-width: 1023px)');
+let lastY = window.scrollY;
+window.addEventListener('scroll', () => {
+  const y = window.scrollY, root = document.documentElement;
+  if (!lowMq.matches) { root.classList.remove('nav-autohide'); lastY = y; return; }
+  const dy = y - lastY;
+  if (Math.abs(dy) < 6) return;
+  const atEnd = y + window.innerHeight >= document.scrollingElement.scrollHeight - 2;
+  root.classList.toggle('nav-autohide', dy > 0 && y > 24 && !atEnd);
+  lastY = y;
+}, { passive: true });
+lowMq.addEventListener?.('change', () => document.documentElement.classList.remove('nav-autohide'));
 // 창 크기가 바뀌면 큰 금액 한 줄 맞춤·메뉴 여백을 다시
 let fitRaf = 0;
 window.addEventListener('resize', () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(() => { fitNums(); syncRailShift(); }); });

@@ -18,7 +18,13 @@ ONLINE = os.environ.get('ONLINE', '1') == '1'
 WIDTHS = {320:568,360:640,390:844,414:896,768:1024,1024:768,1280:800,1440:900,1920:1080}
 ZOOMS = [25,33,50,67,80,90,100,110,125,150,175,200,300,400]
 VIEWS = ['home', 'calendar', 'chart', 'budget', 'search', 'recurring', 'settings']
-MENU_JS = r"""window.__menu = () => { const H = window.innerHeight; return Math.round([document.querySelector('.app-top'), document.querySelector('.tabbar')].filter((e) => e && getComputedStyle(e).display !== 'none').reduce((a, e) => { const r = e.getBoundingClientRect(); return a + Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0)); }, 0) / H * 1000) / 10; }"""
+MENU_JS = r"""window.__menu = () => { // [보이는 메뉴 비율, 고정 메뉴 비율] — 고정: 스크롤해도 화면에 붙어 있는 것(본문만 스크롤되는 기본 화면의 위·아래 메뉴, 낮은 화면의 sticky 아래 메뉴)
+  const H = window.innerHeight, main = document.querySelector('#main'), boxed = main && getComputedStyle(main).overflowY !== 'visible';
+  const els = [document.querySelector('.app-top'), document.querySelector('.tabbar')].filter((e) => e && getComputedStyle(e).display !== 'none');
+  const h = (e) => { const r = e.getBoundingClientRect(); return Math.max(0, Math.min(r.bottom, H) - Math.max(r.top, 0)); };
+  const pinned = (e) => boxed || /sticky|fixed/.test(getComputedStyle(e).position);
+  const pct = (v) => Math.round(v / H * 1000) / 10;
+  return [pct(els.reduce((a, e) => a + h(e), 0)), pct(els.filter(pinned).reduce((a, e) => a + h(e), 0))]; }"""
 CHECK = r"""(opts) => { const MENU = window.__menu;
   const W = document.documentElement.clientWidth, H = window.innerHeight, out = {tabs: null, amt: [], tip: null, menu: null};
   const vis = (e) => { const cs = getComputedStyle(e); if (cs.visibility === 'hidden' || cs.display === 'none') return false; const r = e.getBoundingClientRect(); return r.width > 2 && r.height > 2; };
@@ -72,7 +78,7 @@ CHECK = r"""(opts) => { const MENU = window.__menu;
     out.tip = { pos, overHeader: ov('.app-top'), overTab: ov('.tabbar'), overRecent: ov('[aria-labelledby=recent-h]'), covered: top ? !tip.contains(top) : null };
   }
   // 4) 메뉴 비율(맨 위): 화면 안에 보이는 위 메뉴+아래 메뉴 높이 / 화면 높이
-  out.menu = MENU();
+  [out.menu, out.pin] = MENU();
   // 5) 큰 숫자(data-fit) 글자 크기: 같은 화면·같은 순번끼리 배율별로 비교(배율↑인데 작아지면 실패), 도넛 금액 < 라벨이면 실패
   out.fits = [...root.querySelectorAll('[data-fit]')].filter(vis).map((e, i) => { const fs = parseFloat(getComputedStyle(e).fontSize);
     const lab = e.dataset.fitLabel === 'prev' && e.previousElementSibling ? parseFloat(getComputedStyle(e.previousElementSibling).fontSize) : null;
@@ -114,9 +120,9 @@ with sync_playwright() as p:
             if H <= 500 and MODE != 'tip':
                 # 실제 휠로 160px 내린 뒤 / 다시 60px 올린 뒤의 메뉴 비율
                 pg.mouse.move(max(1, W / 2), max(1, H / 2)); pg.mouse.wheel(0, 160); pg.wait_for_timeout(300)
-                r['menuDown'] = pg.evaluate('window.__menu()'); r['scrolled'] = pg.evaluate('Math.round(document.scrollingElement.scrollTop || document.querySelector("#main").scrollTop)')
+                r['menuDown'], r['pinDown'] = pg.evaluate('window.__menu()'); r['scrolled'] = pg.evaluate('Math.round(document.scrollingElement.scrollTop || document.querySelector("#main").scrollTop)')
                 pg.mouse.wheel(0, -60); pg.wait_for_timeout(300)
-                r['menuUp'] = pg.evaluate('window.__menu()')
+                r['menuUp'], r['pinUp'] = pg.evaluate('window.__menu()')
                 pg.evaluate('document.scrollingElement.scrollTop = 0; document.querySelector("#main").scrollTop = 0'); pg.wait_for_timeout(100)
             res.append(r)
     if MODE == 'matrix':
@@ -143,12 +149,9 @@ def stat(rows, k):
     v = [r[k] for r in rows if r.get(k) is not None]
     return f'최대 {max(v)}% 평균 {sum(v)/len(v):.1f}%' if v else '-'
 if low:
-    print(f'낮은 화면(H≤500) {len(low)}건 — 메뉴 비율(위+아래 메뉴가 화면 안에 보이는 높이/화면 높이): 맨 위 {stat(low,"menu")} | 160px 내린 뒤 {stat(low,"menuDown")} | 다시 60px 올린 뒤 {stat(low,"menuUp")}')
-    for z in ['@300%', '@400%']:
-        g = [r for r in low if z in r['tag']]
-        if g: print(f'   {z}: 맨 위 {stat(g,"menu")} | 내린 뒤 {stat(g,"menuDown")} | 올린 뒤 {stat(g,"menuUp")}')
-    g = [r for r in low if not ('@300%' in r['tag'] or '@400%' in r['tag'])]
-    if g: print(f'   ≤200%: 맨 위 {stat(g,"menu")} | 내린 뒤 {stat(g,"menuDown")} | 올린 뒤 {stat(g,"menuUp")}')
+    print(f'낮은 화면(H≤500) {len(low)}건 — 고정 메뉴 비율(스크롤해도 붙어 있는 메뉴가 화면 안에서 차지하는 높이/화면 높이), 괄호는 위 메뉴(본문과 함께 스크롤됨)까지 더한 보이는 비율')
+    for name, g in [('≤200%', [r for r in low if not ('@300%' in r['tag'] or '@400%' in r['tag'])]), ('300%', [r for r in low if '@300%' in r['tag']]), ('400%', [r for r in low if '@400%' in r['tag']])]:
+        if g: print(f'   {name}: 맨 위 {stat(g,"pin")} ({stat(g,"menu")}) | 160px 내린 뒤 {stat(g,"pinDown")} ({stat(g,"menuDown")}) | 60px 올린 뒤 {stat(g,"pinUp")} ({stat(g,"menuUp")})')
     noscroll = [r for r in low if r.get('scrolled') is not None and r['scrolled'] < 100]
     if noscroll: print(f'   (내용이 짧아 160px까지 못 내려간 화면 {len(noscroll)}건 — 맨 끝에 닿으면 아래 메뉴가 다시 보임)')
 # 큰 숫자 단조성: (폭, 화면, 순번)별로 배율 순서대로 글자 크기가 줄어들면 실패
