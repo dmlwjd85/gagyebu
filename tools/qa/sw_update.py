@@ -3,12 +3,15 @@
 준비: 에뮬레이터 + 빌드 세 개(모두 VITE_USE_EMULATOR=true)
   OLD = 수정 전 빌드(예: c36c512, 지금 배포본과 같은 서비스 워커 설정), V1·V2 = 이 브랜치 빌드(VITE_BUILD_TAG=v1/v2로 구분)
   ROOT = vite preview --outDir 로 띄운 폴더(이 검사가 내용을 바꿔치기함)
-사용: python3 tools/qa/sw_update.py 주소 ROOT OLD V1 V2 [사진 접두사]
+사용: python3 tools/qa/sw_update.py 주소 ROOT OLD V1 V2 [사진 접두사] [로그인 V2 사진 접두사]
 경우
  A) OLD → V1 배포: 새로 고침 1·2·3번째 버전, 앱을 닫았다 다시 열기 1·2번째 버전
  B) V1 → V2 배포, 입력 중 아님: 새로 고침 한 번(자동으로 한 번 더 불러옴) 뒤 버전
  C) V1 → V2 배포, 켜 둔 지 오래 + 입력 시트에 금액 입력 중: 다시 불러오지 않고 안내만 → 시트를 닫으면 '새 버전이 있어요 [지금 적용]' → 누르면 V2
  D) V1에서 권한 거부 토스트가 뜬 뒤 V2 배포: 토스트의 [새로 고침] 한 번으로 V2
+ E) (QA 4차 4-1) 로그인 + 켜 둔 지 16초 + 시트 닫힘·입력 없음: V2 배포 뒤 새로 고침 한 번으로 V2(안내 줄 없음)
+ F) (QA 4차 4-1) 로그인 + 입력 없음: 켜 둔 채 업데이트 확인 → 안내 줄 → 앱을 뒤로 보내면(hidden) 알아서 V2
+ C') C에서 입력 중에 앱을 뒤로 보내도 다시 불러오지 않음(입력 금액 그대로)
 """
 import json, os, shutil, sys, tempfile
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -17,6 +20,7 @@ from playwright.sync_api import sync_playwright  # noqa: E402
 
 URL = emu.app_url(sys.argv[1]); ROOT, OLD, V1, V2 = sys.argv[2:6]
 SHOT = sys.argv[6] if len(sys.argv) > 6 else '/tmp/gagyebu-sw-'
+SHOT4 = sys.argv[7] if len(sys.argv) > 7 else SHOT  # 로그인 상태 V2 사진 접두사
 VER = "(()=>document.documentElement.dataset.build||([...document.scripts].map(s=>s.src).join(' ').match(/index-[^.]+\\.js/)||['?'])[0])()"
 REG = "navigator.serviceWorker.getRegistration().then(r=>r?{active:!!r.active,waiting:!!r.waiting,installing:!!r.installing}:null)"
 def swap(d):  # ROOT 내용을 d로 바꿈(폴더 자체는 그대로 둬야 vite preview가 계속 보여 줌)
@@ -24,6 +28,7 @@ def swap(d):  # ROOT 내용을 d로 바꿈(폴더 자체는 그대로 둬야 vit
         x = os.path.join(ROOT, n); shutil.rmtree(x) if os.path.isdir(x) and not os.path.islink(x) else os.remove(x)
     shutil.copytree(d, ROOT, dirs_exist_ok=True)
 def ctx(p, prof): return p.chromium.launch_persistent_context(prof, viewport={'width': 360, 'height': 780}, locale='ko-KR', timezone_id='Asia/Seoul')
+HIDE = "(()=>{Object.defineProperty(document,'hidden',{value:true,configurable:true});Object.defineProperty(document,'visibilityState',{value:'hidden',configurable:true});document.dispatchEvent(new Event('visibilitychange'))})()"
 def login(pg):
     pg.wait_for_function("document.body.innerText.includes('테스트 계정으로 로그인') || (window.__gagyebu && window.__gagyebu.state.user)", timeout=30000)
     if pg.locator('text=테스트 계정으로 로그인').count(): pg.click('text=테스트 계정으로 로그인')
@@ -61,6 +66,10 @@ with sync_playwright() as p:
     swap(V2); pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); pg.wait_for_timeout(9000)
     C = {'입력 중 배포 뒤 버전': pg.evaluate(VER), '안내 상태': pg.evaluate('window.__gagyebu.ui.updateReady===true'),
          '입력한 금액 그대로': pg.evaluate("document.querySelector('#sheet-root')?.innerText.includes('12,300')")}
+    pg.evaluate(HIDE); pg.wait_for_timeout(4000)
+    C['입력 중 뒤로 보낸 뒤 버전'] = pg.evaluate(VER)
+    C['뒤로 보낸 뒤 입력 금액 그대로'] = pg.evaluate("document.querySelector('#sheet-root')?.innerText.includes('12,300')")
+    pg.evaluate("delete document.hidden; delete document.visibilityState")
     pg.keyboard.press('Escape'); pg.wait_for_timeout(800)
     if pg.locator('[role=alertdialog] [data-v="1"]').count(): pg.click('[role=alertdialog] [data-v="1"]'); pg.wait_for_timeout(500)
     pg.evaluate("window.__gagyebu.go('home')"); pg.wait_for_timeout(800)
@@ -94,6 +103,30 @@ with sync_playwright() as p:
     pg.wait_for_timeout(9000)
     D['[새로 고침] 한 번 뒤 버전'] = pg.evaluate(VER)
     c.close(); R['D_권한토스트_새로고침'] = D
+    # E
+    prof = tempfile.mkdtemp(); swap(V1); c = ctx(p, prof); pg = c.new_page()
+    pg.goto(URL); pg.wait_for_timeout(4000); pg.reload(); login(pg)
+    pg.evaluate("localStorage.setItem('tips', JSON.stringify({v:2,queue:[],hiddenOn:'2099-01-01',dismiss:{},excluded:[]}))")
+    pg.wait_for_timeout(16000)
+    E = {'빈 시트가 DOM에 있음': pg.evaluate("!!document.querySelector('#sheet-root .sheet[role=dialog]')"), '배포 전': pg.evaluate(VER)}
+    swap(V2); pg.reload(); pg.wait_for_timeout(9000); login(pg)
+    E['새로 고침 한 번 뒤 버전'] = pg.evaluate(VER); E['안내 줄'] = pg.locator('.update-bar').count()
+    E['로그인 그대로'] = pg.evaluate('!!window.__gagyebu.state.user')
+    for theme in ('light', 'dark'):
+        pg.evaluate(f"localStorage.setItem('theme','{theme}'); document.documentElement.classList.toggle('dark', {str(theme == 'dark').lower()})"); pg.wait_for_timeout(300)
+        pg.screenshot(path=f'{SHOT4}loggedin-v2-360-{theme}.png')
+    E['화면 표시 빌드'] = pg.evaluate(VER)
+    c.close(); R['E_로그인_새로고침'] = E; print('E', E, flush=True)
+    # F
+    prof = tempfile.mkdtemp(); swap(V1); c = ctx(p, prof); pg = c.new_page()
+    pg.goto(URL); pg.wait_for_timeout(4000); pg.reload(); login(pg)
+    pg.evaluate("localStorage.setItem('tips', JSON.stringify({v:2,queue:[],hiddenOn:'2099-01-01',dismiss:{},excluded:[]}))")
+    pg.wait_for_timeout(16000)
+    swap(V2); pg.evaluate("document.dispatchEvent(new Event('visibilitychange'))"); pg.wait_for_timeout(9000)
+    F = {'켜 둔 채 버전': pg.evaluate(VER), '안내 줄': pg.locator('.update-bar').count()}
+    pg.evaluate(HIDE); pg.wait_for_timeout(6000)
+    F['뒤로 보낸 뒤 버전'] = pg.evaluate(VER)
+    c.close(); R['F_로그인_숨김자동적용'] = F; print('F', F, flush=True)
 print(json.dumps(R, ensure_ascii=False, indent=1))
 ok = {
     'A 새로 고침 두 번째에는 새 버전': R['A_OLD→V1']['배포 뒤 새로 고침 2번째'] == 'v1',
@@ -101,6 +134,9 @@ ok = {
     'C 입력 중엔 그대로·안내': R['C_V1→V2_입력중']['입력 중 배포 뒤 버전'] == 'v1' and R['C_V1→V2_입력중']['안내 상태'],
     'C [지금 적용]으로 새 버전': R['C_V1→V2_입력중']['[지금 적용] 뒤 버전'] == 'v2',
     'D [새로 고침] 한 번으로 새 버전': R['D_권한토스트_새로고침']['[새로 고침] 한 번 뒤 버전'] == 'v2',
+    "C' 입력 중엔 뒤로 보내도 그대로": R['C_V1→V2_입력중']['입력 중 뒤로 보낸 뒤 버전'] == 'v1' and R['C_V1→V2_입력중']['뒤로 보낸 뒤 입력 금액 그대로'],
+    'E 로그인 상태 새로 고침 한 번으로 새 버전': R['E_로그인_새로고침']['빈 시트가 DOM에 있음'] and R['E_로그인_새로고침']['새로 고침 한 번 뒤 버전'] == 'v2' and R['E_로그인_새로고침']['안내 줄'] == 0,
+    'F 로그인 상태 안내 뒤 뒤로 보내면 새 버전': R['F_로그인_숨김자동적용']['안내 줄'] == 1 and R['F_로그인_숨김자동적용']['뒤로 보낸 뒤 버전'] == 'v2',
 }
 print('결과:', {k: ('통과' if v else '실패') for k, v in ok.items()})
 sys.exit(0 if all(ok.values()) else 1)
