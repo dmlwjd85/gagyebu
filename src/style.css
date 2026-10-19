@@ -315,7 +315,7 @@
 @media (max-width: 359px) { .app-top [data-action="theme"] { display: none; } }
 /* 오프라인 표시: 자리를 차지하지 않게(위 메뉴 높이·줄 수 그대로) 오른쪽 버튼들 아래 가장자리에 겹친 '오프라인' 글자 배지.
    흰 글자/짙은 주황 배경 대비 약 5:1, 라이트·다크 모두 같은 색. 스크린리더는 role=status 문구를 읽음.
-   글자 13px(디자인 스펙 caption 크기, 13px 미만은 달력 칸 금액 micro 11px만 허용: 스펙 1-4·9절 6번, QA N8).
+   글자 13px(디자인 스펙 caption 크기, 13px 미만은 달력 칸 금액 micro 11px만 허용: 스펙 1절 타입 표·10절 표와 금지 6번, QA N8).
    한 줄짜리 알약이라 줄 높이는 14px로 낮춰(높이 16px) 예전 10px 배지처럼 아이콘 아래 가장자리만 살짝 덮음 */
 .offline-badge { position: absolute; right: 0; bottom: 0; padding: 1px 5px; border-radius: 999px; background: #B45309; color: #fff;
   font-size: 13px; line-height: 14px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; pointer-events: none;
