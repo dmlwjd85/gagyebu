@@ -1,8 +1,8 @@
 import { readFileSync } from 'node:fs';
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
-import { recTxId } from '../../src/lib/recurring.js';
+import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, arrayUnion, arrayRemove, deleteField, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { recTxId, skipTrim, addSkipped } from '../../src/lib/recurring.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../../src/lib/defaults.js';
 import { safeRef, fixedRecId, looksLikeCard } from '../../src/lib/ids.js';
 import { restorePlans, editTarget, keepTx, keptList, keepIdOf } from '../../src/lib/restore.js';
@@ -665,5 +665,91 @@ describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시
       await assertSucceeds(setDoc(ref, { ...TX, amount: 13000, updatedAt: serverTimestamp() }));
       await assertSucceeds(deleteDoc(ref));
     }
+  });
+});
+
+// QA 3차 N2: 지운 달 목록을 통째로 다시 쓰지 않고 arrayUnion/arrayRemove로(store.js recSkipBatch와 같은 쓰기)
+// RULES_TEST_OLD_WRITES=1 이면 수정 전 앱의 쓰기(이 기기 목록으로 통째로 덮기)로 같은 경우를 돌려 비교할 수 있음
+describe('N2 지운 달(skipped): 넣기·빼기는 원자적으로, 두 기기(하나는 오프라인)에서도 서로 지우지 않기', () => {
+  const RID = 'goodRec25';
+  const RECD = { name: '관리비', amount: 80000, kind: 'expense', categoryId: 'housing', dayOfMonth: 25, active: true, startYm: '2024-01', lastPosted: '2026-10' };
+  const AUTO = (ym) => ({ date: `${ym}-25`, amount: 80000, kind: 'expense', categoryId: 'housing', memo: '관리비', recurringId: RID, origin: 'auto', createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  const OLD_WRITES = process.env.RULES_TEST_OLD_WRITES === '1';
+  const recPath = `users/alice/recurring/${RID}`;
+  const txPath = (ym) => `users/alice/transactions/${recTxId(RID, ym)}`;
+  const seed = (extra = {}, months = []) => env.withSecurityRulesDisabled(async (c) => {
+    await setDoc(doc(c.firestore(), recPath), { ...RECD, ...extra });
+    for (const ym of months) await setDoc(doc(c.firestore(), txPath(ym)), { ...AUTO(ym), createdAt: new Date(`${ym}-25T00:00:00Z`), updatedAt: new Date(`${ym}-25T00:00:00Z`) });
+  });
+  // 앱의 '자동 기록 지우기'(known = 이 기기가 알고 있는 지운 달 목록)
+  const deleteAuto = (db, ym, known) => {
+    const b = writeBatch(db), rec = doc(db, recPath);
+    b.delete(doc(db, txPath(ym)));
+    if (OLD_WRITES) { b.update(rec, { skipped: addSkipped(known, ym), updatedAt: serverTimestamp() }); return b.commit(); }
+    b.update(rec, { skipped: arrayUnion(ym), updatedAt: serverTimestamp() });
+    const drop = skipTrim(known, ym);
+    if (drop.length) b.update(rec, { skipped: arrayRemove(...drop) });
+    return b.commit();
+  };
+  const skippedNow = async () => (await getDoc(doc(env.authenticatedContext('alice').firestore(), recPath))).data().skipped || [];
+  const months = (n, y = 2024) => Array.from({ length: n }, (_, i) => `${y + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`);
+
+  test('두 기기: B가 오프라인에서 9월을 지우는 사이 A가 10월을 지움 → B 연결 뒤 9·10월 모두 남고, B의 10월 자동 기록은 거부', async () => {
+    await seed({}, ['2026-09', '2026-10']);
+    const A = env.authenticatedContext('alice').firestore();
+    const B = env.authenticatedContext('alice').firestore();
+    await getDoc(doc(B, recPath)); // B가 반복을 받아 둠(skipped 없음)
+    await disableNetwork(B);
+    const bDelete = deleteAuto(B, '2026-09', []); // 오프라인 대기열
+    const bAuto = setDoc(doc(B, txPath('2026-10')), AUTO('2026-10')).then(() => 'ok', (e) => e.code); // 자정 넘김: 10월 자동 기록 대기열(이미 있으니 거부돼야 함)
+    await assertSucceeds(deleteAuto(A, '2026-10', [])); // A 온라인: 10월 지움
+    await enableNetwork(B);
+    await bDelete;
+    expect(await bAuto).toBe('permission-denied'); // 지운 10월이 되살아나지 않음
+    expect((await skippedNow()).sort()).toEqual(['2026-09', '2026-10']);
+    await assertFails(setDoc(doc(A, txPath('2026-10')), AUTO('2026-10')));
+  });
+  test('24개가 차 있을 때: 넣기(arrayUnion)와 가장 오래된 달 빼기(arrayRemove)를 한 묶음으로 허용, 넣기만 하면 거부', async () => {
+    const full = months(24); // 2024-01 ~ 2025-12
+    await seed({ skipped: full }, ['2026-10']);
+    const db = alice();
+    // 빼지 않고 넣기만 하면 25개라 거부(규칙의 24개 상한 그대로)
+    const b = writeBatch(db); b.delete(doc(db, txPath('2026-10'))); b.update(doc(db, recPath), { skipped: arrayUnion('2026-10') });
+    await assertFails(b.commit());
+    await assertSucceeds(deleteAuto(db, '2026-10', full));
+    const now = await skippedNow();
+    expect(now.length).toBe(24); expect(now).not.toContain('2024-01'); expect(now).toContain('2026-10');
+  });
+  test('24개 상한 정리도 남의 변경을 지우지 않음: 다른 기기가 방금 넣은 달은 그대로', async () => {
+    const list = months(22);
+    await seed({ skipped: list }, ['2026-09', '2026-10']);
+    const A = env.authenticatedContext('alice').firestore(), B = env.authenticatedContext('alice').firestore();
+    await getDoc(doc(B, recPath));
+    await disableNetwork(B);
+    const bDelete = deleteAuto(B, '2026-09', list); // B는 22개로 앎 → 뺄 것 없음
+    await assertSucceeds(deleteAuto(A, '2026-10', list)); // 23개
+    await enableNetwork(B);
+    await bDelete; // 24개: 상한 안
+    const now = await skippedNow();
+    expect(now.length).toBe(24); expect(now).toEqual(expect.arrayContaining(['2026-09', '2026-10', ...list]));
+  });
+  test('되돌리기: 그 달 빼기(arrayRemove) + 다시 만들기 한 묶음 허용, 다른 기기가 넣은 달은 남김', async () => {
+    await seed({ skipped: ['2026-08', '2026-10'] });
+    const db = alice(), b = writeBatch(db);
+    b.set(doc(db, txPath('2026-10')), { ...AUTO('2026-10') });
+    b.update(doc(db, recPath), { skipped: arrayRemove('2026-10'), updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+    expect(await skippedNow()).toEqual(['2026-08']);
+  });
+  test('반복 고치기(합쳐 쓰기): 지운 달을 보내지 않으면 서버 목록이 그대로, 비운 결제수단은 지움', async () => {
+    await seed({ skipped: ['2026-09', '2026-10'], accountId: 'card' });
+    const db = alice();
+    await assertSucceeds(setDoc(doc(db, recPath), { name: '관리비2', amount: 81000, kind: 'expense', categoryId: 'housing', dayOfMonth: 25, active: true, startYm: '2024-01', accountId: deleteField(), updatedAt: serverTimestamp() }, { merge: true }));
+    const d = (await getDoc(doc(db, recPath))).data();
+    expect(d.skipped).toEqual(['2026-09', '2026-10']); expect(d.name).toBe('관리비2'); expect('accountId' in d).toBe(false);
+  });
+  test('arrayUnion으로도 형식 밖 값은 거부', async () => {
+    await seed({ skipped: ['2026-09'] });
+    for (const bad of ['2026-13', '1234567890123', 202610]) await assertFails(updateDoc(doc(alice(), recPath), { skipped: arrayUnion(bad) }));
   });
 });

@@ -16,6 +16,12 @@ export const SKIP_MAX = 24;
 export const addSkipped = (list = [], ym) => [...new Set([...list, ym])].sort().slice(-SKIP_MAX);
 export const dropSkipped = (list = [], ym) => list.filter((x) => x !== ym);
 /**
+ * 지운 달을 하나 넣을 때 24개 상한을 지키려고 함께 뺄 오래된 달(QA 3차 N2).
+ * 목록을 통째로 다시 쓰면 오프라인 기기가 다른 기기의 변경을 지우므로, 넣기는 arrayUnion·빼기는 arrayRemove로 보내고
+ * 여기서는 '뺄 것'만 고름. 규칙은 묶음이 끝난 뒤 상태(24개 이하)로 판단.
+ */
+export const skipTrim = (list = [], ym) => { const keep = new Set(addSkipped(list, ym)); return [...new Set(list)].filter((x) => !keep.has(x)); };
+/**
  * 자동 기록 결과로 올려도 되는 lastPosted(QA 3차 N1).
  * 회차 순서대로 앞에서부터 이어서 처리된('done') 달까지만 올림. 처리 못 한 달('failed')이 있으면 그 앞에서 멈춰서
  * 다음에 열 때 그 달부터 다시 시도(이미 만든 뒤쪽 달은 '있으면 건너뛰기'라 두 번 생기지 않음).

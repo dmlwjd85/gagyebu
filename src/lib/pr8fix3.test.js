@@ -76,3 +76,21 @@ describe('N1 배포 순서: 규칙을 먼저, 앱은 나중에', () => {
     expect(read('docs/배포.md')).toContain('npm run rules:deploy');
   });
 });
+
+describe('N2 지운 달은 arrayUnion/arrayRemove로(통째로 다시 쓰지 않음)', () => {
+  it('skipTrim: 24개를 넘길 때만 가장 오래된 달을 뺌', async () => {
+    const { skipTrim } = await import('./recurring.js');
+    const m = (n) => Array.from({ length: n }, (_, i) => `${2024 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`);
+    expect(skipTrim(m(23), '2026-10')).toEqual([]);
+    expect(skipTrim(m(24), '2026-10')).toEqual(['2024-01']);
+    expect(skipTrim(m(24), m(24)[5])).toEqual([]); // 이미 있는 달
+    expect(skipTrim([], '2026-10')).toEqual([]);
+  });
+  it('store.js: skipped를 목록으로 쓰는 곳이 없음(새 반복·옮기기·되살리기만 목록 전체)', () => {
+    const src = read('src/store.js');
+    expect(src).not.toMatch(/skipped: (addSkipped|dropSkipped)\(/);
+    expect(src).toMatch(/skipped: arrayUnion\(x\.ym\)/);
+    expect(src).toMatch(/skipped: arrayRemove\(rx\.ym\)/);
+    expect(src).toMatch(/\{ merge: true \}/);
+  });
+});

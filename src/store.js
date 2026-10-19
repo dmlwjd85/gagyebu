@@ -1,11 +1,11 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, getDoc, getDocFromCache, getDocFromServer, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, getDocFromCache, getDocFromServer, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
-import { dueOccurrences, recParts, addSkipped, dropSkipped, bumpLastPosted, settledLastPosted, deniedOutcome } from './lib/recurring.js';
+import { dueOccurrences, recParts, skipTrim, bumpLastPosted, settledLastPosted, deniedOutcome } from './lib/recurring.js';
 import { safeRef, isRuleId, fixedRecId } from './lib/ids.js';
 import { restorePlans, keptList, keepTx, unkeep, keepIdOf, editTarget } from './lib/restore.js';
 
@@ -236,7 +236,7 @@ export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
         const rx = recOf(ref.id);
         if (rx && (rx.r.skipped || []).includes(rx.ym)) {
           const b = writeBatch(db);
-          b.set(ref, body); b.update(u('recurring', rx.r.id), { skipped: dropSkipped(rx.r.skipped, rx.ym), updatedAt: serverTimestamp() });
+          b.set(ref, body); b.update(u('recurring', rx.r.id), { skipped: arrayRemove(rx.ym), updatedAt: serverTimestamp() }); // 통째로 다시 쓰지 않음(QA 3차 N2)
           await b.commit();
         } else await setDoc(ref, body);
         if (fromKeep) { state.kept = unkeep(uid, tx.keepKey); emit(); }
@@ -279,15 +279,31 @@ export function retryKept() {
 }
 // 지우기. 반복 자동 기록이면 그 달을 반복의 '지운 달'(skipped)에 넣는 쓰기와 한 묶음:
 // 다른 기기(오프라인으로 자정을 넘긴 기기 등)가 같은 달을 다시 자동 기록해도 규칙이 거부 → 지운 기록이 살아나지 않음(QA D1)
+// 지운 달은 arrayUnion으로 넣고, 24개를 넘길 오래된 달만 arrayRemove로 뺌(QA 3차 N2):
+// 목록을 통째로 다시 쓰면 오프라인이던 기기가 연결될 때 다른 기기가 넣은 달을 지워 버림
+// 거부되면 서버에서 반복을 다시 읽어서, 다른 기기가 지운 달을 더 넣어 24개를 넘겼으면 서버 목록 기준으로 오래된 달을 빼고 한 번 더
+function recSkipBatch(id, x, known) {
+  const b = writeBatch(db), rec = u('recurring', x.r.id), drop = skipTrim(known, x.ym);
+  b.delete(u('transactions', id));
+  b.update(rec, { skipped: arrayUnion(x.ym), updatedAt: serverTimestamp() });
+  if (drop.length) b.update(rec, { skipped: arrayRemove(...drop) });
+  return b.commit();
+}
 export function deleteTx(id) {
   const x = recOf(id);
   if (!x) return fire(() => deleteDoc(u('transactions', id)), writeErrorHandler);
-  fire(() => {
-    const b = writeBatch(db);
-    b.delete(u('transactions', id));
-    b.update(u('recurring', x.r.id), { skipped: addSkipped(x.r.skipped, x.ym), updatedAt: serverTimestamp() });
-    return b.commit();
-  }, writeErrorHandler);
+  const run = async () => {
+    try { await recSkipBatch(id, x, x.r.skipped || []); } catch (e) {
+      if (e?.code !== 'permission-denied') throw e;
+      let r;
+      try { r = await getDocFromServer(u('recurring', x.r.id)); } catch { throw e; }
+      if (!r.exists()) throw e;
+      const known = r.data().skipped || [];
+      if (!skipTrim(known, x.ym).length) throw e; // 상한 문제가 아님: 그대로 알림
+      return recSkipBatch(id, x, known);
+    }
+  };
+  fire(run, writeErrorHandler);
 }
 
 export function saveCategory(c) {
@@ -338,20 +354,28 @@ export const deleteRule = (id) => fire(() => deleteDoc(u('rules', id)), writeErr
 
 export function saveRecurring(r) {
   const old = r.id ? state.recurring.find((x) => x.id === r.id) : null;
-  // 고칠 때도 '지운 달'·만든 날은 그대로(setDoc은 문서를 통째로 바꿈)
-  const skipped = r.skipped ?? old?.skipped;
   const data = clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, skipped: skipped?.length ? skipped : undefined, updatedAt: serverTimestamp(),
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(),
     createdAt: r.id ? (r.createdAt ?? old?.createdAt) : serverTimestamp() });
+  // 새로 만들거나 지운 반복을 되살릴 때만 '지운 달'을 함께 씀
+  const skipped = r.skipped ?? old?.skipped;
+  const full = skipped?.length ? { ...data, skipped } : data;
   // 규칙에 맞지 않는 예전 id면 늘 같은 새 id로 옮김: 새 문서 쓰기와 예전 문서 지우기를 한 묶음으로(둘 다 되거나 둘 다 안 됨, QA R5)
   if (r.id && !isRuleId(r.id)) {
     const id = fixedRecId(r.id), b = writeBatch(db);
-    b.set(u('recurring', id), data); b.delete(u('recurring', r.id)); // 만든 날은 그대로(QA N7)
+    b.set(u('recurring', id), full); b.delete(u('recurring', r.id)); // 만든 날은 그대로(QA N7)
     fire(b.commit(), writeErrorHandler);
     return id;
   }
   const ref = r.id ? u('recurring', r.id) : newRef('recurring');
-  fire(() => setDoc(ref, data), writeErrorHandler);
+  // 이미 있는 반복 고치기: '지운 달'은 보내지 않고 합쳐 쓰기(QA 3차 N2). 이 기기의 목록으로 덮으면 다른 기기가 지운 달이 사라짐.
+  // 비운 결제수단은 지우고, 만든 날은 서버 값을 그대로 둠
+  if (old) {
+    const { createdAt, ...patch } = data;
+    fire(() => setDoc(ref, { ...patch, ...(createdAt ? { createdAt } : {}), accountId: data.accountId ?? deleteField() }, { merge: true }), writeErrorHandler);
+    return ref.id;
+  }
+  fire(() => setDoc(ref, full), writeErrorHandler);
   return ref.id;
 }
 export const deleteRecurring = (id) => fire(() => deleteDoc(u('recurring', id)), writeErrorHandler);
