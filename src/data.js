@@ -26,7 +26,7 @@ export function loginErrorText(e) {
 let store = null, storeP = null;
 const SIGNED_IN = 'signedIn';
 const loadStore = () => (storeP ??= import('./store.js').then((m) => {
-  m.bind({ state, emit, onError: (e) => writeErrorHandler?.(e) });
+  m.bind({ state, emit, onError: (e, retry) => writeErrorHandler?.(e, retry) });
   return (store = m);
 }));
 

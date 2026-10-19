@@ -6,6 +6,24 @@ export const daysInMonth = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.sl
 /** 31일 반복 → 2월엔 28(29)일, 30일인 달엔 30일 */
 export const dueDate = (ym, day) => `${ym}-${pad(Math.min(day, daysInMonth(ym)))}`;
 export const recTxId = (rid, ym) => `rec-${rid}-${ym}`;
+/** 'rec-{반복id}-{YYYY-MM}' → { rid, ym } (아니면 null). 반복 id는 형식 밖(예전 id)일 수도 있음 */
+export function recParts(id) {
+  const m = /^rec-(.+)-([0-9]{4}-(0[1-9]|1[0-2]))$/.exec(id || '');
+  return m ? { rid: m[1], ym: m[2] } : null;
+}
+// 사용자가 지운 자동 기록의 달(반복 문서 skipped): 그 달은 다시 자동 기록하지 않음(QA D1). 최근 24개만, 정렬·중복 없음
+export const SKIP_MAX = 24;
+export const addSkipped = (list = [], ym) => [...new Set([...list, ym])].sort().slice(-SKIP_MAX);
+export const dropSkipped = (list = [], ym) => list.filter((x) => x !== ym);
+/**
+ * 사용자가 그 달 자동 기록을 직접 고쳤을 때 lastPosted를 그 달로 올릴지(빈 달이 생기지 않을 때만).
+ * @returns {string|null} 새 lastPosted(바꿀 필요 없으면 null)
+ */
+export function bumpLastPosted(r, ym) {
+  const base = r.lastPosted ?? (r.startYm ? shiftYm(r.startYm, -1) : null);
+  if (!base || base >= ym || base < shiftYm(ym, -1)) return null;
+  return ym;
+}
 
 /**
  * 오늘까지 기록됐어야 하는 회차들(아직 안 만든 것만)

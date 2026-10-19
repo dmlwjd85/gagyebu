@@ -93,11 +93,28 @@ service cloud.firestore {
       // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
       match /transactions/{docId} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
-          && txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
+        // 새로 만들기: 반복 자동 기록 id(rec-…)는 사용자가 지운 달(반복 문서의 skipped)이면 거부 → 지운 자동 기록이 다시 살아나지 않음(QA D1).
+        // getAfter: 되돌리기는 skipped에서 그 달을 빼는 쓰기와 한 묶음으로 오므로 묶음 뒤 상태로 봄
+        allow create: if isOwner(uid) && txOk(docId) && (!isRecTxId(docId) || recMonthOpen(uid, docId));
+        // 고치기: 자동 기록은 '없을 때만 만들기'. 이미 있는 문서를 자동 기록이 덮어쓰지 못하게(QA D1: 오프라인 대기열은 트랜잭션이 안 돼 규칙으로 막음)
+        //  - origin == 'auto'(이 버전의 자동 기록)인 쓰기는, 원래 문서도 자동 기록일 때만(카테고리 옮기기 같은 부분 고치기용)
+        //  - createdAt이 이번 요청 시각(serverTimestamp)인 쓰기 = 새로 만든다는 쓰기 → 이미 있는 문서엔 거부(예전 버전 앱의 자동 기록도 여기서 막힘)
+        //  사용자 고치기는 origin을 빼고, createdAt은 원래 값(또는 없음)을 그대로 보냄
+        allow update: if isOwner(uid) && txOk(docId)
+          && !(d().get('origin', '') == 'auto' && resource.data.get('origin', '') != 'auto')
+          && d().get('createdAt', null) != request.time;
+      }
+      // 반복 자동 기록 문서의 그 달이 반복 문서에서 '지운 달'로 표시돼 있지 않은지
+      function recMonthOpen(uid, docId) {
+        let p = /databases/$(database)/documents/users/$(uid)/recurring/$(docId[4:docId.size() - 8]);
+        return !existsAfter(p) || !(docId[docId.size() - 7:docId.size()] in getAfter(p).data.get('skipped', []));
+      }
+      // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
+      function txOk(docId) {
+        return txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
-                                 'importHash', 'importBatch', 'recurringId', 'card4'])
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'origin'])
           && d().amount is int && d().amount <= 1000000000
           && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
           && d().kind in ['expense', 'income']
@@ -110,6 +127,7 @@ service cloud.firestore {
           && (!('importBatch' in d()) || batchId(d().importBatch))
           && (!('recurringId' in d()) || id(d().recurringId))
           && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
+          && (!('origin' in d()) || d().origin == 'auto') // 자동 기록 표식
           && optTs('createdAt') && optTs('updatedAt');
       }
 
@@ -166,7 +184,7 @@ service cloud.firestore {
         allow create, update: if isOwner(uid)
           && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
-          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
@@ -174,6 +192,10 @@ service cloud.firestore {
           && d().active is bool
           && ym(d().startYm)
           && (!('lastPosted' in d()) || ym(d().lastPosted))
+          // 사용자가 지운 자동 기록의 달(YYYY-MM) 최근 24개: 이 달은 다시 자동 기록하지 않음(QA D1)
+          && (!('skipped' in d()) || (d().skipped is list && d().skipped.size() <= 24
+              && (d().skipped.size() == 0 || (d().skipped.join(',').matches('^[0-9]{4}-(0[1-9]|1[0-2])(,[0-9]{4}-(0[1-9]|1[0-2]))*$')
+                  && d().skipped.join(',').split(',').size() == d().skipped.size()))))
           && optTs('createdAt') && optTs('updatedAt');
       }
 

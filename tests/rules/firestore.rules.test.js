@@ -9,7 +9,7 @@ import { restorePlans, editTarget, keepTx, keptList, keepIdOf } from '../../src/
 
 let env;
 beforeAll(async () => {
-  env = await initializeTestEnvironment({ projectId: 'demo-gagyebu', firestore: { rules: readFileSync('firestore.rules', 'utf8') } });
+  env = await initializeTestEnvironment({ projectId: process.env.RULES_TEST_PROJECT || 'demo-gagyebu', firestore: { rules: readFileSync('firestore.rules', 'utf8') } });
 });
 afterAll(async () => env?.cleanup());
 beforeEach(async () => {
@@ -580,5 +580,90 @@ describe('R5 형식 밖 반복 id: 새 id 만들기·옮기기·되돌리기', (
     keepTx('alice', { id: 'k1234567890123x', date: '2026-02-28', amount: 4500, kind: 'expense', categoryId: 'food' }, mem, 1);
     const it = keptList('alice', mem)[0];
     await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${keepIdOf('alice', it)}`), { date: it.date, amount: it.amount, kind: it.kind, categoryId: it.categoryId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+  });
+});
+
+describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시 만들지 않기', () => {
+  const RID = 'goodRec25';
+  const RECD = { name: '관리비', amount: 80000, kind: 'expense', categoryId: 'housing', dayOfMonth: 25, active: true, startYm: '2026-09', lastPosted: '2026-09' };
+  const AUTO = { date: '2026-10-25', amount: 80000, kind: 'expense', categoryId: 'housing', memo: '관리비', recurringId: RID };
+  const id = recTxId(RID, '2026-10');
+  const p = `users/alice/transactions/${id}`;
+  const ts = () => ({ createdAt: serverTimestamp(), updatedAt: serverTimestamp() });
+  const seed = (extra = {}) => env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), `users/alice/recurring/${RID}`), { ...RECD, ...extra }));
+
+  test("origin 'auto' 자동 기록: 없으면 만들기 허용, 있으면(사용자가 고친 문서) 덮어쓰기 거부", async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, origin: 'auto', ...ts() }));
+    // 사용자 고치기(origin 뺌, createdAt 원래 값)
+    const created = (await getDoc(doc(alice(), p))).data().createdAt;
+    await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, amount: 81000, memo: '관리비 10월 직접 고침', createdAt: created, updatedAt: serverTimestamp() }));
+    // 다른 기기의 자동 기록(오프라인 대기열 등)이 같은 문서를 다시 씀 → 거부
+    await assertFails(setDoc(doc(alice(), p), { ...AUTO, origin: 'auto', ...ts() }));
+    await assertFails(setDoc(doc(alice(), p), { ...AUTO, origin: 'auto', createdAt: created, updatedAt: serverTimestamp() })); // createdAt을 맞춰도 origin으로 거부
+    expect((await getDoc(doc(alice(), p))).data()).toMatchObject({ amount: 81000, memo: '관리비 10월 직접 고침' });
+  });
+  test('예전 버전 앱의 자동 기록(origin 없음, 새 createdAt)도 이미 있는 문서는 덮어쓰지 못함', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, ...ts() })); // 없을 때는 예전 앱도 그대로 만들 수 있음
+    await assertSucceeds(updateDoc(doc(alice(), p), { amount: 81000 }));
+    await assertFails(setDoc(doc(alice(), p), { ...AUTO, ...ts() }));
+    await assertFails(updateDoc(doc(alice(), p), { createdAt: serverTimestamp() }));
+  });
+  test("자동 기록 문서의 부분 고치기(카테고리 옮기기)는 허용, origin을 'auto'로 바꾸는 고치기는 거부", async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, origin: 'auto', ...ts() }));
+    await assertSucceeds(updateDoc(doc(alice(), p), { categoryId: 'etc' }));
+    await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'users/alice/transactions/plainTx1'), { ...TX }));
+    await assertFails(updateDoc(doc(alice(), 'users/alice/transactions/plainTx1'), { origin: 'auto' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/plainTx2'), { ...TX, origin: 'user' })); // 표식 값은 'auto'만
+  });
+  test('지운 달(skipped): 다시 만들기 거부(자동·사용자 모두), 다른 달은 허용, 반복이 없으면 허용', async () => {
+    await seed({ skipped: ['2026-10'] });
+    await assertFails(setDoc(doc(alice(), p), { ...AUTO, origin: 'auto', ...ts() }));
+    await assertFails(setDoc(doc(alice(), p), { ...AUTO, ...ts() })); // 예전 앱 자동 기록
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${recTxId(RID, '2026-11')}`), { ...AUTO, date: '2026-11-25', origin: 'auto', ...ts() }));
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${recTxId('noSuchRec', '2026-10')}`), { ...AUTO, recurringId: 'noSuchRec', ...ts() }));
+  });
+  test('지우기: 거래 삭제 + 반복 skipped에 그 달 넣기 한 묶음 허용 → 되돌리기: 그 달 빼기 + 다시 만들기 한 묶음 허용', async () => {
+    await seed();
+    await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, origin: 'auto', ...ts() }));
+    const db = alice();
+    let b = writeBatch(db);
+    b.delete(doc(db, p)); b.update(doc(db, `users/alice/recurring/${RID}`), { skipped: ['2026-10'], updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+    await assertFails(setDoc(doc(db, p), { ...AUTO, ...ts() })); // 그 달만 다시 만들면 거부
+    b = writeBatch(db);
+    b.set(doc(db, p), { ...AUTO, updatedAt: serverTimestamp() }); b.update(doc(db, `users/alice/recurring/${RID}`), { skipped: [], updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+  });
+  test('반복 skipped 형식: YYYY-MM 문자열 24개까지', async () => {
+    const r = doc(alice(), `users/alice/recurring/${RID}`);
+    await assertSucceeds(setDoc(r, { ...RECD, skipped: ['2026-09', '2026-10'] }));
+    await assertSucceeds(setDoc(r, { ...RECD, skipped: [] }));
+    const many = Array.from({ length: 24 }, (_, i) => `${2025 + Math.floor(i / 12)}-${String((i % 12) + 1).padStart(2, '0')}`);
+    await assertSucceeds(setDoc(r, { ...RECD, skipped: many }));
+    await assertFails(setDoc(r, { ...RECD, skipped: [...many, '2027-01'] }));
+    for (const bad of [['2026-13'], ['2026-10,2026-11'], [202610], ['2026-1'], '2026-10', ['1234567890123']]) await assertFails(setDoc(r, { ...RECD, skipped: bad }));
+  });
+  test('이미 배포된 데이터(표식 없는 rec- 문서): 읽기·고치기·지우기·되살리기 그대로', async () => {
+    await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), p), { ...AUTO, createdAt: new Date('2026-10-25T00:00:00Z') }));
+    await seed();
+    const db = alice();
+    const old = (await getDoc(doc(db, p))).data();
+    await assertSucceeds(setDoc(doc(db, p), { ...AUTO, amount: 81000, createdAt: old.createdAt, updatedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(db, p), { ...AUTO, amount: 82000, updatedAt: serverTimestamp() })); // createdAt 없이 고치기
+    await assertSucceeds(deleteDoc(doc(db, p)));
+    await assertSucceeds(setDoc(doc(db, p), { ...AUTO, createdAt: old.createdAt, updatedAt: serverTimestamp() })); // 같은 id 되살리기
+  });
+  test('앱 생성 함수 id(rec-·자동 id·고정 id kp/tx/rx) 전부 기존대로 만들기·고치기·지우기', async () => {
+    const db = alice();
+    const ids = [recTxId('r31', '2026-11'), recTxId(fixedRecId('q1w2e3r4t5y6u7i8o9p0a1s2d3'), '2026-10'), editTarget({ id: 'legacyTx1234567890123' }).id, doc(collection(db, 'users/alice/transactions')).id];
+    for (const tid of ids) {
+      const ref = doc(db, `users/alice/transactions/${tid}`);
+      await assertSucceeds(setDoc(ref, { ...TX, ...ts() }));
+      await assertSucceeds(setDoc(ref, { ...TX, amount: 13000, updatedAt: serverTimestamp() }));
+      await assertSucceeds(deleteDoc(ref));
+    }
   });
 });

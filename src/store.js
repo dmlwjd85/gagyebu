@@ -1,11 +1,11 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, getDoc, getDocFromCache, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
-import { dueOccurrences } from './lib/recurring.js';
+import { dueOccurrences, recParts, addSkipped, dropSkipped, bumpLastPosted } from './lib/recurring.js';
 import { safeRef, isRuleId, fixedRecId } from './lib/ids.js';
 import { restorePlans, keptList, keepTx, unkeep, keepIdOf, editTarget } from './lib/restore.js';
 
@@ -15,7 +15,7 @@ if (useEmulator) connectFirestoreEmulator(db, location.hostname || '127.0.0.1', 
 
 // data.js가 넘겨주는 공용 상태·알림 함수
 let state, emit, writeErrorHandler;
-export function bind(ctx) { state = ctx.state; emit = ctx.emit; writeErrorHandler = (e) => ctx.onError?.(e); }
+export function bind(ctx) { state = ctx.state; emit = ctx.emit; writeErrorHandler = (e, retry) => ctx.onError?.(e, retry); }
 
 let unsubs = [], txUnsub = null, budgetUnsub = null;
 export function stopAll() {
@@ -27,8 +27,10 @@ const col = (name) => collection(db, 'users', state.user.uid, name);
 const newRef = (name) => safeRef(() => doc(col(name)));
 
 // 쓰기는 오프라인에서도 즉시 로컬 반영되고, 서버 응답은 기다리지 않는다.
-function fire(promise, onError) {
-  promise.catch((e) => { console.error(e); onError?.(e); });
+// make: 쓰기 함수(다시 하기 가능) 또는 이미 시작한 쓰기(묶음 등, 다시 하기 없음)
+function fire(make, onError) {
+  const run = typeof make === 'function' ? make : null;
+  (run ? run() : make).catch((e) => { console.error(e); onError?.(e, run ? () => fire(run, onError) : undefined); });
 }
 
 // 다른 탭이 보관함을 바꾸면(보관·다시 저장) 이 탭 화면도 바로 맞춤
@@ -75,25 +77,43 @@ export function startUser() {
 }
 
 // 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
-// 반복마다 따로 씀(QA R5): 한 반복이 거부돼도 다른 반복의 기록은 막히지 않음.
-// 규칙에 맞지 않는 예전 반복 id(숫자 13개 이상)는 같은 묶음에서 늘 같은 새 id로 옮긴 뒤 기록.
+// 자동 기록은 '없을 때만 만들기'(QA D1): 사용자가 고친 같은 달 기록을 덮어쓰지 않음.
+//  - 이미 있으면(서버, 오프라인이면 이 기기 캐시) 건너뜀. 지운 달(skipped)도 건너뜀
+//  - 그래도 오프라인 대기열 등으로 겹치면 규칙이 막음(origin 'auto'·새 createdAt인 쓰기는 이미 있는 문서에 거부) → 조용히 넘어감
+//  - 회차마다 따로 쓰고 lastPosted는 따로 올림: 한 달이 막혀도 다음 달 기록·lastPosted가 막히지 않음
+// 규칙에 맞지 않는 예전 반복 id(숫자 13개 이상)는 늘 같은 새 id로 옮긴 뒤 기록(옮기기는 한 묶음).
 const recFields = (r) => clean({ name: r.name, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-  active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, createdAt: r.createdAt });
+  active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, skipped: r.skipped?.length ? r.skipped : undefined, createdAt: r.createdAt });
+async function autoCreate(ref, data) {
+  try {
+    const s = await (globalThis.navigator?.onLine === false ? getDocFromCache(ref) : getDoc(ref));
+    if (s.exists()) return false;
+  } catch { /* 캐시에 없음: 만들어 봄 */ }
+  try { await setDoc(ref, data); return true; } catch (e) {
+    if (e?.code === 'permission-denied') { console.info('[쓱 가계부] 이미 있는(또는 지운) 달이라 자동 기록을 건너뛰었어요:', ref.id); return false; }
+    throw e;
+  }
+}
 export function postRecurring(today) {
   let n = 0;
   for (const r of state.recurring) {
     const rid = isRuleId(r.id) ? r.id : fixedRecId(r.id);
     const due = dueOccurrences({ ...r, id: rid }, today);
     if (!due.length && rid === r.id) continue;
-    const b = writeBatch(db);
+    const skipped = r.skipped || [];
     for (const o of due) {
-      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: rid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+      if (skipped.includes(o.ym)) continue;
+      autoCreate(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: rid,
+        origin: 'auto', createdAt: serverTimestamp(), updatedAt: serverTimestamp() })).catch((e) => { console.error(e); writeErrorHandler?.(e); });
+      n++;
     }
     const lastPosted = due.length ? due[due.length - 1].ym : r.lastPosted;
-    if (rid === r.id) b.update(u('recurring', rid), { lastPosted, updatedAt: serverTimestamp() });
-    else { b.set(u('recurring', rid), { ...recFields({ ...r, lastPosted }), updatedAt: serverTimestamp() }); b.delete(u('recurring', r.id)); }
-    fire(b.commit(), writeErrorHandler);
-    n += due.length;
+    if (rid === r.id) fire(() => updateDoc(u('recurring', rid), { lastPosted, updatedAt: serverTimestamp() }), writeErrorHandler);
+    else {
+      const b = writeBatch(db);
+      b.set(u('recurring', rid), { ...recFields({ ...r, lastPosted }), updatedAt: serverTimestamp() }); b.delete(u('recurring', r.id));
+      fire(b.commit(), writeErrorHandler);
+    }
   }
   return n;
 }
@@ -141,12 +161,30 @@ export function saveTx(tx) {
   const t = tx.id ? editTarget(tx) : { id: newRef('transactions').id, recurringId: tx.recurringId, moved: false };
   const data = { ...txFields({ ...tx, recurringId: t.recurringId, tags: tagsOf(tx.memo) }), updatedAt: serverTimestamp(), ...(tx.id ? {} : { createdAt: serverTimestamp() }) };
   if (tx.id && tx.createdAt) data.createdAt = tx.createdAt;
-  if (!t.moved) { fire(setDoc(u('transactions', t.id), data), writeErrorHandler); return t.id; }
-  const b = writeBatch(db);
-  b.set(u('transactions', t.id), { ...data, createdAt: data.createdAt || serverTimestamp() });
-  b.delete(u('transactions', tx.id));
-  fire(b.commit(), writeErrorHandler);
+  if (tx.id) bumpRecurring(t.id);
+  if (!t.moved) { fire(() => setDoc(u('transactions', t.id), data), writeErrorHandler); return t.id; }
+  // createdAt은 원래 값만(새로 만들지 않음): 이미 있는 문서에 새 createdAt을 보내면 규칙이 '새로 만들기'로 보고 거부
+  fire(() => {
+    const b = writeBatch(db);
+    b.set(u('transactions', t.id), data);
+    b.delete(u('transactions', tx.id));
+    return b.commit();
+  }, writeErrorHandler);
   return t.id;
+}
+// 반복 자동 기록 문서 id → 그 반복(예전 형식 id면 옮긴 id로 찾음)과 달
+function recOf(txId) {
+  const p = recParts(txId);
+  if (!p) return null;
+  const rid = isRuleId(p.rid) ? p.rid : fixedRecId(p.rid);
+  const r = state.recurring.find((x) => x.id === rid);
+  return r ? { r, ym: p.ym } : null;
+}
+// 사용자가 그 달 자동 기록을 직접 고치면 lastPosted를 그 달로(빈 달이 안 생길 때만): 같은 달 자동 기록 시도 자체를 없앰(QA D1)
+function bumpRecurring(txId) {
+  const x = recOf(txId);
+  const lp = x && bumpLastPosted(x.r, x.ym);
+  if (lp) fire(() => updateDoc(u('recurring', x.r.id), { lastPosted: lp, updatedAt: serverTimestamp() }), writeErrorHandler);
 }
 // 여러 건 한 번에 저장 (400건씩 묶음)
 export async function saveTxBatch(list) {
@@ -171,7 +209,15 @@ export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
       const ref = !p.newId ? u('transactions', tx.id) : fromKeep ? u('transactions', keepIdOf(uid, tx))
         : moved ? u('transactions', moved) : newRef('transactions');
       try {
-        await setDoc(ref, { ...p.data, createdAt: createdAt || serverTimestamp(), updatedAt: serverTimestamp() });
+        // createdAt은 알 때만(새 createdAt은 규칙상 '새로 만들기'라 이미 있는 문서 되돌리기가 막힘)
+        const body = { ...p.data, ...(createdAt ? { createdAt } : {}), updatedAt: serverTimestamp() };
+        // 지운 자동 기록 되살리기: 반복의 '지운 달'에서 그 달을 빼는 쓰기와 한 묶음(규칙이 묶음 뒤 상태로 봄)
+        const rx = recOf(ref.id);
+        if (rx && (rx.r.skipped || []).includes(rx.ym)) {
+          const b = writeBatch(db);
+          b.set(ref, body); b.update(u('recurring', rx.r.id), { skipped: dropSkipped(rx.r.skipped, rx.ym), updatedAt: serverTimestamp() });
+          await b.commit();
+        } else await setDoc(ref, body);
         if (fromKeep) { state.kept = unkeep(uid, tx.keepKey); emit(); }
         if (i > 0 && !quiet) writeErrorHandler?.({ code: 'restored-as-new', message: '같은 칸에 되돌리지 못해 새 기록으로 살렸어요.' });
         return true;
@@ -210,11 +256,22 @@ export function retryKept() {
   retrying = (locks ? locks.request(`keptTx:${uid}`, work) : work()).finally(() => { retrying = null; });
   return retrying;
 }
-export const deleteTx = (id) => fire(deleteDoc(u('transactions', id)), writeErrorHandler);
+// 지우기. 반복 자동 기록이면 그 달을 반복의 '지운 달'(skipped)에 넣는 쓰기와 한 묶음:
+// 다른 기기(오프라인으로 자정을 넘긴 기기 등)가 같은 달을 다시 자동 기록해도 규칙이 거부 → 지운 기록이 살아나지 않음(QA D1)
+export function deleteTx(id) {
+  const x = recOf(id);
+  if (!x) return fire(() => deleteDoc(u('transactions', id)), writeErrorHandler);
+  fire(() => {
+    const b = writeBatch(db);
+    b.delete(u('transactions', id));
+    b.update(u('recurring', x.r.id), { skipped: addSkipped(x.r.skipped, x.ym), updatedAt: serverTimestamp() });
+    return b.commit();
+  }, writeErrorHandler);
+}
 
 export function saveCategory(c) {
   const ref = c.id ? u('categories', c.id) : newRef('categories');
-  fire(setDoc(ref, clean({ name: c.name.trim(), emoji: c.emoji, kind: c.kind, order: c.order ?? 0, archived: c.archived || undefined, budget: c.budget })), writeErrorHandler);
+  fire(() => setDoc(ref, clean({ name: c.name.trim(), emoji: c.emoji, kind: c.kind, order: c.order ?? 0, archived: c.archived || undefined, budget: c.budget })), writeErrorHandler);
   return ref.id;
 }
 // 카테고리 삭제: 그 카테고리 거래는 '기타'로 옮겨 보존
@@ -234,53 +291,56 @@ export async function deleteCategory(c) {
 }
 export function saveAccount(a) {
   const ref = a.id ? u('accounts', a.id) : newRef('accounts');
-  fire(setDoc(ref, clean({ name: a.name.trim(), type: a.type ?? 'card', emoji: a.emoji, order: a.order ?? 0, archived: a.archived || undefined })), writeErrorHandler);
+  fire(() => setDoc(ref, clean({ name: a.name.trim(), type: a.type ?? 'card', emoji: a.emoji, order: a.order ?? 0, archived: a.archived || undefined })), writeErrorHandler);
   return ref.id;
 }
 // 결제수단 삭제: 기존 기록은 그대로 두고(이름만 사라짐) 문서만 지움
-export const deleteAccount = (id) => fire(deleteDoc(u('accounts', id)), writeErrorHandler);
+export const deleteAccount = (id) => fire(() => deleteDoc(u('accounts', id)), writeErrorHandler);
 export function reorderCategories(list) {
   const b = writeBatch(db);
   list.forEach((c, i) => b.update(u('categories', c.id), { order: i }));
   fire(b.commit(), writeErrorHandler);
 }
 export function setBudget(ym, total, byCategory) {
-  fire(setDoc(u('budgets', ym), clean({ total, byCategory, updatedAt: serverTimestamp() })), writeErrorHandler);
+  fire(() => setDoc(u('budgets', ym), clean({ total, byCategory, updatedAt: serverTimestamp() })), writeErrorHandler);
 }
 export function setProfile(patch) {
-  fire(setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
+  fire(() => setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
 }
 // ── M2 ──
 export function saveRule(r) {
   const ref = r.id ? u('rules', r.id) : newRef('rules');
-  fire(setDoc(ref, { match: r.match.trim().slice(0, 40), field: 'memo', categoryId: r.categoryId, updatedAt: serverTimestamp() }), writeErrorHandler);
+  fire(() => setDoc(ref, { match: r.match.trim().slice(0, 40), field: 'memo', categoryId: r.categoryId, updatedAt: serverTimestamp() }), writeErrorHandler);
   return ref.id;
 }
-export const deleteRule = (id) => fire(deleteDoc(u('rules', id)), writeErrorHandler);
+export const deleteRule = (id) => fire(() => deleteDoc(u('rules', id)), writeErrorHandler);
 
 export function saveRecurring(r) {
+  const old = r.id ? state.recurring.find((x) => x.id === r.id) : null;
+  // 고칠 때도 '지운 달'·만든 날은 그대로(setDoc은 문서를 통째로 바꿈)
+  const skipped = r.skipped ?? old?.skipped;
   const data = clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) });
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, skipped: skipped?.length ? skipped : undefined, updatedAt: serverTimestamp(),
+    createdAt: r.id ? (r.createdAt ?? old?.createdAt) : serverTimestamp() });
   // 규칙에 맞지 않는 예전 id면 늘 같은 새 id로 옮김: 새 문서 쓰기와 예전 문서 지우기를 한 묶음으로(둘 다 되거나 둘 다 안 됨, QA R5)
   if (r.id && !isRuleId(r.id)) {
     const id = fixedRecId(r.id), b = writeBatch(db);
-    const createdAt = r.createdAt ?? state.recurring.find((x) => x.id === r.id)?.createdAt; // 만든 날은 그대로(QA N7)
-    b.set(u('recurring', id), clean({ ...data, createdAt })); b.delete(u('recurring', r.id));
+    b.set(u('recurring', id), data); b.delete(u('recurring', r.id)); // 만든 날은 그대로(QA N7)
     fire(b.commit(), writeErrorHandler);
     return id;
   }
   const ref = r.id ? u('recurring', r.id) : newRef('recurring');
-  fire(setDoc(ref, data), writeErrorHandler);
+  fire(() => setDoc(ref, data), writeErrorHandler);
   return ref.id;
 }
-export const deleteRecurring = (id) => fire(deleteDoc(u('recurring', id)), writeErrorHandler);
+export const deleteRecurring = (id) => fire(() => deleteDoc(u('recurring', id)), writeErrorHandler);
 
 export function saveGoal(g) {
   const ref = g.id ? u('goals', g.id) : newRef('goals');
-  fire(setDoc(ref, clean({ name: g.name.trim(), emoji: g.emoji, target: g.target, saved: g.saved ?? 0, due: g.due, order: g.order ?? 0, updatedAt: serverTimestamp() })), writeErrorHandler);
+  fire(() => setDoc(ref, clean({ name: g.name.trim(), emoji: g.emoji, target: g.target, saved: g.saved ?? 0, due: g.due, order: g.order ?? 0, updatedAt: serverTimestamp() })), writeErrorHandler);
   return ref.id;
 }
-export const deleteGoal = (id) => fire(deleteDoc(u('goals', id)), writeErrorHandler);
+export const deleteGoal = (id) => fire(() => deleteDoc(u('goals', id)), writeErrorHandler);
 
 // 오프라인이면 서버를 기다리지 않고 이 기기 캐시에서 읽음(가져오기가 멈추지 않게)
 const read = (q) => (navigator.onLine ? getDocs(q) : getDocsFromCache(q));

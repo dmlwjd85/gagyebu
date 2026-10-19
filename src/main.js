@@ -150,7 +150,7 @@ function onSave(tx, { repeat = false } = {}) {
     const old = sug.existing, oc = old && state.categories.find((x) => x.id === old.categoryId);
     const q = old ? `'${sug.key}' 규칙(${oc?.name ?? '다른 카테고리'})을 ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 바꿀까요?`
       : `앞으로 ${josa(`'${sug.key}'`, '은는')} ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 분류할까요?`;
-    return setTimeout(() => toast(`고쳤어요. ${q}`, {
+    return setTimeout(() => toast(`고쳤어요 · ${q}`, {
       action: old ? '바꾸기' : '그렇게 하기', duration: 6000,
       onAction: () => { data.saveRule({ id: old?.id, match: sug.key, categoryId: tx.categoryId }); toast(old ? '규칙을 바꿨어요.' : '규칙을 만들었어요. 설정에서 고칠 수 있어요.'); },
     }), 50);
@@ -213,7 +213,7 @@ async function editRecurring(r) {
   const lastPosted = isNew ? (day <= Number(t.slice(8)) ? ym : undefined) : r.lastPosted;
   data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted });
   setTimeout(() => data.postRecurring(today()), 300);
-  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요.');
+  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요');
 }
 const GOAL_EMOJI = ['🎯', '✈️', '🏠', '🚗', '💍', '🎓', '🛟', '💻', '🎁', '🐷'];
 async function editGoal(g) {
@@ -230,7 +230,7 @@ async function editGoal(g) {
   });
   if (!v) return;
   data.saveGoal({ ...(g ?? { order: state.goals.length }), ...v, due: v.due || undefined });
-  toast(g ? '고쳤어요.' : `🎯 '${v.name}' 목표를 만들었어요.`);
+  toast(g ? '고쳤어요' : `🎯 '${v.name}' 목표를 만들었어요.`);
 }
 async function editRule() {
   const v = await formDialog({
@@ -589,7 +589,7 @@ if (isFirebaseConfigured) {
   data = await import('./data.js');
   state = data.state;
   initSheet({ getState: () => state, onSave, onDelete });
-  data.onWriteError((e) => {
+  data.onWriteError((e, retry) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
     if (e?.code === 'kept-locally') return toast(e.message, { action: '설정 열기', onAction: () => go('settings'), duration: 8000 });
     if (e?.code === 'permission-denied') {
@@ -597,10 +597,11 @@ if (isFirebaseConfigured) {
       // 앱 안에 문의 창구가 없으므로 사용자가 직접 할 수 있는 일을 안내(QA R8)
       const signedIn = !!data.state?.user;
       return signedIn
-        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 한 번 더 해 주세요. 계속 안 되면 설정 › 데이터에서 전체 백업을 받아 두면 안심이에요.', { action: '새로 고침', onAction: () => location.reload(), duration: 8000 })
+        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 다시 해 주세요.', { action: '새로 고침', onAction: () => location.reload(), duration: 8000 })
         : toast('다시 로그인해 주세요. 이번 기록은 저장하지 못했어요.');
     }
-    return toast('저장하지 못했어요. 잠시 후 다시 해 주세요.');
+    // 스펙 8절: [다시 하기] — 같은 쓰기를 한 번 더(묶음 쓰기처럼 다시 할 수 없는 건 버튼 없이)
+    return toast('저장하지 못했어요. 잠시 후 다시 해 주세요.', retry ? { action: '다시 하기', onAction: retry, duration: 8000 } : {});
   });
   data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);
