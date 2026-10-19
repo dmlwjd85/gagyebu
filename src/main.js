@@ -1,4 +1,6 @@
 import './style.css';
+// 글꼴 CSS(@font-face 92개, 약 49kB)는 화면 그리기를 막지 않게 따로 불러옴
+import('./fonts.css');
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -12,6 +14,7 @@ import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, rollNumber, haptic } from './ui/util.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
+import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
@@ -50,8 +53,9 @@ let lastHero = null, lastView = null;
 function gateView({ caption, card }) {
   const hero = $('#boot-hero');
   if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
-    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap"></p><h1 class="mt-2 text-display">쓱 가계부</h1>
-      <p class="mt-3 text-body">10초 기록, 하루 한 번 보는 내 돈 날씨.</p></section><section class="card-solid p-5 flex flex-col gap-3" id="boot-card"></section></div></main>`;
+    <h1 class="flex justify-center" id="boot-logo">${logo({ cls: 'boot-logo' })}</h1>
+    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
+    <section class="card-solid p-5 flex flex-col gap-3" id="boot-card"></section></div></main>`;
   $('#boot-cap').textContent = caption;
   $('#boot-card').innerHTML = card;
   $('main', app)?.removeAttribute('aria-busy');
@@ -83,6 +87,7 @@ function render() {
   renderTip();
 }
 const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
+  <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쓱 가계부' })}</div>
   ${TABS.slice(0, 2).map(tabBtn).join('')}
   <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">＋</span></button>
   ${TABS.slice(2).map(tabBtn).join('')}</nav>`;

@@ -10,3 +10,4 @@ dist/
 firebase-debug.log
 firestore-debug.log
 dist-emu/
+__pycache__/

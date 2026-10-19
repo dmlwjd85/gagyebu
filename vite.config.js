@@ -1,13 +1,36 @@
 import { defineConfig } from 'vite';
 import { VitePWA } from 'vite-plugin-pwa';
+import { readFileSync } from 'node:fs';
+
+const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
+
+// 첫 화면 글자(쓱 가계부, 로그인 안내)가 많이 든 Pretendard 조각만 미리 받기.
+// 91: 영문·숫자·가장 흔한 한글, 90: 그다음 흔한 한글. 나머지 조각은 필요할 때 받음.
+const BASE = '/gagyebu/';
+const PRELOAD_FONT_SUBSETS = [91, 90];
+function preloadMainFonts() {
+  return {
+    name: 'preload-main-fonts',
+    transformIndexHtml: {
+      order: 'post',
+      handler(html, ctx) {
+        if (!ctx.bundle) return html;
+        const files = Object.keys(ctx.bundle).filter((f) => PRELOAD_FONT_SUBSETS.some((n) => new RegExp(`PretendardVariable\\.subset\\.${n}-[^/]+\\.woff2$`).test(f)));
+        return files.map((f) => ({ tag: 'link', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: `${BASE}${f}`, crossorigin: '' }, injectTo: 'head' }));
+      },
+    },
+  };
+}
 
 export default defineConfig({
-  base: '/gagyebu/',
+  base: BASE,
+  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
   plugins: [
+    preloadMainFonts(),
     VitePWA({
       registerType: 'autoUpdate',
       injectRegister: 'script-defer',
-      includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
+      includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
         name: '쓱 가계부',
         short_name: '쓱 가계부',
@@ -35,6 +58,11 @@ export default defineConfig({
   ],
   build: {
     target: 'es2022',
+    // 경고 기준 500kB → 600kB: firebase-firestore 조각(압축 전 약 586kB, gzip 약 149kB)은
+    // Firestore SDK 한 덩어리라 더 나눌 수 없음(내부 모듈이 서로 얽혀 있어 manualChunks로 쪼개도 다시 합쳐짐).
+    // 실제 전송량은 gzip 149kB이고, 로그인한 뒤에만 불러오므로(store.js) 첫 화면 속도에는 영향이 없음.
+    // 다른 조각이 500kB를 넘기면 여전히 경고가 뜨도록 해당 조각 크기에 딱 맞춰 600으로만 올림.
+    chunkSizeWarningLimit: 600,
     rollupOptions: {
       output: {
         manualChunks(id) {

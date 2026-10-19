@@ -25,6 +25,8 @@ with sync_playwright() as p:
         for x in bad: print('    PIX-BAD', x)
         for v in r['v']: print('   ', v['id'], v['impact'], v['n'], v['ex'][:2])
     check('로그인-라이트')
+    pg.evaluate("localStorage.setItem('theme','dark'); document.documentElement.classList.add('dark')"); check('로그인-다크')
+    pg.evaluate("localStorage.setItem('theme','light'); document.documentElement.classList.remove('dark')")
     if 'login-test' in pg.content():
         pg.click('text=테스트 계정으로 로그인'); pg.wait_for_timeout(1500); pg.evaluate('window.__gagyebu.seedDemo()'); pg.wait_for_timeout(2500)
         pg.evaluate("localStorage.setItem('tips', JSON.stringify({queue:[],hiddenOn:null,dismiss:{},excluded:[]}))")
