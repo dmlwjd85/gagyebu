@@ -1,7 +1,8 @@
 // 10초 입력 시트: ＋ → 숫자 → 카테고리 → 저장
 import { esc, $, $$, haptic, confirmDialog } from './util.js';
 import { formatWon } from '../lib/money.js';
-import { ymd, prettyDate } from '../lib/dates.js';
+import { ymd, prettyDate, parseYmd, WEEK } from '../lib/dates.js';
+const longDate = (d, today) => { const x = parseYmd(d); return `${x.getFullYear()}년 ${x.getMonth() + 1}월 ${x.getDate()}일 (${WEEK[x.getDay()]})${d === today ? ' · 오늘' : ''}`; };
 import { validateTx, MAX_AMOUNT, MAX_MEMO } from '../lib/validate.js';
 import { suggestOrder } from '../lib/defaults.js';
 
@@ -35,12 +36,14 @@ export function openSheet(tx = null, { date } = {}) {
   render();
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
+  document.getElementById('app').inert = true;
   requestAnimationFrame(() => $('.sheet', el).focus());
 }
 export function closeSheet() {
   if (!isSheetOpen()) return;
   el.classList.remove('open');
   document.documentElement.classList.remove('sheet-open');
+  document.getElementById('app').inert = false;
   lastFocus?.focus?.();
 }
 
@@ -82,8 +85,9 @@ function render() {
       </div>
     </div>
     ${s.showOpts ? `<div class="px-5 pt-3 grid gap-2">
-        <label class="opt-row"><span aria-hidden="true">📅</span><span class="sr-only">날짜</span>
-          <input type="date" name="date" value="${s.date}" max="2100-12-31" class="opt-input" /></label>
+        <label class="opt-row relative"><span aria-hidden="true">📅</span>
+          <span class="flex-1 text-body" aria-hidden="true">${esc(longDate(s.date, today))}</span><span class="text-caption text-ink-sub font-semibold" aria-hidden="true">바꾸기 ›</span>
+          <input type="date" name="date" lang="ko" value="${s.date}" max="2100-12-31" class="date-overlay" aria-label="날짜, ${esc(longDate(s.date, today))}" /></label>
         <div class="flex gap-2 flex-wrap" role="radiogroup" aria-label="결제수단">
           ${st.accounts.filter((a) => !a.archived).map((a) => `<button role="radio" aria-checked="${a.id === s.accountId}" class="chip" data-acc="${esc(a.id)}"><span aria-hidden="true">${esc(a.emoji ?? '')}</span> ${esc(a.name)}</button>`).join('')}
         </div>
@@ -137,14 +141,14 @@ function onClick(e) {
   if (t.dataset.kind) { if (s.kind !== t.dataset.kind) { s.kind = t.dataset.kind; s.categoryId = null; s.more = false; } return render(); }
   if (t.dataset.cat) { s.categoryId = t.dataset.cat; s.error = ''; haptic(); render(); $(`[data-cat="${CSS.escape(s.categoryId)}"]`, el)?.classList.add('pop'); return; }
   if (t.hasAttribute('data-more')) { s.more = true; return render(); }
-  if (t.hasAttribute('data-opts')) { s.showOpts = true; render(); return $('input[name=date]', el)?.focus(); }
+  if (t.hasAttribute('data-opts')) { s.showOpts = true; render(); return $('[data-acc]', el)?.focus(); }
   if (t.dataset.acc) { s.accountId = s.accountId === t.dataset.acc ? '' : t.dataset.acc; return render(); }
   if (t.hasAttribute('data-save')) return save();
   if (t.hasAttribute('data-del')) { const id = s.id; closeSheet(); return ctx.onDelete(id); }
 }
 function onInput(e) {
   if (e.target.name === 'memo') s.memo = e.target.value;
-  if (e.target.name === 'date' && e.type === 'change' && e.target.value) { s.date = e.target.value; }
+  if (e.target.name === 'date' && e.type === 'change' && e.target.value) { s.date = e.target.value; render(); $('input[name=date]', el)?.focus(); }
 }
 function onPaste(e) {
   if (e.target.name === 'memo' || e.target.name === 'date') return;

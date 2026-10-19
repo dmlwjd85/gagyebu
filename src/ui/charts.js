@@ -33,14 +33,14 @@ export function trendBars(rows, { currentYm, selectedYm } = {}) {
   const y = (v) => T + (H - T - B) * (1 - Math.max(0, v) / top);
   const col = (W - L - R) / rows.length;
   let grid = '';
-  for (let v = 0; v <= top + 1; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${v ? 'stroke-dasharray="3 3"' : ''}/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end" fill="var(--ink-sub)" style="font-size:10px">${v ? shortWon(v) : 0}</text>`;
+  for (let v = 0; v <= top + 1; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${v ? 'stroke-dasharray="3 3"' : ''}/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end" fill="currentColor" class="text-ink-sub" style="font-size:10px">${v ? shortWon(v) : 0}</text>`;
   const bars = rows.map((r, i) => {
     const x = L + i * col + col / 2, cur = r.ym === currentYm, sel = r.ym === selectedYm;
     return `<g class="bar-g" data-bar="${r.ym}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${Number(r.ym.slice(5))}월 지출 ${formatWon(r.expense)}, 남긴 돈 ${formatWon(r.saved)}">
       <rect x="${x - col / 2}" y="${T}" width="${col}" height="${H - T - 2}" rx="8" fill="${sel ? 'var(--heat-1)' : 'transparent'}" ${cur ? 'stroke="var(--primary)" stroke-width="1.5"' : ''}/>
       <rect class="bar" style="animation-delay:${i * 40}ms" x="${x - bw - 1}" y="${y(r.expense)}" width="${bw}" height="${y(0) - y(r.expense)}" rx="4" fill="var(--chart-1)"/>
       <rect class="bar" style="animation-delay:${i * 40 + 20}ms" x="${x + 1}" y="${y(r.saved)}" width="${bw}" height="${y(0) - y(r.saved)}" rx="4" fill="var(--income)"/>
-      <text x="${x}" y="${H - 8}" text-anchor="middle" fill="var(--ink-sub)" style="font-size:12px;font-weight:${cur ? 700 : 500}">${Number(r.ym.slice(5))}월</text></g>`;
+      <text x="${x}" y="${H - 8}" text-anchor="middle" fill="currentColor" class="text-ink-sub" style="font-size:12px;font-weight:${cur ? 700 : 500}">${Number(r.ym.slice(5))}월</text></g>`;
   }).join('');
   return `<svg viewBox="0 0 ${W} ${H}" class="w-full trend" role="group" aria-label="월별 지출과 남긴 돈">${grid}${bars}</svg>`;
 }

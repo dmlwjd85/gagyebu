@@ -6,11 +6,12 @@ export default defineConfig({
   plugins: [
     VitePWA({
       registerType: 'autoUpdate',
+      injectRegister: 'script-defer',
       includeAssets: ['favicon.svg', 'apple-touch-icon.png'],
       manifest: {
-        name: '가계부 · 내 돈 날씨',
-        short_name: '가계부',
-        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부.',
+        name: '쓱 가계부',
+        short_name: '쓱 가계부',
+        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 쓱 가계부.',
         lang: 'ko',
         start_url: '/gagyebu/',
         scope: '/gagyebu/',
@@ -32,5 +33,17 @@ export default defineConfig({
       },
     }),
   ],
+  build: {
+    target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@firebase/firestore') || id.includes('firebase/firestore')) return 'firebase-firestore';
+          if (id.includes('@firebase/auth') || id.includes('firebase/auth')) return 'firebase-auth';
+          if (id.includes('node_modules/@firebase') || id.includes('node_modules/firebase')) return 'firebase-core';
+        },
+      },
+    },
+  },
   test: { include: ['src/**/*.test.js'], environment: 'node' },
 });

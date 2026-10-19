@@ -1,8 +1,9 @@
 import './style.css';
-import { isFirebaseConfigured, useEmulator } from './firebase.js';
+import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
-import * as data from './data.js';
-import { state } from './data.js';
+// Firebase SDK는 설정이 있을 때만 나눠서 불러옴
+let data = null;
+let state = { ready: false, user: null, txs: [], categories: [], accounts: [] };
 import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
@@ -16,7 +17,9 @@ import { topBar, homeView, calendarView, chartView, budgetView, settingsView, lo
 initTheme();
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
-const ui = { view: 'home', viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, loginError: '' };
+const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings'];
+const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
+const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '' };
 const today = () => ymd(new Date());
 
 function model() {
@@ -43,10 +46,20 @@ function model() {
 
 // ── 렌더 ───────────────────────────────────────────
 let lastHero = null, lastView = null;
+// 로그인·설정 안내: 첫 화면(index.html)의 브랜드 카드는 그대로 두고 아래 카드만 바꿈 → 화면 깜빡임·LCP 지연 없음
+function gateView({ caption, card }) {
+  const hero = $('#boot-hero');
+  if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
+    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap"></p><h1 class="mt-2 text-display">쓱 가계부</h1>
+      <p class="mt-3 text-body">10초 기록, 하루 한 번 보는 내 돈 날씨.</p></section><section class="card-solid p-5 flex flex-col gap-3" id="boot-card"></section></div></main>`;
+  $('#boot-cap').textContent = caption;
+  $('#boot-card').innerHTML = card;
+  $('main', app)?.removeAttribute('aria-busy');
+}
 function render() {
-  if (!isFirebaseConfigured) { app.innerHTML = setupView(); return; }
-  if (!state.ready) { app.innerHTML = '<div class="min-h-dvh grid place-items-center text-ink-sub" aria-busy="true">불러오는 중…</div>'; return; }
-  if (!state.user) { app.innerHTML = loginView({ emulator: useEmulator, error: ui.loginError }); return; }
+  if (!isFirebaseConfigured) return gateView(setupView());
+  if (!state.ready) return; // index.html 의 첫 화면(브랜드 카드)을 그대로 둠
+  if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
   const m = model();
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
@@ -123,6 +136,7 @@ function download(name, text, type = 'text/csv;charset=utf-8') {
 }
 function go(view, extra = {}) {
   Object.assign(ui, { view, emojiFor: null }, extra);
+  history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
   render();
   $('#main')?.focus({ preventScroll: true });
   window.scrollTo(0, 0);
@@ -158,6 +172,14 @@ app.addEventListener('click', async (e) => {
   if (d.filterCat) return go('calendar', { mode: 'list', catFilter: d.filterCat });
   if (d.theme) { setThemeMode(d.theme); return render(); }
   if (d.catKind) { ui.catKind = d.catKind; ui.emojiFor = null; return render(); }
+  if (d.accEmoji) { ui.accEmojiFor = ui.accEmojiFor === d.accEmoji ? null : d.accEmoji; return render(); }
+  if (d.accPick) { const a = state.accounts.find((x) => x.id === ui.accEmojiFor); ui.accEmojiFor = null; if (a) data.saveAccount({ ...a, emoji: d.accPick }); return render(); }
+  if (d.accDel) {
+    const a = state.accounts.find((x) => x.id === d.accDel);
+    if (!a || !(await confirmDialog({ title: `'${a.name}' 결제수단을 지울까요?`, body: '이미 남긴 기록은 지워지지 않아요.', ok: '지우기', danger: true }))) return;
+    data.deleteAccount(a.id); if (localStorage.getItem('lastAccount') === a.id) localStorage.removeItem('lastAccount');
+    return toast('지웠어요.', { action: '되돌리기', onAction: () => data.saveAccount(a) });
+  }
   if (d.chartKind) { ui.chartKind = d.chartKind; return render(); }
   if (d.catMenu) { ui.catMenu = ui.catMenu === d.catMenu ? null : d.catMenu; ui.emojiFor = null; return render(); }
   if (d.emojiFor) { ui.emojiFor = ui.emojiFor === d.emojiFor ? null : d.emojiFor; return render(); }
@@ -199,11 +221,16 @@ app.addEventListener('click', async (e) => {
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
     case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
-    case 'csv-month': return download(`가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
+    case 'csv-month': return download(`쓱가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
-      try { download(`가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
+      try { download(`쓱가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
       catch { toast('내보내지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
+    case 'add-acc': {
+      const id = data.saveAccount({ name: '새 결제수단', emoji: '💳', type: 'card', order: state.accounts.length });
+      setTimeout(() => { const el = app.querySelector(`[data-acc-name="${CSS.escape(id)}"]`); el?.focus(); el?.select(); }, 60);
+      return;
+    }
     case 'add-cat': {
       const list = state.categories.filter((c) => c.kind === ui.catKind);
       const id = data.saveCategory({ name: '새 카테고리', emoji: ui.catKind === 'income' ? '💸' : '🌱', kind: ui.catKind, order: list.length });
@@ -214,7 +241,7 @@ app.addEventListener('click', async (e) => {
       try {
         const txs = await data.allTransactions();
         const strip = ({ createdAt, updatedAt, ...r }) => r;
-        download(`가계부_백업_${m.today}.json`, JSON.stringify({ app: 'gagyebu', version: 1, exportedAt: new Date().toISOString(), profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs.map(strip) }, null, 2), 'application/json');
+        download(`쓱가계부_백업_${m.today}.json`, JSON.stringify({ app: 'gagyebu', version: 1, exportedAt: new Date().toISOString(), profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs.map(strip) }, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'delete-all':
@@ -232,12 +259,19 @@ app.addEventListener('change', (e) => {
     if (err) { toast(err); t.value = c?.name ?? ''; return; }
     if (c && c.name !== t.value.trim()) data.saveCategory({ ...c, name: t.value });
   }
+  if (t.dataset.accName) {
+    const a = state.accounts.find((x) => x.id === t.dataset.accName), name = t.value.trim();
+    if (!name || name.length > 20) { toast('이름은 1~20자로 적어 주세요.'); t.value = a?.name ?? ''; return; }
+    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 저장하지 않아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
+    if (a && a.name !== name) data.saveAccount({ ...a, name });
+  }
+  if (t.dataset.accType) { const a = state.accounts.find((x) => x.id === t.dataset.accType); if (a) data.saveAccount({ ...a, type: t.value }); }
   if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
   if (t.dataset.toggleEnv !== undefined) { ui.envelopes = t.checked; if (!t.checked && state.budget?.byCategory) data.setBudget(model().viewYm, state.budget.total ?? 0, undefined); render(); }
 });
 app.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && e.target.dataset?.nameFor) e.target.blur();
+  if (e.key === 'Enter' && (e.target.dataset?.nameFor || e.target.dataset?.accName)) e.target.blur();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.bar) { e.preventDefault(); ui.barYm = e.target.dataset.bar; render(); }
 });
 window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => state.user && render());
@@ -247,14 +281,49 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('online', render);
+window.addEventListener('hashchange', () => { if (hashView() !== ui.view) go(hashView()); });
 window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
+
+// 거래 밀어서 지우기 (왼쪽으로 40% 이상 밀면 삭제 + 되돌리기). 키보드·스크린리더는 거래를 눌러 시트의 🗑️ 사용
+let swipe = null, swipedAt = 0;
+app.addEventListener('pointerdown', (e) => {
+  const row = e.target.closest('.tx-row');
+  if (!row || e.button) return;
+  swipe = { row, x: e.clientX, y: e.clientY, dx: 0, active: false, id: e.pointerId };
+});
+app.addEventListener('pointermove', (e) => {
+  if (!swipe || e.pointerId !== swipe.id) return;
+  const dx = e.clientX - swipe.x, dy = e.clientY - swipe.y;
+  if (!swipe.active) {
+    if (Math.abs(dy) > 10 && Math.abs(dy) > Math.abs(dx)) { swipe = null; return; }
+    if (dx < -10 && Math.abs(dx) > Math.abs(dy)) { swipe.active = true; swipe.row.setPointerCapture?.(e.pointerId); swipe.row.classList.add('swiping'); }
+    else return;
+  }
+  swipe.dx = Math.min(0, dx);
+  swipe.row.style.transform = `translateX(${swipe.dx}px)`;
+  swipe.row.parentElement.classList.toggle('swipe-ready', -swipe.dx > swipe.row.offsetWidth * 0.4);
+});
+const endSwipe = () => {
+  if (!swipe) return;
+  const { row, dx, active } = swipe; swipe = null;
+  if (!active) return;
+  swipedAt = Date.now();
+  row.classList.remove('swiping');
+  if (-dx > row.offsetWidth * 0.4) { row.style.transform = 'translateX(-110%)'; haptic(12); setTimeout(() => onDelete(row.dataset.tx), 160); }
+  else { row.style.transform = ''; row.parentElement.classList.remove('swipe-ready'); }
+};
+app.addEventListener('pointerup', endSwipe);
+app.addEventListener('pointercancel', endSwipe);
+app.addEventListener('click', (e) => { if (Date.now() - swipedAt < 300 && e.target.closest('.tx-row')) { e.stopImmediatePropagation(); e.preventDefault(); } }, true);
 
 // 렌더 묶기(스냅샷이 연달아 올 때 한 번만)
 let raf = 0;
 const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!isSheetOpen() || ui.view) render(); }); };
 
 if (isFirebaseConfigured) {
+  data = await import('./data.js');
+  state = data.state;
   initSheet({ getState: () => state, onSave, onDelete });
   data.onWriteError((e) => toast(e?.code === 'permission-denied' ? '저장 권한이 없어요. 다시 로그인해 주세요.' : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
   data.subscribe(schedule);

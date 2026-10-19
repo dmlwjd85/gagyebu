@@ -82,6 +82,27 @@ describe('기타 컬렉션 필드 검증', () => {
   });
 });
 
+describe('결제수단', () => {
+  test('본인: 추가·이모지 변경·삭제', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/accounts/a2'), { name: '생활비 카드', type: 'card', emoji: '💳', order: 3 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/accounts/a2'), { name: '생활비 카드', type: 'card', emoji: '👛', order: 3 }));
+    await assertSucceeds(deleteDoc(doc(alice(), 'users/alice/accounts/a2')));
+  });
+  test('이름 21자·빈 이름·긴 이모지 거부', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/a3'), { name: 'x'.repeat(21), type: 'card' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/a3'), { name: '', type: 'card' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/a3'), { name: '카드', type: 'card', emoji: '💳'.repeat(9) }));
+  });
+  test('타인·비로그인: 읽기·추가·삭제 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'users/alice/accounts/card'), { name: '카드', type: 'card' }));
+    await assertFails(getDoc(doc(bob(), 'users/alice/accounts/card')));
+    await assertFails(getDocs(collection(bob(), 'users/alice/accounts')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/accounts/x'), { name: '카드', type: 'card' }));
+    await assertFails(deleteDoc(doc(bob(), 'users/alice/accounts/card')));
+    await assertFails(deleteDoc(doc(anon(), 'users/alice/accounts/card')));
+  });
+});
+
 describe('타인 uid', () => {
   test('읽기 거부(문서·목록)', async () => {
     await assertFails(getDoc(doc(bob(), 'users/alice')));
