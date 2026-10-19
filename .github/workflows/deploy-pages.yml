@@ -3,7 +3,37 @@ on: { push: { branches: [main] }, workflow_dispatch: {} }
 permissions: { contents: read, pages: write, id-token: write }
 concurrency: { group: pages, cancel-in-progress: true }
 jobs:
+  # 1단계: 보안 규칙이 먼저(QA 3차 N1). 앱이 규칙보다 먼저 나가면 새 앱의 쓰기가 예전 규칙에 거부돼요.
+  #  - 비밀값 FIREBASE_SERVICE_ACCOUNT(서비스 계정 JSON)가 있으면 여기서 규칙을 배포해요.
+  #  - 없으면 규칙 배포 표시(.github/firestore-rules-deployed.sha256)가 지금 firestore.rules와 같은지 확인해요.
+  #    다르면 이 단계에서 멈추고 앱은 배포하지 않아요(예전 앱이 그대로 남아 안전). 절차: docs/배포.md
+  rules:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - id: mode
+        env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' }
+        run: if [ -n "$SA" ]; then echo "deploy=true" >> "$GITHUB_OUTPUT"; else echo "deploy=false" >> "$GITHUB_OUTPUT"; fi
+      - if: steps.mode.outputs.deploy == 'true'
+        run: npm ci
+      - name: 규칙 먼저 배포(서비스 계정이 있을 때)
+        if: steps.mode.outputs.deploy == 'true'
+        env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' }
+        run: |
+          printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
+          GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx firebase deploy --only firestore:rules --project gagyebu-b44fc2 --non-interactive
+          rm -f "$RUNNER_TEMP/sa.json"
+      - name: 규칙 배포 표시 확인(서비스 계정이 없을 때)
+        if: steps.mode.outputs.deploy != 'true'
+        run: |
+          if ! node scripts/rules-mark.mjs --check; then
+            echo "::error title=규칙을 먼저 배포해 주세요::firestore.rules가 운영에 배포된 규칙과 달라요. 'npm run rules:deploy'로 규칙을 배포하고 바뀐 .github/firestore-rules-deployed.sha256을 커밋한 뒤 다시 실행해 주세요(docs/배포.md). 앱은 배포하지 않았어요."
+            exit 1
+          fi
   build:
+    needs: rules
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

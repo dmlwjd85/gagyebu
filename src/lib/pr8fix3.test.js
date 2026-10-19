@@ -60,3 +60,19 @@ describe('N1 자동 기록이 거부되면 정말 있는지 확인하고, 처리
     expect(src).not.toMatch(/permission-denied'\) \{ console\.info\([^)]*\); return false; \}/);
   });
 });
+
+describe('N1 배포 순서: 규칙을 먼저, 앱은 나중에', () => {
+  it('앱 배포 워크플로는 rules 단계가 끝나야 빌드해요', () => {
+    const y = read('.github/workflows/deploy-pages.yml');
+    expect(y).toMatch(/\n  rules:\n/);
+    expect(y).toMatch(/\n  build:\n    needs: rules\n/);
+    expect(y).toContain('firebase deploy --only firestore:rules --project gagyebu-b44fc2');
+    expect(y).toContain('node scripts/rules-mark.mjs --check');
+  });
+  it('npm run rules:deploy 는 규칙 배포에 성공한 뒤에만 표시 파일을 고쳐 써요', () => {
+    const pkg = JSON.parse(read('package.json'));
+    expect(pkg.scripts['rules:deploy']).toBe('firebase deploy --only firestore:rules --project gagyebu-b44fc2 && node scripts/rules-mark.mjs');
+    expect(read('.github/firestore-rules-deployed.sha256')).toMatch(/^[0-9a-f]{64}\n/);
+    expect(read('docs/배포.md')).toContain('npm run rules:deploy');
+  });
+});

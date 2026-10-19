@@ -1,0 +1,4 @@
+d021f5611579e9dcf61dfdf49123d17f0b8d0fa56f861189759ea031c9114958
+# 운영(gagyebu-b44fc2)에 마지막으로 배포한 firestore.rules의 sha256. npm run rules:deploy 가 배포에 성공하면 고쳐 써요.
+# 앱 배포(deploy-pages.yml)는 이 값이 firestore.rules와 같을 때만 진행해요. 손으로 고치지 마세요.
+# 지금 값: 배포본 640ff0f(main)의 규칙. PR #8의 새 규칙은 아직 배포하지 않았어요.
