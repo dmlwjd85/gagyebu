@@ -6,7 +6,7 @@
 @layer base {
   html { color-scheme: light; -webkit-tap-highlight-color: transparent; }
   html.dark { color-scheme: dark; }
-  body { @apply bg-bg text-ink font-sans antialiased text-body; min-height: 100dvh; }
+  body { @apply bg-bg text-ink font-sans antialiased text-body; min-height: 100dvh; word-break: keep-all; overflow-wrap: anywhere; }
   html.sheet-open body { overflow: hidden; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 10px; }
   button { touch-action: manipulation; }
@@ -52,7 +52,11 @@
   .seg { @apply inline-flex p-1 rounded-2xl; background: var(--line); }
   .seg > button { @apply min-h-[44px] px-4 rounded-xl text-caption font-semibold text-ink-sub; }
   .seg > button[aria-checked="true"] { background: var(--surface-solid); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
-  .select { @apply min-h-[44px] rounded-xl px-3 border text-body; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
+  /* 긴 옵션(공백 없는 20자 결제수단 등)이 있어도 화면 밖으로 밀리지 않게: 폭은 부모 안, 넘치면 말줄임(QA N13) */
+  .select { @apply min-h-[44px] rounded-xl px-3 border text-body min-w-0 max-w-full text-ellipsis; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
+  .opt-row { @apply flex items-center justify-between gap-2 text-body min-h-[44px] min-w-0; }
+  .opt-row > .opt-k { @apply shrink-0 whitespace-nowrap; }
+  .opt-row > .select { @apply flex-initial; max-width: min(62%, 260px); }
   .switch { @apply relative inline-block w-12 h-7 shrink-0; }
   .switch::before { content: ''; position: absolute; inset: -9px -2px; } /* 누르는 영역 52×44 */
   .switch input { @apply absolute opacity-0 cursor-pointer z-10; inset: -9px -2px; width: calc(100% + 4px); height: calc(100% + 18px); }
@@ -151,6 +155,28 @@
   .view-enter { animation: fadeUp .24s ease-out; }
   .fade-in { animation: fadeIn .15s ease-out; }
   .fade-up { animation: fadeUp .24s ease-out; }
+  /* M2: 가져오기·검색·반복·목표·리포트 */
+  .drop { @apply flex flex-col items-center justify-center gap-2 min-h-[220px] p-6 rounded-3xl border-2 border-dashed cursor-pointer transition-colors; border-color: color-mix(in srgb, var(--primary) 55%, var(--line)); background: color-mix(in srgb, var(--primary) 6%, var(--surface-solid)); }
+  .drop:hover, .drop.over { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface-solid)); }
+  .drop:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 3px; }
+  .chip-ok { border-color: var(--income); color: var(--income); }
+  .map-table { @apply w-max min-w-full border-separate text-caption; border-spacing: 0; }
+  .map-table th { @apply align-top text-left font-semibold p-2 min-w-[136px] max-w-[160px] lg:min-w-[150px] lg:max-w-[200px] border-b-2; border-color: var(--line); }
+  .map-table th.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, transparent); }
+  .map-table td { @apply p-2 whitespace-nowrap max-w-[160px] lg:max-w-[200px] overflow-hidden text-ellipsis tabular-nums border-b; border-color: var(--line); color: var(--ink); }
+  .map-sel { @apply w-full min-h-[44px] mt-1 px-2 rounded-xl border text-caption font-semibold; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
+  .map-table th.on .map-sel { border-color: var(--primary); color: var(--primary); }
+  .imp-foot { @apply sticky z-20 mt-3 max-w-[560px] lg:max-w-[880px] mx-auto px-1 pt-3; bottom: 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 30%); }
+  .done-check { @apply grid place-items-center w-20 h-20 rounded-full; background: var(--income); }
+  .done-check path { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw .5s .1s ease-out forwards; }
+  .set-link { @apply flex w-full items-center gap-3 min-h-[56px] px-3 rounded-2xl text-body border; border-color: var(--line); background: var(--surface-solid); }
+  .set-link:hover, .report-btn:hover { border-color: var(--primary); }
+  .report-btn { @apply flex w-full items-center gap-3 min-h-[60px] px-4 rounded-3xl border; border-color: var(--line); background: var(--surface-solid); }
+  .search-box { @apply flex items-center gap-2 min-h-[52px] px-4 rounded-2xl border; border-color: var(--line); background: var(--surface-solid); }
+  .search-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
+  .search-box input:focus-visible { outline: none; }
+  .amount-in { @apply w-[88px] min-h-[44px] px-2 rounded-xl border text-caption text-right tabular-nums; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
+  .goal { @apply flex items-center gap-3 p-3 rounded-2xl; background: var(--bg); }
 }
 
 /* 동적으로 붙는 클래스 (Tailwind 정리 대상에서 제외하려고 레이어 밖에 둠) */
@@ -191,3 +217,9 @@
   .pclogo { display: flex; justify-content: center; order: -2; margin-bottom: 4px; }
   .pcsym { width: 48px; height: 48px; }
 }
+
+@keyframes draw { to { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .done-check path { animation: none; stroke-dashoffset: 0; } }
+
+/* 화면에 안 보이는 읽기용 글자(sr-only)가 긴 줄 끝(오른쪽 밖)에 놓여 가로 스크롤을 만들지 않게 왼쪽 위에 고정(QA N3) */
+.sr-only:not(:focus):not(:focus-within) { left: 0; top: 0; }

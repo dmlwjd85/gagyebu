@@ -1,10 +1,11 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
-import { period, shiftYm } from './lib/dates.js';
+import { period, shiftYm, ymd, addDays } from './lib/dates.js';
+import { dueOccurrences, recTxId } from './lib/recurring.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
@@ -41,6 +42,43 @@ export function startUser() {
     state.accounts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     emit();
   }));
+  // M2: 자동 분류 규칙·반복 거래·저축 목표 (모두 개수가 적어 전체 구독)
+  // 가져오기 묶음 기록(되돌리기용): 묶음 id·건수·기간·형식 이름만(파일 이름·원본 없음)
+  unsubs.push(onSnapshot(col('imports'), (s) => {
+    // at(서버 시각) → 이 기기 시간 기준 'YYYY-MM-DDTHH:mm' 글자
+    const local = (t) => { const x = t?.toDate?.(); return x ? `${ymd(x)}T${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}` : ''; };
+    state.imports = s.docs.map((d) => { const v = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...v, at: local(v.at) }; })
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+    emit();
+  }));
+  unsubs.push(onSnapshot(col('rules'), (s) => { state.rules = s.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }));
+  unsubs.push(onSnapshot(col('goals'), (s) => {
+    state.goals = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+    emit();
+  }));
+  let posted = false;
+  unsubs.push(onSnapshot(col('recurring'), { includeMetadataChanges: true }, (s) => {
+    state.recurring = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.dayOfMonth - b.dayOfMonth);
+    // 서버 기준 목록을 받은 뒤 한 번만 밀린 회차 기록(캐시만 보고 쓰면 다른 기기 기록을 모름)
+    if (!posted && !s.metadata.fromCache) { posted = true; postRecurring(ymd(new Date())); }
+    emit();
+  }));
+}
+
+// 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
+export function postRecurring(today) {
+  const b = writeBatch(db); let n = 0;
+  for (const r of state.recurring) {
+    const due = dueOccurrences(r, today);
+    if (!due.length) continue;
+    for (const o of due) {
+      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: r.id, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+      n++;
+    }
+    b.update(u('recurring', r.id), { lastPosted: due[due.length - 1].ym, updatedAt: serverTimestamp() });
+  }
+  if (n) fire(b.commit(), writeErrorHandler);
+  return n;
 }
 
 // 첫 로그인: 기본 카테고리·결제수단 생성
@@ -77,7 +115,8 @@ export function watchMonth(ym) {
 }
 
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ''));
-const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags }) => clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined });
+const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4 }) =>
+  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4 });
 export const tagsOf = (memo = '') => [...new Set((memo.match(/#[^\s#]{1,20}/g) || []).map((t) => t.slice(1)))].slice(0, 20);
 
 export function saveTx(tx) {
@@ -95,9 +134,17 @@ export async function saveTxBatch(list) {
     await b.commit();
   }
 }
-export function restoreTx(tx) { // 되돌리기: 같은 id로 되살림
+// 되돌리기: 같은 id로 되살림. 규칙이 그 id 쓰기를 거부하면(예전 형식·일시 오류) 새 자동 id로 살려 유실을 막음.
+export function restoreTx(tx) {
   const { id, ...rest } = tx;
-  fire(setDoc(u('transactions', id), { ...txFields(rest), ...(rest.createdAt ? { createdAt: rest.createdAt } : {}), updatedAt: serverTimestamp() }), writeErrorHandler);
+  const data = { ...txFields(rest), ...(rest.createdAt ? { createdAt: rest.createdAt } : {}), updatedAt: serverTimestamp() };
+  const p = setDoc(u('transactions', id), data).catch(async (e) => {
+    if (e?.code !== 'permission-denied') throw e;
+    const ref = doc(col('transactions'));
+    await setDoc(ref, { ...data, createdAt: rest.createdAt || serverTimestamp() });
+    writeErrorHandler?.({ code: 'restored-as-new', message: '같은 칸에 되돌리지 못해 새 기록으로 살렸어요.' });
+  });
+  fire(p, writeErrorHandler);
 }
 export const deleteTx = (id) => fire(deleteDoc(u('transactions', id)), writeErrorHandler);
 
@@ -139,13 +186,75 @@ export function setBudget(ym, total, byCategory) {
 export function setProfile(patch) {
   fire(setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
 }
+// ── M2 ──
+export function saveRule(r) {
+  const ref = r.id ? u('rules', r.id) : doc(col('rules'));
+  fire(setDoc(ref, { match: r.match.trim().slice(0, 40), field: 'memo', categoryId: r.categoryId, updatedAt: serverTimestamp() }), writeErrorHandler);
+  return ref.id;
+}
+export const deleteRule = (id) => fire(deleteDoc(u('rules', id)), writeErrorHandler);
+
+export function saveRecurring(r) {
+  const ref = r.id ? u('recurring', r.id) : doc(col('recurring'));
+  fire(setDoc(ref, clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) })), writeErrorHandler);
+  return ref.id;
+}
+export const deleteRecurring = (id) => fire(deleteDoc(u('recurring', id)), writeErrorHandler);
+
+export function saveGoal(g) {
+  const ref = g.id ? u('goals', g.id) : doc(col('goals'));
+  fire(setDoc(ref, clean({ name: g.name.trim(), emoji: g.emoji, target: g.target, saved: g.saved ?? 0, due: g.due, order: g.order ?? 0, updatedAt: serverTimestamp() })), writeErrorHandler);
+  return ref.id;
+}
+export const deleteGoal = (id) => fire(deleteDoc(u('goals', id)), writeErrorHandler);
+
+// 오프라인이면 서버를 기다리지 않고 이 기기 캐시에서 읽음(가져오기가 멈추지 않게)
+const read = (q) => (navigator.onLine ? getDocs(q) : getDocsFromCache(q));
+// 가져오기: 겹치는 기간의 기존 거래(중복 검사용). 날짜 ±1일 근접 중복도 보므로 앞뒤 하루씩 넓혀 읽음
+export async function txsInRange(from, to) {
+  const s = await read(query(col('transactions'), where('date', '>=', addDays(from, -1)), where('date', '<=', addDays(to, 1))));
+  return s.docs.map((d) => ({ id: d.id, ...d.data() }));
+}
+// 가져오기 저장: 원본 줄은 저장하지 않고 앱 형식 칸 + 지문·묶음 id·카드 끝 4자리만.
+// 쓰기는 이 기기에 바로 반영되고 서버 응답은 기다리지 않음(오프라인이면 연결될 때 올라감)
+export function importTxs(items, batchId, meta = {}) {
+  for (let i = 0; i < items.length; i += 400) {
+    const b = writeBatch(db);
+    items.slice(i, i + 400).forEach((x) => b.set(doc(col('transactions')), {
+      ...txFields({ date: x.date, amount: x.amount, kind: x.kind, categoryId: x.categoryId, accountId: x.accountId, memo: x.memo,
+        tags: tagsOf(x.memo), importHash: x.importHash, importBatch: batchId, card4: x.card4 ?? undefined }),
+      createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
+    }));
+    if (i === 0) b.set(u('imports', batchId), clean({ count: items.length, from: meta.from, to: meta.to, label: meta.label?.slice(0, 20), at: serverTimestamp() }));
+    fire(b.commit(), writeErrorHandler);
+  }
+  return { count: items.length, pending: !navigator.onLine };
+}
+// 가져오기 묶음 전체 되돌리기(고친 거래도 묶음 id가 남아 있어 함께 지워짐)
+export async function undoImport(batchId) {
+  const s = await read(query(col('transactions'), where('importBatch', '==', batchId)));
+  for (let i = 0; i < s.docs.length || i === 0; i += 400) {
+    const b = writeBatch(db);
+    s.docs.slice(i, i + 400).forEach((d) => b.delete(d.ref));
+    if (i === 0) b.delete(u('imports', batchId));
+    fire(b.commit(), writeErrorHandler);
+  }
+  return s.docs.length;
+}
+// JSON 백업용: 모든 달 예산
+export async function allBudgets() {
+  const s = await read(col('budgets'));
+  return s.docs.map((d) => ({ ym: d.id, ...d.data() }));
+}
+
 export async function allTransactions() {
   const s = await getDocs(query(col('transactions'), orderBy('date')));
   return s.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 // 모든 기록 삭제(계정 삭제 포함)
 export async function deleteEverything() {
-  for (const name of ['transactions', 'categories', 'accounts', 'budgets']) {
+  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports']) {
     const s = await getDocs(col(name));
     for (let i = 0; i < s.docs.length; i += 400) {
       const b = writeBatch(db);

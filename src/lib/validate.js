@@ -3,8 +3,9 @@ export const MAX_AMOUNT = 1_000_000_000;
 export const MAX_MEMO = 200;
 // 저장 전 클라이언트 검증 (firestore.rules 와 같은 기준)
 export function validateTx(t) {
-  if (!Number.isInteger(t.amount) || t.amount <= 0) return '금액을 먼저 입력해 주세요.';
-  if (t.amount > MAX_AMOUNT) return '한 번에 10억 원까지 입력할 수 있어요.';
+  // 음수는 카드 환불(지출 차감)만 허용
+  if (!Number.isInteger(t.amount) || t.amount === 0 || (t.amount < 0 && t.kind !== 'expense')) return '금액을 먼저 입력해 주세요.';
+  if (Math.abs(t.amount) > MAX_AMOUNT) return '한 번에 10억 원까지 입력할 수 있어요.';
   if (t.kind !== 'expense' && t.kind !== 'income') return '지출인지 수입인지 골라 주세요.';
   if (!t.categoryId) return '카테고리를 골라 주세요.';
   if (!isYmd(t.date)) return '날짜가 올바르지 않아요.';

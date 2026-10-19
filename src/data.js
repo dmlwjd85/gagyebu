@@ -5,7 +5,7 @@ import { pickLoginMode, isIOS, isStandalone, isSameOriginAuth, loginErrorMessage
 
 const listeners = new Set();
 export const state = {
-  ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [],
+  ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [],
   txWindow: null, txLoaded: false, pendingWrites: false,
 };
 const emit = () => listeners.forEach((fn) => fn(state));
@@ -46,7 +46,7 @@ export function initAuth() {
       try { await loadStore(); } catch (e) { console.error(e); }
       if (auth.currentUser?.uid !== user.uid) return; // 기다리는 사이 로그아웃·계정 전환됨
     } else localStorage.removeItem(SIGNED_IN);
-    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], txWindow: null, txLoaded: false, budgetYm: null, ready: true });
+    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], txWindow: null, txLoaded: false, budgetYm: null, ready: true });
     if (user && store) store.startUser();
     emit();
   });
@@ -68,6 +68,17 @@ export const setBudget = call('setBudget');
 export const setProfile = call('setProfile');
 export const allTransactions = call('allTransactions');
 export const deleteEverything = call('deleteEverything');
+export const saveRule = call('saveRule');
+export const deleteRule = call('deleteRule');
+export const saveRecurring = call('saveRecurring');
+export const deleteRecurring = call('deleteRecurring');
+export const postRecurring = call('postRecurring');
+export const saveGoal = call('saveGoal');
+export const deleteGoal = call('deleteGoal');
+export const txsInRange = call('txsInRange');
+export const importTxs = call('importTxs');
+export const undoImport = call('undoImport');
+export const allBudgets = call('allBudgets');
 
 export async function login() {
   if (loginMode() === 'redirect') {

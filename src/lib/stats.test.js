@@ -26,7 +26,7 @@ describe('집계', () => {
     expect(r[1].amount).toBe(11000);
     expect(r[0].share + r[1].share).toBeCloseTo(1);
   });
-  test('날짜별', () => expect(byDay(txs)['2026-10-01']).toEqual({ expense: 15000, income: 0, count: 2 }));
+  test('날짜별', () => expect(byDay(txs)['2026-10-01']).toEqual({ expense: 15000, income: 0, count: 2, spent: true }));
   test('히트맵 4단계', () => { expect(heatLevel(0, 100)).toBe(0); expect(heatLevel(10, 100)).toBe(1); expect(heatLevel(60, 100)).toBe(3); expect(heatLevel(100, 100)).toBe(4); });
   test('월 추이', () => {
     const r = trend(txs, [period('2026-09'), period('2026-10')]);

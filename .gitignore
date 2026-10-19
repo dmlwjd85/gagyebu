@@ -11,3 +11,6 @@ firebase-debug.log
 firestore-debug.log
 dist-emu/
 __pycache__/
+
+# Firebase 웹 설정 원본(값은 GitHub Secrets로만 전달)
+firebase-config.json
