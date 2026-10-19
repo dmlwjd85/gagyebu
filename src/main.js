@@ -5,14 +5,20 @@ import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
 let data = null;
-let state = { ready: false, user: null, txs: [], categories: [], accounts: [] };
+let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [] };
 import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, rollNumber, haptic } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic } from './ui/util.js';
+// 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
+let IMP = null;
+const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
+import { searchView, recurringView } from './ui/m2views.js';
+import { merchantKey, matchRule, classify } from './lib/classify.js';
+import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
@@ -20,9 +26,10 @@ import { topBar, homeView, calendarView, chartView, budgetView, settingsView, lo
 initTheme();
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
-const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings'];
+const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring'];
+const NO_NAV = new Set(['settings', 'import', 'search', 'recurring']); // 아래 탭 막대 없는 화면
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
-const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '' };
+const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
 const today = () => ymd(new Date());
 
 function model() {
@@ -36,7 +43,8 @@ function model() {
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
     sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
-    categories: state.categories, accounts: state.accounts,
+    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, txs: state.txs,
+    searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
     trend: trend(state.txs, [-5, -4, -3, -2, -1, 0].map((d) => period(shiftYm(viewYm, d), sd))),
@@ -68,15 +76,19 @@ function render() {
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
   const scrollY = window.scrollY;
-  const body = { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView }[ui.view](m, ui);
+  if (ui.view === 'import' && !IMP) loadImp().then(render);
+  if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
+  const body = ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
+    : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView }[ui.view](m, ui);
+  const nav = !NO_NAV.has(ui.view);
   app.innerHTML = `
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
-    <div class="app-shell ${ui.view === 'settings' ? '' : 'has-nav'}">
+    <div class="app-shell ${nav ? 'has-nav' : ''}">
       ${topBar(m)}
       <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
     </div>
-    ${ui.view === 'settings' ? '' : tabBar()}
+    ${nav ? tabBar() : ''}
     <div id="tip-slot"></div>`;
   // 홈 숫자 롤링
   const hero = $('#hero-num');
@@ -115,11 +127,26 @@ function renderTip() {
 }
 
 // ── 동작 ───────────────────────────────────────────
-function onSave(tx) {
+function onSave(tx, { repeat = false } = {}) {
   const isEdit = !!tx.id;
-  const before = isEdit ? state.txs.find((t) => t.id === tx.id) : null;
+  const before = isEdit ? findTx(tx.id) : null;
   const id = data.saveTx(tx);
   const c = state.categories.find((x) => x.id === tx.categoryId);
+  if (ui.view === 'search') refreshSearch();
+  if (repeat) {
+    // 이번 회차는 방금 기록했으니 lastPosted = 이번 달 → 다음 달부터 자동 기록
+    const ym = tx.date.slice(0, 7);
+    data.saveRecurring({ name: (tx.memo || c?.name || '반복').split(' #')[0].slice(0, 30), amount: tx.amount, kind: tx.kind, categoryId: tx.categoryId, accountId: tx.accountId, dayOfMonth: Number(tx.date.slice(8)), active: true, startYm: ym, lastPosted: ym });
+    return setTimeout(() => toast(`🔁 매달 ${Number(tx.date.slice(8))}일에 ${formatWon(tx.amount)} 자동으로 기록할게요.`, { action: '반복 보기', onAction: () => go('recurring') }), 50);
+  }
+  // 분류를 고치면 규칙 제안: 앞으로 같은 가맹점은 이 카테고리로
+  const key = merchantKey(tx.memo);
+  if (isEdit && before && before.categoryId !== tx.categoryId && key && matchRule(tx.memo, state.rules)?.categoryId !== tx.categoryId) {
+    return setTimeout(() => toast(`고쳤어요. 앞으로 '${key}'은(는) ${c?.emoji ?? ''} ${c?.name ?? ''}(으)로 분류할까요?`, {
+      action: '그렇게 하기', duration: 6000,
+      onAction: () => { const old = state.rules.find((r) => r.match === key); data.saveRule({ id: old?.id, match: key, categoryId: tx.categoryId }); toast('규칙을 만들었어요. 설정에서 고칠 수 있어요.'); },
+    }), 50);
+  }
   setTimeout(() => {
     const m = model();
     const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
@@ -128,9 +155,14 @@ function onSave(tx) {
     });
   }, 50);
 }
+const findTx = (id) => state.txs.find((t) => t.id === id) ?? ui.searchAll?.find((t) => t.id === id);
+function refreshSearch() {
+  data.allTransactions().then((all) => { ui.searchAll = all; schedule(); }).catch(() => { ui.searchAll = state.txs; schedule(); });
+}
 function onDelete(id) {
-  const before = state.txs.find((t) => t.id === id);
+  const before = findTx(id);
   data.deleteTx(id);
+  if (ui.searchAll) { ui.searchAll = ui.searchAll.filter((t) => t.id !== id); if (ui.view === 'search') schedule(); }
   toast('삭제했어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
 }
 function download(name, text, type = 'text/csv;charset=utf-8') {
@@ -140,11 +172,116 @@ function download(name, text, type = 'text/csv;charset=utf-8') {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function go(view, extra = {}) {
+  if (ui.view === 'import' && view !== 'import') ui.imp = null; // 가져오기에서 나가면 읽은 파일을 메모리에서 버림
+  if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
   Object.assign(ui, { view, emojiFor: null }, extra);
   history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
   render();
   $('#main')?.focus({ preventScroll: true });
   window.scrollTo(0, 0);
+}
+
+// ── M2: 반복 거래·저축 목표·규칙 입력 대화상자 ─────────────
+const catOptions = () => state.categories.filter((c) => !c.archived).map((c) => [c.id, `${c.kind === 'income' ? '수입' : '지출'} · ${c.emoji} ${c.name}`]);
+async function editRecurring(r) {
+  const isNew = !r?.id;
+  const t = today();
+  const v = await formDialog({
+    title: isNew ? '반복 거래 추가' : '반복 거래 고치기', body: '정한 날짜가 되면 자동으로 기록해요. 31일로 정하면 짧은 달은 말일에 기록해요.',
+    fields: [
+      { name: 'name', label: '이름', value: r?.name ?? '', maxlength: 30, hint: '예: 월세, 넷플릭스' },
+      { name: 'amount', label: '금액', type: 'amount', value: r?.amount ?? 0 },
+      { name: 'categoryId', label: '카테고리', type: 'select', value: r?.categoryId ?? state.categories.find((c) => c.kind === 'expense')?.id, options: catOptions() },
+      { name: 'dayOfMonth', label: '매달 며칠', type: 'select', value: r?.dayOfMonth ?? Number(t.slice(8)), options: Array.from({ length: 31 }, (_, i) => [i + 1, `${i + 1}일`]) },
+      { name: 'accountId', label: '결제수단', type: 'select', value: r?.accountId ?? '', options: [['', '지정 안 함'], ...state.accounts.map((a) => [a.id, `${a.emoji || ''} ${a.name}`])] },
+    ],
+    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 입력해 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
+  });
+  if (!v) return;
+  const c = state.categories.find((x) => x.id === v.categoryId);
+  const day = Number(v.dayOfMonth);
+  // 새로 만들 때: 오늘이 이미 지난 날이면 이번 달은 건너뜀(직접 기록했을 수 있음) → 다음 달부터
+  const ym = t.slice(0, 7);
+  const lastPosted = isNew ? (day <= Number(t.slice(8)) ? ym : undefined) : r.lastPosted;
+  data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted });
+  setTimeout(() => data.postRecurring(today()), 300);
+  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요.');
+}
+const GOAL_EMOJI = ['🎯', '✈️', '🏠', '🚗', '💍', '🎓', '🛟', '💻', '🎁', '🐷'];
+async function editGoal(g) {
+  const v = await formDialog({
+    title: g ? '저축 목표 고치기' : '저축 목표 추가',
+    fields: [
+      { name: 'emoji', label: '아이콘', type: 'select', value: g?.emoji ?? '🎯', options: GOAL_EMOJI.map((e) => [e, e]) },
+      { name: 'name', label: '이름', value: g?.name ?? '', maxlength: 30, hint: '예: 제주 여행, 비상금' },
+      { name: 'target', label: '목표 금액', type: 'amount', value: g?.target ?? 0 },
+      { name: 'saved', label: '지금까지 모은 돈', type: 'amount', value: g?.saved ?? 0 },
+      { name: 'due', label: '목표일 (선택)', type: 'date', value: g?.due ?? '' },
+    ],
+    validate: (x) => validateGoal(x) ?? (x.due && x.due < today() && !g ? '목표일은 오늘 뒤로 정해 주세요.' : null),
+  });
+  if (!v) return;
+  data.saveGoal({ ...(g ?? { order: state.goals.length }), ...v, due: v.due || undefined });
+  toast(g ? '고쳤어요.' : `🎯 '${v.name}' 목표를 만들었어요.`);
+}
+async function editRule() {
+  const v = await formDialog({
+    title: '자동 분류 규칙 추가', body: '메모(가맹점)에 이 글자가 들어 있으면 이 카테고리로 분류해요. 여러 규칙이 맞으면 더 긴 글자가 이겨요.',
+    fields: [{ name: 'match', label: '이 글자가 있으면', value: '', maxlength: 40, hint: '예: 스타벅스, 쿠팡' }, { name: 'categoryId', label: '이 카테고리로', type: 'select', value: state.categories[0]?.id, options: catOptions() }],
+    validate: (x) => (!x.match ? '글자를 적어 주세요.' : null),
+  });
+  if (!v) return;
+  const old = state.rules.find((r) => r.match === v.match);
+  data.saveRule({ id: old?.id, ...v });
+  toast(old ? '같은 글자의 규칙을 바꿨어요.' : '규칙을 만들었어요.');
+}
+
+// ── 가져오기 동작 ──────────────────────────────────
+const impCtx = () => ({ categories: state.categories, rules: state.rules, txsInRange: data.txsInRange, importTxs: data.importTxs });
+async function impLoad(bytes, name, enc) {
+  const imp = ui.imp ?? (ui.imp = IMP.newImport());
+  imp.busy = true; render();
+  await IMP.loadFile(imp, bytes, name, enc);
+  render(); $('#main')?.focus({ preventScroll: true });
+}
+async function impFile(file) {
+  if (!file) return;
+  await loadImp();
+  if (file.size > 20 * 1024 * 1024) return toast('20MB보다 큰 파일은 읽지 않아요. 기간을 나눠서 받아 주세요.');
+  if (ui.view !== 'import') go('import');
+  ui.imp = IMP.newImport();
+  await impLoad(new Uint8Array(await file.arrayBuffer()), file.name);
+}
+async function onImportClick(d) {
+  const imp = ui.imp;
+  if (!imp) return;
+  if (d.impBack !== undefined) {
+    if (imp.step === 2) { ui.imp = IMP.newImport(); return render(); }
+    if (imp.step === 3 || imp.step === 4) { imp.step--; imp.error = ''; return render(); }
+    return go('settings');
+  }
+  if (d.impSample !== undefined) {
+    try { const r = await fetch(IMP.SAMPLE_URL); if (!r.ok) throw new Error(r.status); await impLoad(new Uint8Array(await r.arrayBuffer()), '현대카드_예시.xls'); }
+    catch { toast('예시 파일을 받지 못했어요.'); }
+    return;
+  }
+  if (d.impUndo) {
+    if (!(await confirmDialog({ title: '이번에 가져온 거래를 모두 지울까요?', body: '이 묶음으로 들어온 거래만 지워요. 직접 남긴 기록은 그대로예요.', ok: '되돌리기', danger: true }))) return;
+    try { const n = await data.undoImport(d.impUndo); IMP.clearLastImport(); ui.imp = IMP.newImport(); render(); toast(`가져온 거래 ${n}건을 지웠어요.`); }
+    catch { toast('되돌리지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+    return;
+  }
+  if (d.impEnc !== undefined) return impLoad(imp.bytes, imp.fileName, imp.table.encoding === 'euc-kr' ? 'utf-8' : 'euc-kr');
+  if (d.impHdr) { IMP.setHeaderRow(imp, imp.headerRow + Number(d.impHdr)); return render(); }
+  if (d.impSheet) { IMP.setSheet(imp, Number(d.impSheet)); return render(); }
+  if (d.impSkipall !== undefined) { imp.choice = {}; return render(); }
+  if (d.impChoice) { imp.choice[d.impChoice] = d.v; return render(); }
+  if (d.impNext !== undefined) {
+    if (imp.step === 2) { imp.busy = true; render(); await IMP.checkDuplicates(imp, impCtx()); }
+    else if (imp.step === 3) imp.step = 4;
+    else if (imp.step === 4) { imp.busy = true; render(); await IMP.commit(imp, impCtx()); if (imp.step === 5) haptic(20); }
+    render(); window.scrollTo(0, 0); $('#main')?.focus({ preventScroll: true });
+  }
 }
 
 async function editBudget(m) {
@@ -162,7 +299,34 @@ app.addEventListener('click', async (e) => {
   const d = t.dataset;
   const m = state.user ? model() : null;
   if (d.nav) return go(d.nav, d.mode ? { mode: d.mode, catFilter: null } : {});
-  if (d.tx) { const tx = state.txs.find((x) => x.id === d.tx); return tx && openSheet(tx); }
+  if (d.tx) { const tx = findTx(d.tx); return tx && openSheet(tx); }
+  if (Object.keys(d).some((k) => k.startsWith('imp'))) return onImportClick(d);
+  // 검색
+  if (d.searchKind !== undefined) { ui.search.kind = d.searchKind; if (ui.search.categoryId && m.catMap.get(ui.search.categoryId)?.kind !== d.searchKind && d.searchKind) ui.search.categoryId = ''; return render(); }
+  if (d.searchClear !== undefined) { ui.search = { q: '', kind: '', categoryId: '', accountId: '', range: ui.search.range, min: null, max: null }; return render(); }
+  if (d.searchTry) { ui.search.q = d.searchTry; render(); return $('[data-search-q]')?.focus(); }
+  // 반복 거래
+  if (d.recEdit) return editRecurring(state.recurring.find((r) => r.id === d.recEdit));
+  if (d.recFrom) { const c = { id: classify({ desc: d.recFrom, kind: 'expense' }, state.rules, new Set(state.categories.map((x) => x.id))).categoryId }; return editRecurring({ name: d.recFrom.slice(0, 30), amount: Number(d.amount), kind: 'expense', categoryId: c?.id, dayOfMonth: 1, active: true }); }
+  if (d.recDel) {
+    const r = state.recurring.find((x) => x.id === d.recDel);
+    if (!r || !(await confirmDialog({ title: `'${r.name}' 반복을 지울까요?`, body: '이미 기록된 거래는 그대로 남아요.', ok: '지우기', danger: true }))) return;
+    data.deleteRecurring(r.id);
+    return toast('지웠어요.', { action: '되돌리기', onAction: () => data.saveRecurring(r) });
+  }
+  // 저축 목표
+  if (d.goalEdit) return editGoal(state.goals.find((g) => g.id === d.goalEdit));
+  if (d.goalAdd) {
+    const g = state.goals.find((x) => x.id === d.goalAdd);
+    const v = g && (await promptAmount({ title: `${g.emoji || '🎯'} ${g.name}에 모으기`, body: `지금 ${formatWon(g.saved || 0)} / ${formatWon(g.target)}`, value: 0, ok: '모으기' }));
+    if (!v) return;
+    const saved = Math.min(10_000_000_000, (g.saved || 0) + v);
+    data.saveGoal({ ...g, saved });
+    haptic(12);
+    return toast(saved >= g.target ? `🎉 '${g.name}' 목표를 이뤘어요!` : `${formatWon(v)} 모았어요. ${Math.round((saved / g.target) * 100)}%`, { action: '되돌리기', onAction: () => data.saveGoal(g) });
+  }
+  // 자동 분류 규칙
+  if (d.ruleDel) { const r = state.rules.find((x) => x.id === d.ruleDel); if (!r) return; data.deleteRule(r.id); return toast('규칙을 지웠어요.', { action: '되돌리기', onAction: () => data.saveRule(r) }); }
   if (d.month) {
     const delta = Number(d.month);
     ui.viewYm = delta === 0 ? null : shiftYm(m.viewYm, delta);
@@ -217,6 +381,12 @@ app.addEventListener('click', async (e) => {
   if (d.tipOpen !== undefined) { tipCollapsed = false; return renderTip(); }
   switch (d.action) {
     case 'add': haptic(); return openSheet();
+    case 'add-rec': return editRecurring(null);
+    case 'add-goal': return editGoal(null);
+    case 'add-rule': return editRule();
+    case 'report':
+      try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
+      return;
     case 'theme': toggleTheme(); return render();
     case 'budget': return editBudget(m);
     case 'login':
@@ -273,10 +443,52 @@ app.addEventListener('change', (e) => {
   if (t.dataset.accType) { const a = state.accounts.find((x) => x.id === t.dataset.accType); if (a) data.saveAccount({ ...a, type: t.value }); }
   if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
+  // 가져오기
+  if (t.dataset.impFile !== undefined) { impFile(t.files?.[0]); t.value = ''; return; }
+  if (t.dataset.impCol && ui.imp) { IMP.setCol(ui.imp, Number(t.dataset.impCol), t.value); return render(); }
+  if (t.dataset.impOpt && ui.imp) { const k = t.dataset.impOpt; ui.imp.opts[k] = t.type === 'checkbox' ? t.checked : t.value; return render(); }
+  // 검색
+  if (t.dataset.searchF) { ui.search[t.dataset.searchF] = t.value; return render(); }
+  if (t.dataset.searchAmt) { const n = t.value.replace(/[^0-9]/g, ''); ui.search[t.dataset.searchAmt] = n ? Number(n) : null; return render(); }
+  // 반복·규칙
+  if (t.dataset.recActive) {
+    const r = state.recurring.find((x) => x.id === t.dataset.recActive);
+    if (!r) return;
+    // 다시 켤 때 꺼져 있던 달은 채우지 않음(지난달까지 기록한 것으로 봄)
+    const prev = shiftYm(today().slice(0, 7), -1);
+    data.saveRecurring({ ...r, active: t.checked, lastPosted: t.checked && (!r.lastPosted || r.lastPosted < prev) ? prev : r.lastPosted });
+    if (t.checked) setTimeout(() => data.postRecurring(today()), 300);
+    return toast(t.checked ? `'${r.name}' 자동 기록을 켰어요.` : `'${r.name}' 자동 기록을 껐어요.`);
+  }
+  if (t.dataset.ruleMatch) {
+    const r = state.rules.find((x) => x.id === t.dataset.ruleMatch), v = t.value.trim();
+    if (!v || v.length > 40) { toast('글자는 1~40자로 적어 주세요.'); t.value = r?.match ?? ''; return; }
+    if (r && r.match !== v) data.saveRule({ ...r, match: v });
+  }
+  if (t.dataset.ruleCat) { const r = state.rules.find((x) => x.id === t.dataset.ruleCat); if (r) data.saveRule({ ...r, categoryId: t.value }); }
   if (t.dataset.toggleEnv !== undefined) { ui.envelopes = t.checked; if (!t.checked && state.budget?.byCategory) data.setBudget(model().viewYm, state.budget.total ?? 0, undefined); render(); }
 });
+let searchTimer;
+app.addEventListener('input', (e) => {
+  if (e.target.dataset?.searchQ === undefined) return;
+  ui.search.q = e.target.value;
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => { if (e.isComposing) return; render(); const el = $('[data-search-q]'); if (el) { el.focus(); el.setSelectionRange(el.value.length, el.value.length); } }, 250);
+});
+app.addEventListener('compositionend', (e) => e.target.dataset?.searchQ !== undefined && e.target.dispatchEvent(new Event('input', { bubbles: true })));
+app.addEventListener('submit', (e) => { if (e.target.matches('[data-search-form]')) { e.preventDefault(); ui.search.q = $('[data-search-q]').value; render(); } });
+// 파일 끌어다 놓기: 가져오기 화면의 상자, 또는 PC에서 아무 화면에나 놓으면 가져오기로
+const hasFiles = (e) => [...(e.dataTransfer?.types ?? [])].includes('Files');
+document.addEventListener('dragover', (e) => { if (!state.user || !hasFiles(e)) return; e.preventDefault(); $('[data-drop]')?.classList.add('over'); });
+document.addEventListener('dragleave', (e) => { if (!e.relatedTarget) $('[data-drop]')?.classList.remove('over'); });
+document.addEventListener('drop', (e) => {
+  if (!state.user || !hasFiles(e)) return;
+  e.preventDefault();
+  if (isSheetOpen() || ui.imp?.busy) return;
+  impFile(e.dataTransfer.files[0]);
+});
 app.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && (e.target.dataset?.nameFor || e.target.dataset?.accName)) e.target.blur();
+  if (e.key === 'Enter' && (e.target.dataset?.nameFor || e.target.dataset?.accName || e.target.dataset?.ruleMatch)) e.target.blur();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.bar) { e.preventDefault(); ui.barYm = e.target.dataset.bar; render(); }
 });
 window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => state.user && render());

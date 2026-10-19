@@ -6,7 +6,7 @@ const longDate = (d, today) => { const x = parseYmd(d); return `${x.getFullYear(
 import { validateTx, MAX_AMOUNT, MAX_MEMO } from '../lib/validate.js';
 import { suggestOrder } from '../lib/defaults.js';
 
-let el, ctx, s, lastFocus;
+let el, ctx, s, lastFocus, longPressAt = 0;
 const recentKey = 'recentCats';
 const recentIds = () => { try { return JSON.parse(localStorage.getItem(recentKey)) || []; } catch { return []; } };
 const pushRecent = (id) => localStorage.setItem(recentKey, JSON.stringify([id, ...recentIds().filter((x) => x !== id)].slice(0, 8)));
@@ -22,6 +22,14 @@ export function initSheet(context) {
   el.addEventListener('input', onInput);
   el.addEventListener('change', onInput);
   el.addEventListener('paste', onPaste);
+  // 저장 길게 누르기(0.6초) = 매달 반복으로 저장
+  let lp;
+  el.addEventListener('pointerdown', (e) => {
+    if (!e.target.closest('[data-save]') || s.id) return;
+    lp = setTimeout(() => { longPressAt = Date.now(); s.repeat = true; haptic(20); save(); }, 600);
+  });
+  const stop = () => clearTimeout(lp);
+  el.addEventListener('pointerup', stop); el.addEventListener('pointercancel', stop);
   document.addEventListener('keydown', onKey);
 }
 export const isSheetOpen = () => el?.classList.contains('open');
@@ -93,14 +101,16 @@ function render() {
         </div>
         <label class="opt-row"><span aria-hidden="true">✏️</span><span class="sr-only">메모</span>
           <input name="memo" value="${esc(s.memo)}" maxlength="${MAX_MEMO}" placeholder="메모 (예: 점심 #회사)" class="opt-input" autocomplete="off" enterkeyhint="done" /></label>
+        ${s.id ? '' : `<button type="button" role="switch" aria-checked="${!!s.repeat}" class="chip self-start" data-repeat><span aria-hidden="true">🔁</span> 매달 반복${s.repeat ? ` · 매달 ${Number(s.date.slice(8))}일` : ''}</button>`}
       </div>`
     : `<button class="mx-5 mt-3 opt-summary" data-opts>
-        <span>📅 ${esc(prettyDate(s.date, today))}</span><span>${esc(acc ? `${acc.emoji ?? ''} ${acc.name}` : '💳 결제수단')}</span><span>✏️ ${s.memo ? esc(s.memo) : '메모'}</span></button>`}
+        <span>📅 ${esc(prettyDate(s.date, today))}</span><span>${esc(acc ? `${acc.emoji ?? ''} ${acc.name}` : '💳 결제수단')}</span><span>✏️ ${s.memo ? esc(s.memo) : '메모'}</span>${s.repeat ? '<span>🔁 매달</span>' : ''}</button>`}
     <div class="keypad px-4 pt-3" aria-label="숫자 키패드">
       ${['1', '2', '3', '4', '5', '6', '7', '8', '9', '000', '0', '⌫'].map((k) => `<button class="key" data-key="${k}" aria-label="${k === '⌫' ? '지우기' : k}">${k}</button>`).join('')}
     </div>
     <div class="px-4 pt-3 pb-[max(16px,env(safe-area-inset-bottom))]">
-      <button class="btn-primary w-full h-14 text-head ${canSave ? 'pulse' : ''}" data-save ${canSave ? '' : 'aria-disabled="true"'}>${s.id ? '고친 내용 저장' : '저장'}</button>
+      <button class="btn-primary w-full h-14 text-head ${canSave ? 'pulse' : ''}" data-save ${canSave ? '' : 'aria-disabled="true"'}>${s.id ? '고친 내용 저장' : s.repeat ? '저장 · 매달 반복' : '저장'}</button>
+      ${s.id ? '' : '<p class="mt-1 text-center text-caption text-ink-sub">저장을 길게 누르면 매달 반복으로 저장해요</p>'}
     </div>`;
   s.shake = false;
 }
@@ -130,7 +140,7 @@ async function save() {
   if (tx.accountId) localStorage.setItem('lastAccount', tx.accountId);
   haptic(12);
   closeSheet();
-  ctx.onSave(tx);
+  ctx.onSave(tx, { repeat: !s.id && !!s.repeat });
 }
 
 function onClick(e) {
@@ -143,7 +153,8 @@ function onClick(e) {
   if (t.hasAttribute('data-more')) { s.more = true; return render(); }
   if (t.hasAttribute('data-opts')) { s.showOpts = true; render(); return $('[data-acc]', el)?.focus(); }
   if (t.dataset.acc) { s.accountId = s.accountId === t.dataset.acc ? '' : t.dataset.acc; return render(); }
-  if (t.hasAttribute('data-save')) return save();
+  if (t.hasAttribute('data-repeat')) { s.repeat = !s.repeat; haptic(); return render(); }
+  if (t.hasAttribute('data-save')) { if (Date.now() - longPressAt < 400) return; return save(); }
   if (t.hasAttribute('data-del')) { const id = s.id; closeSheet(); return ctx.onDelete(id); }
 }
 function onInput(e) {

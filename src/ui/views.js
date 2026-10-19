@@ -5,6 +5,7 @@ import { byCategory, byDay, heatLevel } from '../lib/stats.js';
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
 import { symbol } from './brand.js';
+import { goalsCard, rulesCard } from './m2views.js';
 
 // 설정 아래 버전 표시(package.json version, vite.config의 define)
 const VERSION = typeof __APP_VERSION__ === 'string' ? `v${__APP_VERSION__}` : '';
@@ -36,6 +37,7 @@ export function topBar(m) {
     </div>
     <div class="flex items-center gap-1">
       ${m.offline ? '<span class="icon-btn text-base" role="status" title="오프라인: 연결되면 자동으로 올릴게요"><span aria-hidden="true">☁️</span><span class="sr-only">오프라인. 기록은 저장해 두고 연결되면 자동으로 올릴게요.</span></span>' : ''}
+      <button class="icon-btn" data-nav="search" aria-label="검색">🔍</button>
       <button class="icon-btn" data-action="theme" aria-label="${m.dark ? '라이트 모드로 전환' : '다크 모드로 전환'}">${m.dark ? '☀️' : '🌙'}</button>
       <button class="icon-btn" data-nav="settings" aria-label="설정">⚙️</button>
     </div></header>`;
@@ -142,7 +144,8 @@ export function calendarView(m, ui) {
 export function chartView(m, ui) {
   const kind = ui.chartKind ?? 'expense';
   const pills = `<div class="seg" role="radiogroup" aria-label="차트 종류">${[['expense', '지출'], ['income', '수입'], ['saved', '남긴 돈']].map(([k, l]) => `<button role="radio" aria-checked="${kind === k}" data-chart-kind="${k}">${l}</button>`).join('')}</div>`;
-  const head = `<div class="flex items-center justify-between gap-2"><h1 class="text-title">차트</h1>${pills}</div>`;
+  const head = `<div class="flex items-center justify-between gap-2"><h1 class="text-title">차트</h1>${pills}</div>
+    ${m.periodTxs.length ? `<button class="report-btn" data-action="report"><span class="text-2xl" aria-hidden="true">📤</span><span class="flex-1 text-left"><span class="block text-body font-semibold">${Number(m.viewYm.slice(5))}월 리포트 카드 만들기</span><span class="block text-caption text-ink-sub">남긴 돈·TOP 3를 이미지 한 장으로 공유해요</span></span><span aria-hidden="true">›</span></button>` : ''}`;
   if (m.txLoaded && m.periodTxs.length < 3) return `<div class="flex flex-col gap-3">${head}<section class="card-solid p-4">${empty('📊', '기록이 3개 이상 모이면 그래프를 그려 드릴게요.')}</section>${trendCard(m, ui)}</div>`;
   if (kind === 'saved') return `<div class="flex flex-col gap-3">${head}<div class="view-grid">${savedCard(m)}${trendCard(m, ui)}</div></div>`;
   const sel = m.periodTxs.filter((t) => t.kind === kind);
@@ -232,7 +235,8 @@ export function budgetView(m, ui) {
           <div class="mt-1.5 h-2 rounded-full bg-line"><div class="h-2 rounded-full ${r > 1 ? 'bg-expense' : r >= 0.9 ? 'bg-chart-3' : 'bg-primary'}" style="width:${lim ? Math.min(100, r * 100) : 0}%"></div></div>
           ${r > 1 ? `<p class="mt-1 text-caption text-expense font-semibold">${formatWon(sp - lim)} 넘쳤어요</p>` : r >= 0.9 ? `<p class="mt-1 text-caption text-chart-3 font-semibold">한도의 ${Math.round(r * 100)}%예요</p>` : ''}</button></li>`;
       }).join('')}</ul>` : ''}
-    </section></div></div>`;
+    </section>
+    ${goalsCard(m)}</div></div>`;
 }
 
 export function settingsView(m, ui) {
@@ -253,6 +257,8 @@ export function settingsView(m, ui) {
       <label class="flex items-center justify-between gap-2 text-body">진동 피드백<label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동 피드백"><span></span></label></label>
       <button class="btn-ghost self-start" data-action="tips-reset">팁 다시 보기</button></section>
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-data"><h2 id="s-data" class="text-head">데이터</h2>
+      <button class="set-link" data-nav="import"><span aria-hidden="true">📥</span><span class="flex-1 text-left">카드사·은행 파일 가져오기<span class="block text-caption text-ink-sub">엑셀·CSV · 중복은 알아서 걸러요</span></span><span aria-hidden="true">›</span></button>
+      <button class="set-link" data-nav="recurring"><span aria-hidden="true">🔁</span><span class="flex-1 text-left">반복 거래<span class="block text-caption text-ink-sub">${m.recurring.length ? `${m.recurring.filter((r) => r.active).length}개 켜짐 · 월세·구독 자동 기록` : '월세·구독 자동 기록'}</span></span><span aria-hidden="true">›</span></button>
       <div class="flex flex-wrap gap-2"><button class="btn-ghost" data-action="csv-month">이 달 CSV 내보내기</button><button class="btn-ghost" data-action="csv-all">전체 CSV 내보내기</button><button class="btn-ghost" data-action="json-all">JSON 백업</button></div>
       <p class="text-caption text-ink-sub">엑셀에서 바로 열 수 있어요. 파일은 이 기기에서만 만들어져요.</p>
       <button class="btn-danger self-start" data-action="delete-all">모든 기록과 계정 삭제</button></section>
@@ -286,7 +292,8 @@ export function settingsView(m, ui) {
         </li>`).join('')}</ul>
       <button class="btn-ghost mt-3" data-action="add-cat">＋ 카테고리 추가</button>
       <p class="mt-2 text-caption text-ink-sub">지운 카테고리의 기록은 '기타'로 옮겨져요.</p>
-    </section></div></div>
+    </section>
+    ${rulesCard(m)}</div></div>
     <p class="flex items-center justify-center gap-1.5 mt-2 text-caption text-ink-sub">${symbol('S', { cls: 'versym' })}쓱 가계부 ${VERSION}</p></div>`;
 }
 

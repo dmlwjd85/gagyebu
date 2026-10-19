@@ -77,7 +77,7 @@ describe('기타 컬렉션 필드 검증', () => {
     await assertFails(updateDoc(doc(alice(), 'users/alice'), { role: 'admin' }));
   });
   test('정의되지 않은 하위 컬렉션 거부', async () => {
-    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/r1'), { amount: 1 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/importMaps/m1'), { a: 1 }));
     await assertFails(getDoc(doc(alice(), 'users/alice/secrets/s1')));
   });
 });
@@ -138,5 +138,99 @@ describe('루트/기타 컬렉션', () => {
   test('비로그인 거부', async () => {
     await assertFails(getDoc(doc(anon(), 'publicStuff/x')));
     await assertFails(setDoc(doc(anon(), 'publicStuff/z'), { a: 1 }));
+  });
+});
+
+// ── M2: 가져오기 필드·자동 분류 규칙·반복 거래·저축 목표 ──
+const RULE = { match: '스타벅스', field: 'memo', categoryId: 'cafe' };
+const REC = { name: '월세', amount: 650000, kind: 'expense', categoryId: 'housing', dayOfMonth: 25, active: true, startYm: '2026-10' };
+const GOAL = { name: '여행 자금', emoji: '✈️', target: 1000000, saved: 0 };
+
+describe('M2 거래 가져오기 필드', () => {
+  const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/i1'), { ...TX, ...data });
+  test('지문·묶음·카드 끝 4자리·반복 id 허용', () =>
+    assertSucceeds(tx({ importHash: '0123456789abcdef', importBatch: 'imp-20261019', card4: '5678', recurringId: 'rent' })));
+  test('카드번호 전체·5자리·글자 거부', async () => {
+    await assertFails(tx({ card4: '1234-5678-9012-3456' }));
+    await assertFails(tx({ card4: '12345' }));
+    await assertFails(tx({ card4: 'abcd' }));
+  });
+  test('지문 형식(16자리 hex)·묶음 id 길이', async () => {
+    await assertFails(tx({ importHash: '스타벅스 강남점 5600' }));
+    await assertFails(tx({ importHash: '0123456789ABCDEF' }));
+    await assertFails(tx({ importBatch: 'x'.repeat(41) }));
+  });
+  test('원본 줄 통째로 저장 거부', () => assertFails(tx({ raw: ['2026.10.03', '1234-****', '스타벅스'] })));
+});
+
+describe('M2 자동 분류 규칙', () => {
+  const p = 'users/alice/rules/r1';
+  test('본인: 추가·수정·삭제·목록', async () => {
+    await assertSucceeds(setDoc(doc(alice(), p), { ...RULE, createdAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(alice(), p), { categoryId: 'food' }));
+    await assertSucceeds(getDocs(collection(alice(), 'users/alice/rules')));
+    await assertSucceeds(deleteDoc(doc(alice(), p)));
+  });
+  test('빈 글자·41자·다른 field·추가 필드·카테고리 누락 거부', async () => {
+    await assertFails(setDoc(doc(alice(), p), { ...RULE, match: '' }));
+    await assertFails(setDoc(doc(alice(), p), { ...RULE, match: 'x'.repeat(41) }));
+    await assertFails(setDoc(doc(alice(), p), { ...RULE, field: 'amount' }));
+    await assertFails(setDoc(doc(alice(), p), { ...RULE, regex: '.*' }));
+    await assertFails(setDoc(doc(alice(), p), { match: '스타벅스' }));
+  });
+  test('타인·비로그인 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p), RULE));
+    await assertFails(getDoc(doc(bob(), p)));
+    await assertFails(getDocs(collection(bob(), 'users/alice/rules')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/rules/r2'), RULE));
+    await assertFails(deleteDoc(doc(bob(), p)));
+    await assertFails(getDoc(doc(anon(), p)));
+  });
+});
+
+describe('M2 반복 거래', () => {
+  const p = 'users/alice/recurring/rent';
+  test('본인: 추가·끄기·마지막 기록 달·삭제', async () => {
+    await assertSucceeds(setDoc(doc(alice(), p), { ...REC, accountId: 'bank', createdAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(alice(), p), { active: false, lastPosted: '2026-10' }));
+    await assertSucceeds(deleteDoc(doc(alice(), p)));
+  });
+  test('금액·날짜·형식 검증', async () => {
+    const bad = (x) => assertFails(setDoc(doc(alice(), p), { ...REC, ...x }));
+    await bad({ amount: 1.5 }); await bad({ amount: 0 }); await bad({ amount: '650000' }); await bad({ amount: 1000000001 });
+    await bad({ dayOfMonth: 0 }); await bad({ dayOfMonth: 32 }); await bad({ dayOfMonth: 1.5 });
+    await bad({ startYm: '2026-13' }); await bad({ lastPosted: '2026/10' }); await bad({ active: 'yes' });
+    await bad({ kind: 'transfer' }); await bad({ name: 'x'.repeat(31) }); await bad({ cardNumber: '1234' });
+    const { startYm, ...noStart } = REC; await assertFails(setDoc(doc(alice(), p), noStart));
+  });
+  test('타인·비로그인 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p), REC));
+    await assertFails(getDoc(doc(bob(), p)));
+    await assertFails(setDoc(doc(bob(), p), REC));
+    await assertFails(updateDoc(doc(bob(), p), { amount: 1 }));
+    await assertFails(deleteDoc(doc(bob(), p)));
+    await assertFails(setDoc(doc(anon(), 'users/alice/recurring/x'), REC));
+  });
+});
+
+describe('M2 저축 목표', () => {
+  const p = 'users/alice/goals/trip';
+  test('본인: 추가·모으기·삭제', async () => {
+    await assertSucceeds(setDoc(doc(alice(), p), { ...GOAL, due: '2027-03-31', order: 0, createdAt: serverTimestamp() }));
+    await assertSucceeds(updateDoc(doc(alice(), p), { saved: 250000 }));
+    await assertSucceeds(deleteDoc(doc(alice(), p)));
+  });
+  test('금액·날짜 검증', async () => {
+    const bad = (x) => assertFails(setDoc(doc(alice(), p), { ...GOAL, ...x }));
+    await bad({ target: 0 }); await bad({ target: 1.5 }); await bad({ target: 10000000001 });
+    await bad({ saved: -1 }); await bad({ saved: 0.5 }); await bad({ due: '2027/03/31' }); await bad({ name: '' }); await bad({ owner: 'bob' });
+  });
+  test('타인·비로그인 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p), GOAL));
+    await assertFails(getDoc(doc(bob(), p)));
+    await assertFails(getDocs(collection(bob(), 'users/alice/goals')));
+    await assertFails(updateDoc(doc(bob(), p), { saved: 999 }));
+    await assertFails(deleteDoc(doc(bob(), p)));
+    await assertFails(getDoc(doc(anon(), p)));
   });
 });

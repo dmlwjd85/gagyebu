@@ -26,13 +26,18 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
-          && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
+                                 'importHash', 'importBatch', 'recurringId', 'card4'])
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income']
           && d().date is string && d().date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
           && str(d().categoryId, 1, 64)
           && optStr('accountId', 64) && optStr('memo', 200)
           && (!('tags' in d()) || (d().tags is list && d().tags.size() <= 20))
+          // 가져오기 지문(16자리 hex)·묶음 id·반복 id. 카드번호는 끝 4자리 숫자만 허용
+          && (!('importHash' in d()) || (d().importHash is string && d().importHash.matches('^[0-9a-f]{16}$')))
+          && optStr('importBatch', 40) && optStr('recurringId', 64)
+          && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
           && optTs('createdAt') && optTs('updatedAt');
       }
 
@@ -68,7 +73,47 @@ service cloud.firestore {
           && (!('byCategory' in d()) || (d().byCategory is map && d().byCategory.size() <= 100))
           && optTs('updatedAt');
       }
-      // 그 밖의 하위 컬렉션(rules, recurring 등)은 M2에서 검증 규칙과 함께 연다 → 지금은 거부
+
+      // 자동 분류 규칙: 가맹점 글자 → 카테고리
+      match /rules/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && d().keys().hasAll(['match', 'categoryId'])
+          && d().keys().hasOnly(['match', 'field', 'categoryId', 'createdAt', 'updatedAt'])
+          && str(d().match, 1, 40) && str(d().categoryId, 1, 64)
+          && (!('field' in d()) || d().field == 'memo')
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+
+      // 반복 거래(월세·구독): 매달 dayOfMonth일에 자동 기록
+      match /recurring/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'createdAt', 'updatedAt'])
+          && str(d().name, 1, 30)
+          && d().amount is int && d().amount > 0 && d().amount <= 1000000000
+          && d().kind in ['expense', 'income'] && str(d().categoryId, 1, 64) && optStr('accountId', 64)
+          && d().dayOfMonth is int && d().dayOfMonth >= 1 && d().dayOfMonth <= 31
+          && d().active is bool
+          && d().startYm is string && d().startYm.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+          && (!('lastPosted' in d()) || (d().lastPosted is string && d().lastPosted.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')))
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+
+      // 저축 목표: 목표 금액(1원~100억)·모은 금액(0 이상 정수)
+      match /goals/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && d().keys().hasAll(['name', 'target', 'saved'])
+          && d().keys().hasOnly(['name', 'emoji', 'target', 'saved', 'due', 'order', 'createdAt', 'updatedAt'])
+          && str(d().name, 1, 30) && optStr('emoji', 16)
+          && d().target is int && d().target > 0 && d().target <= 10000000000
+          && d().saved is int && d().saved >= 0 && d().saved <= 10000000000
+          && (!('due' in d()) || (d().due is string && d().due.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && optInt('order', 0, 1000) && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 그 밖의 하위 컬렉션: 규칙 없음 = 거부
     }
     // users 밖 모든 경로: 규칙 없음 = 거부
   }

@@ -30,6 +30,12 @@ with sync_playwright() as p:
     if 'login-test' in pg.content():
         pg.click('text=테스트 계정으로 로그인'); pg.wait_for_timeout(1500); pg.evaluate('window.__gagyebu.seedDemo()'); pg.wait_for_timeout(2500)
         pg.evaluate("localStorage.setItem('tips', JSON.stringify({queue:[],hiddenOn:null,dismiss:{},excluded:[]}))")
+        # M2 화면용 데이터: 목표·반복·규칙
+        pg.evaluate("""(()=>{const g=window.__gagyebu, d=g.data, c=g.state.categories.find(c=>c.kind==='expense');
+          d.saveGoal({name:'제주 여행', emoji:'✈️', target:1200000, saved:400000, due:'2027-04-30'}); d.saveGoal({name:'비상금', target:3000000, saved:3000000});
+          d.saveRecurring({name:'월세', amount:550000, kind:'expense', categoryId:c.id, dayOfMonth:25, active:true, startYm:'2026-10', lastPosted:'2026-10'});
+          d.saveRecurring({name:'넷플릭스', amount:17000, kind:'expense', categoryId:c.id, dayOfMonth:5, active:false, startYm:'2026-10', lastPosted:'2026-10'});
+          d.saveRule({match:'스타벅스', categoryId:c.id});})()"""); pg.wait_for_timeout(800)
         for theme in ['light','dark']:
             pg.evaluate(f"localStorage.setItem('theme','{theme}'); document.documentElement.classList.toggle('dark', '{theme}'==='dark')")
             for v in ['home','calendar','chart','budget','settings']:
@@ -38,6 +44,21 @@ with sync_playwright() as p:
                 check(f'{v}-{theme}')
                 if v=='chart':
                     pg.click('[data-chart-kind=saved]'); check(f'chart-saved-{theme}'); pg.click('[data-chart-kind=expense]')
+            # M2: 검색·반복·가져오기 단계·리포트
+            pg.evaluate("window.__gagyebu.go('search')"); pg.wait_for_timeout(800); check(f'search-empty-{theme}')
+            pg.fill('[data-search-q]','마트'); pg.wait_for_timeout(600); check(f'search-{theme}')
+            pg.evaluate("window.__gagyebu.go('recurring')"); check(f'recurring-{theme}')
+            pg.evaluate("window.__gagyebu.go('import')"); pg.wait_for_timeout(600); check(f'import1-{theme}')
+            S=os.path.join(os.path.dirname(__file__),'../../samples/')
+            pg.set_input_files('[data-imp-file]', S+'현대카드_예시.xls'); pg.wait_for_timeout(1200); check(f'import2-{theme}')
+            pg.click('[data-imp-next]'); pg.wait_for_timeout(1200); check(f'import3-{theme}')
+            pg.click('[data-imp-next]'); pg.wait_for_timeout(400); check(f'import4-{theme}')
+            pg.evaluate("window.__gagyebu.go('settings')"); pg.evaluate("window.__gagyebu.go('import')"); pg.wait_for_timeout(400)
+            pg.set_input_files('[data-imp-file]', S+'일반_예시.csv'); pg.wait_for_timeout(1000); pg.click('[data-imp-next]'); pg.wait_for_timeout(1200); check(f'import3-suspect-{theme}')
+            pg.click('[data-imp-next]'); pg.wait_for_timeout(300); pg.click('[data-imp-next]'); pg.wait_for_timeout(1500); check(f'import5-{theme}')
+            pg.click('main [data-imp-undo]'); pg.wait_for_timeout(300); pg.click('[role=alertdialog] [data-v="1"]'); pg.wait_for_timeout(1200)
+            pg.evaluate("window.__gagyebu.go('chart')"); pg.click('[data-action=report]'); pg.wait_for_timeout(2000); check(f'report-{theme}'); pg.click('[data-rp=close]')
+            pg.evaluate("window.__gagyebu.go('budget')"); pg.click('[data-action=add-goal]'); pg.wait_for_timeout(300); check(f'goal-dialog-{theme}'); pg.keyboard.press('Escape')
             pg.evaluate("window.__gagyebu.go('home')"); pg.click('.fab'); pg.wait_for_timeout(400); pg.click('.cat-chip >> nth=0'); pg.click('.key[data-key=\"5\"]'); pg.click('[data-opts]')
             check(f'sheet-{theme}'); pg.keyboard.press('Escape')
     b.close()
