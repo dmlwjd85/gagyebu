@@ -14,8 +14,15 @@ export function fitNum(el) {
   const base = parseFloat(getComputedStyle(el).fontSize);
   // 가운데 정렬(flex items-center 등)로 상자 자체가 부모보다 넓어지는 경우도 넘침으로 봄
   // 문장 속 금액(inline)은 자기 폭이 없으니(clientWidth 0) 부모 폭만 봄 → 한 줄을 통째로 차지해도 넘칠 때만 줄임
-  const par = el.parentElement, ps = par && getComputedStyle(par);
-  const room = () => Math.min(el.clientWidth || Infinity, par ? par.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight) : Infinity);
+  // 가운데 정렬 부모는 내용만큼 넓어지므로 조상 몇 단계까지 보고 가장 좁은 안쪽 폭을 기준으로
+  const room = () => {
+    let r = el.clientWidth || Infinity;
+    for (let p = el.parentElement, i = 0; p && i < 4 && p.id !== 'main'; p = p.parentElement, i++) {
+      const ps = getComputedStyle(p);
+      r = Math.min(r, p.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight));
+    }
+    return r;
+  };
   const need = () => Math.max(el.scrollWidth, el.getBoundingClientRect().width);
   for (let k = 1; k <= 9 && need() > room() + 0.5; k++) el.style.fontSize = `${base * (1 - k * 0.05)}px`;
 }
