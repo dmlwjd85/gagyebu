@@ -1,32 +1,261 @@
 import './style.css';
-import { isFirebaseConfigured } from './firebase.js';
-import { initTheme, toggleTheme, currentTheme } from './theme.js';
+import { isFirebaseConfigured, useEmulator } from './firebase.js';
+import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
+import * as data from './data.js';
+import { state } from './data.js';
+import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
+import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
+import { formatWon } from './lib/money.js';
+import { toCSV } from './lib/csv.js';
+import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
+import { validateCategory } from './lib/validate.js';
+import { $, esc, toast, confirmDialog, promptAmount, rollNumber, haptic } from './ui/util.js';
+import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
+import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
-const won = (n) => `${Math.trunc(n).toLocaleString('ko-KR')}원`;
-const icon = () => (currentTheme() === 'dark' ? '☀️' : '🌙');
+const app = $('#app');
+const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
+const ui = { view: 'home', viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, loginError: '' };
+const today = () => ymd(new Date());
 
-document.querySelector('#app').innerHTML = `
-  <div class="fixed inset-0 -z-10 bg-aurora" aria-hidden="true"></div>
-  <main class="mx-auto max-w-md min-h-screen px-4 pt-4 pb-10 flex flex-col gap-3">
-    <header class="flex items-center justify-between">
-      <h1 class="text-title">10월</h1>
-      <button id="theme-btn" class="glass w-11 h-11 !rounded-full grid place-items-center text-lg" aria-label="다크 모드 전환">${icon()}</button>
-    </header>
-    <section class="hero-card px-5 pt-[18px] pb-4">
-      <p class="text-caption font-semibold">☀️ 맑음 · 여유 있어요</p>
-      <p class="text-body mt-2">오늘 쓸 수 있는 돈</p>
-      <p class="text-display tabular-nums mt-1">${won(0)}</p>
-      <div class="mt-3 h-2 rounded-full bg-white/25"><div class="h-2 w-0 rounded-full bg-white"></div></div>
-      <div class="mt-2 flex justify-between text-caption tabular-nums"><span>이번 달 예산 0% 사용</span><span>예산 미설정</span></div>
-    </section>
-    <section class="grid grid-cols-3 gap-2">
-      <div class="glass p-3"><p class="text-caption text-ink-sub">지출</p><p class="text-head tabular-nums text-expense">−${won(0)}</p></div>
-      <div class="glass p-3"><p class="text-caption text-ink-sub">수입</p><p class="text-head tabular-nums text-income">+${won(0)}</p></div>
-      <div class="glass p-3"><p class="text-caption text-ink-sub">남긴 돈</p><p class="text-head tabular-nums">${won(0)}</p></div>
-    </section>
-    <p class="text-caption text-ink-sub text-center mt-2">${isFirebaseConfigured ? 'Firebase 연결됨' : 'Firebase 미설정 (.env 필요)'}</p>
-  </main>`;
+function model() {
+  const sd = state.profile?.monthStartDay ?? 1;
+  const t = today();
+  const curYm = periodOf(t, sd);
+  const viewYm = ui.viewYm ?? curYm;
+  const p = period(viewYm, sd);
+  const periodTxs = filterPeriod(state.txs, p);
+  const tot = totals(periodTxs);
+  const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
+  return {
+    sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
+    categories: state.categories, accounts: state.accounts,
+    catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
+    weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
+    trend: trend(state.txs, [-5, -4, -3, -2, -1, 0].map((d) => period(shiftYm(viewYm, d), sd))),
+    streak: recordStreak(state.txs.map((x) => x.date), t),
+    noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
+    insight: topIncrease(periodTxs, prevTxs),
+    dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine,
+  };
+}
 
-const btn = document.querySelector('#theme-btn');
-btn.addEventListener('click', () => { toggleTheme(); btn.textContent = icon(); });
+// ── 렌더 ───────────────────────────────────────────
+let lastHero = null, lastView = null;
+function render() {
+  if (!isFirebaseConfigured) { app.innerHTML = setupView(); return; }
+  if (!state.ready) { app.innerHTML = '<div class="min-h-dvh grid place-items-center text-ink-sub" aria-busy="true">불러오는 중…</div>'; return; }
+  if (!state.user) { app.innerHTML = loginView({ emulator: useEmulator, error: ui.loginError }); return; }
+  const m = model();
+  data.watchMonth(m.viewYm);
+  const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
+  const scrollY = window.scrollY;
+  const body = { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView }[ui.view](m, ui);
+  app.innerHTML = `
+    <div class="aurora" aria-hidden="true"></div>
+    <a href="#main" class="skip-link">본문으로 건너뛰기</a>
+    <div class="app-shell">
+      ${topBar(m)}
+      <main id="main" class="mt-3 pb-36 ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
+    </div>
+    ${ui.view === 'settings' ? '' : tabBar()}
+    <div id="tip-slot"></div>`;
+  // 홈 숫자 롤링
+  const hero = $('#hero-num');
+  if (hero) { const to = Number(hero.dataset.target); rollNumber(hero, to, formatWon, lastHero ?? 0); lastHero = to; }
+  if (focusKey) { const el = app.querySelector(`[data-${focusKey[0].replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}="${CSS.escape(focusKey[1])}"]`); el?.focus({ preventScroll: true }); }
+  window.scrollTo(0, scrollY);
+  lastView = ui.view;
+  renderTip();
+}
+const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
+  ${TABS.slice(0, 2).map(tabBtn).join('')}
+  <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">＋</span></button>
+  ${TABS.slice(2).map(tabBtn).join('')}</nav>`;
+const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on' : ''}" data-nav="${id}" ${ui.view === id ? 'aria-current="page"' : ''}><span aria-hidden="true">${icon}</span><span>${label}</span></button>`;
+
+// ── 구석 팁 ─────────────────────────────────────────
+const tipState = () => { try { return JSON.parse(localStorage.getItem('tips')) ?? emptyTipState(); } catch { return emptyTipState(); } };
+const saveTipState = (s) => localStorage.setItem('tips', JSON.stringify(s));
+let currentTip = null, tipCollapsed = false, tipTimer;
+function pickTip() {
+  const r = nextTip(tipState(), today());
+  saveTipState(r.state);
+  currentTip = r.tip ? { text: r.tip, index: r.index } : null;
+  tipCollapsed = false;
+  clearTimeout(tipTimer);
+  tipTimer = setTimeout(() => { tipCollapsed = true; renderTip(); }, 8000);
+}
+function renderTip() {
+  const slot = $('#tip-slot');
+  if (!slot) return;
+  if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
+  slot.innerHTML = `<div class="tip ${tipCollapsed ? 'collapsed' : ''}" aria-live="polite">
+    ${tipCollapsed ? `<button class="tip-mini" data-tip-open aria-label="팁 보기">💡</button>`
+      : `<span aria-hidden="true">💡</span><p class="flex-1">${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button>`}</div>`;
+}
+
+// ── 동작 ───────────────────────────────────────────
+function onSave(tx) {
+  const isEdit = !!tx.id;
+  const before = isEdit ? state.txs.find((t) => t.id === tx.id) : null;
+  const id = data.saveTx(tx);
+  const c = state.categories.find((x) => x.id === tx.categoryId);
+  setTimeout(() => {
+    const m = model();
+    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
+    toast(`${c?.name ?? ''} ${formatWon(tx.amount)} ${isEdit ? '고쳤어요.' : '기록!'}${extra}`, {
+      action: '되돌리기', onAction: () => (before ? data.restoreTx(before) : data.deleteTx(id)),
+    });
+  }, 50);
+}
+function onDelete(id) {
+  const before = state.txs.find((t) => t.id === id);
+  data.deleteTx(id);
+  toast('삭제했어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
+}
+function download(name, text) {
+  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+  const a = Object.assign(document.createElement('a'), { href: url, download: name });
+  document.body.append(a); a.click(); a.remove();
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function go(view, extra = {}) {
+  Object.assign(ui, { view, emojiFor: null }, extra);
+  render();
+  $('#main')?.focus({ preventScroll: true });
+  window.scrollTo(0, 0);
+}
+
+async function editBudget(m) {
+  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 끕니다.', value: m.budget?.total ?? 0 });
+  if (v == null) return;
+  data.setBudget(m.viewYm, v, state.budget?.byCategory);
+  toast(v ? `예산을 ${formatWon(v)}으로 정했어요.` : '예산을 껐어요.');
+}
+
+app.addEventListener('click', async (e) => {
+  const t = e.target.closest('button, [data-tx]');
+  if (!t || t.disabled) return;
+  const d = t.dataset;
+  const m = state.user ? model() : null;
+  if (d.nav) return go(d.nav, d.mode ? { mode: d.mode, catFilter: null } : {});
+  if (d.tx) { const tx = state.txs.find((x) => x.id === d.tx); return tx && openSheet(tx); }
+  if (d.month) {
+    const delta = Number(d.month);
+    ui.viewYm = delta === 0 ? null : shiftYm(m.viewYm, delta);
+    if (ui.viewYm && ui.viewYm >= m.curYm) ui.viewYm = null;
+    ui.selDate = null;
+    return render();
+  }
+  if (d.date) { ui.selDate = ui.selDate === d.date ? null : d.date; return render(); }
+  if (d.addOn) return openSheet(null, { date: d.addOn });
+  if (d.mode) { ui.mode = d.mode; return render(); }
+  if (d.clearFilter !== undefined) { ui.catFilter = null; return render(); }
+  if (d.filterCat) return go('calendar', { mode: 'list', catFilter: d.filterCat });
+  if (d.theme) { setThemeMode(d.theme); return render(); }
+  if (d.catKind) { ui.catKind = d.catKind; ui.emojiFor = null; return render(); }
+  if (d.catMenu) { ui.catMenu = ui.catMenu === d.catMenu ? null : d.catMenu; ui.emojiFor = null; return render(); }
+  if (d.emojiFor) { ui.emojiFor = ui.emojiFor === d.emojiFor ? null : d.emojiFor; return render(); }
+  if (d.pick) { const c = state.categories.find((x) => x.id === ui.emojiFor); ui.emojiFor = null; if (c) data.saveCategory({ ...c, emoji: d.pick }); return render(); }
+  if (d.move) {
+    const list = state.categories.filter((c) => c.kind === ui.catKind);
+    const i = list.findIndex((c) => c.id === d.move), j = i + Number(d.dir);
+    if (j < 0 || j >= list.length) return;
+    [list[i], list[j]] = [list[j], list[i]];
+    return data.reorderCategories(list);
+  }
+  if (d.archive) { const c = state.categories.find((x) => x.id === d.archive); return c && data.saveCategory({ ...c, archived: !c.archived }); }
+  if (d.delcat) {
+    const c = state.categories.find((x) => x.id === d.delcat);
+    if (!c || !(await confirmDialog({ title: `'${c.name}' 카테고리를 지울까요?`, body: '이 카테고리의 기록은 기타로 옮겨져요.', ok: '지우기', danger: true }))) return;
+    try { const n = await data.deleteCategory(c); toast(n ? `지웠어요. 기록 ${n}개는 기타로 옮겼어요.` : '지웠어요.'); }
+    catch (err) { toast(err.message || '지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+    return;
+  }
+  if (d.env) {
+    const c = state.categories.find((x) => x.id === d.env);
+    const cur = state.budget?.byCategory?.[d.env] ?? 0;
+    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없앱니다.', value: cur });
+    if (v == null) return;
+    const by = { ...(state.budget?.byCategory ?? {}) };
+    v ? (by[d.env] = v) : delete by[d.env];
+    return data.setBudget(m.viewYm, state.budget?.total ?? 0, by);
+  }
+  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
+  if (d.tipOpen !== undefined) { tipCollapsed = false; return renderTip(); }
+  switch (d.action) {
+    case 'add': haptic(); return openSheet();
+    case 'theme': toggleTheme(); return render();
+    case 'budget': return editBudget(m);
+    case 'login':
+      ui.loginError = '';
+      try { await data.login(); } catch (err) { ui.loginError = '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'; console.error(err); render(); }
+      return;
+    case 'login-test': return data.loginTestUser();
+    case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
+    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
+    case 'csv-month': return download(`가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
+    case 'csv-all':
+      try { download(`가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
+      catch { toast('내보내지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+      return;
+    case 'add-cat': {
+      const list = state.categories.filter((c) => c.kind === ui.catKind);
+      const id = data.saveCategory({ name: '새 카테고리', emoji: ui.catKind === 'income' ? '💸' : '🌱', kind: ui.catKind, order: list.length });
+      setTimeout(() => { const el = app.querySelector(`[data-name-for="${CSS.escape(id)}"]`); el?.focus(); el?.select(); }, 60);
+      return;
+    }
+    case 'delete-all':
+      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 지워지고 되돌릴 수 없어요. 필요하면 먼저 CSV로 내보내세요.', ok: '모두 삭제', danger: true }))) return;
+      try { const r = await data.deleteEverything(); toast(r === 'deleted' ? '모두 지웠어요.' : '기록을 지웠어요. 계정 삭제는 다시 로그인한 뒤 해 주세요.'); }
+      catch { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+  }
+});
+
+app.addEventListener('change', (e) => {
+  const t = e.target;
+  if (t.dataset.nameFor) {
+    const c = state.categories.find((x) => x.id === t.dataset.nameFor);
+    const err = validateCategory({ name: t.value, emoji: c?.emoji });
+    if (err) { toast(err); t.value = c?.name ?? ''; return; }
+    if (c && c.name !== t.value.trim()) data.saveCategory({ ...c, name: t.value });
+  }
+  if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
+  if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
+  if (t.dataset.toggleEnv !== undefined) { ui.envelopes = t.checked; if (!t.checked && state.budget?.byCategory) data.setBudget(model().viewYm, state.budget.total ?? 0, undefined); render(); }
+});
+app.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset?.nameFor) e.target.blur(); });
+document.addEventListener('keydown', (e) => {
+  if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
+  if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
+});
+
+window.addEventListener('online', render);
+window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
+window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
+
+// 렌더 묶기(스냅샷이 연달아 올 때 한 번만)
+let raf = 0;
+const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!isSheetOpen() || ui.view) render(); }); };
+
+if (isFirebaseConfigured) {
+  initSheet({ getState: () => state, onSave, onDelete });
+  data.onWriteError((e) => toast(e?.code === 'permission-denied' ? '저장 권한이 없어요. 다시 로그인해 주세요.' : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+  data.subscribe(schedule);
+  data.initAuth();
+  pickTip();
+}
+render();
+
+// 에뮬레이터 전용 데모 데이터 (스크린샷·수동 검증용)
+if (import.meta.env.VITE_USE_EMULATOR === 'true') {
+  window.__gagyebu = { state, data, ui, render, openSheet, go,
+    async seedDemo() {
+      const { demoTransactions } = await import('./dev/demo.js');
+      const m = model();
+      data.setBudget(m.curYm, 1_500_000);
+      await data.saveTxBatch(demoTransactions(m.today));
+    } };
+}
