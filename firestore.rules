@@ -1,22 +1,75 @@
 rules_version = '2';
+// 가계부 보안 규칙: 본인(users/{uid}) 데이터만 읽기·쓰기, 그 외 전부 거부.
+// 공용 경로 와일드카드 쓰기 금지. 모든 쓰기는 필드 목록·형식·크기 검증.
 service cloud.firestore {
   match /databases/{database}/documents {
     function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+    function d() { return request.resource.data; }
+    function str(v, min, max) { return v is string && v.size() >= min && v.size() <= max; }
+    function optStr(k, max) { return !(k in d()) || str(d()[k], 0, max); }
+    function optInt(k, min, max) { return !(k in d()) || (d()[k] is int && d()[k] >= min && d()[k] <= max); }
+    function optBool(k) { return !(k in d()) || d()[k] is bool; }
+    function optTs(k) { return !(k in d()) || d()[k] is timestamp; }
 
-    // 거래: amount 는 정수(원)여야 함
-    match /users/{uid}/transactions/{txId} {
+    // 사용자 설정 문서
+    match /users/{uid} {
       allow read, delete: if isOwner(uid);
       allow create, update: if isOwner(uid)
-        && request.resource.data.amount is int;
-    }
+        && d().keys().hasOnly(['displayName', 'currency', 'monthStartDay', 'createdAt', 'updatedAt', 'seeded'])
+        && optStr('displayName', 100)
+        && (!('currency' in d()) || d().currency == 'KRW')
+        && optInt('monthStartDay', 1, 28)
+        && optBool('seeded') && optTs('createdAt') && optTs('updatedAt');
 
-    // 본인 데이터만. (규칙은 OR 결합이므로 transactions 는 위 규칙과 분리)
-    match /users/{uid} {
-      allow read, write: if isOwner(uid);
+      // 거래: 금액은 1원 ~ 10억 원 정수
+      match /transactions/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
+          && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt'])
+          && d().amount is int && d().amount > 0 && d().amount <= 1000000000
+          && d().kind in ['expense', 'income']
+          && d().date is string && d().date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
+          && str(d().categoryId, 1, 64)
+          && optStr('accountId', 64) && optStr('memo', 200)
+          && (!('tags' in d()) || (d().tags is list && d().tags.size() <= 20))
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+
+      // 카테고리
+      match /categories/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && d().keys().hasAll(['name', 'emoji', 'kind'])
+          && d().keys().hasOnly(['name', 'emoji', 'kind', 'order', 'archived', 'budget'])
+          && str(d().name, 1, 20) && str(d().emoji, 1, 16)
+          && d().kind in ['expense', 'income']
+          && optInt('order', 0, 1000) && optBool('archived') && optInt('budget', 0, 100000000000);
+      }
+
+      // 결제수단 (카드·계좌번호 저장 금지: 이름 20자 제한)
+      match /accounts/{id} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && d().keys().hasAll(['name', 'type'])
+          && d().keys().hasOnly(['name', 'type', 'emoji', 'archived', 'order'])
+          && str(d().name, 1, 20) && d().type in ['cash', 'card', 'bank']
+          && optStr('emoji', 16) && optBool('archived') && optInt('order', 0, 1000);
+      }
+
+      // 월 예산: 문서 id = YYYY-MM
+      match /budgets/{ym} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && ym.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
+          && d().keys().hasAll(['total'])
+          && d().keys().hasOnly(['total', 'byCategory', 'updatedAt'])
+          && d().total is int && d().total >= 0 && d().total <= 100000000000
+          && (!('byCategory' in d()) || (d().byCategory is map && d().byCategory.size() <= 100))
+          && optTs('updatedAt');
+      }
+      // 그 밖의 하위 컬렉션(rules, recurring 등)은 M2에서 검증 규칙과 함께 연다 → 지금은 거부
     }
-    match /users/{uid}/{collection}/{document=**} {
-      allow read, write: if isOwner(uid) && collection != 'transactions';
-    }
-    // 그 외 모든 경로는 기본 deny (공용 와일드카드 쓰기 금지)
+    // users 밖 모든 경로: 규칙 없음 = 거부
   }
 }

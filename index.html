@@ -2,12 +2,21 @@
 <html lang="ko">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>가계부</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>가계부 · 10초 기록, 내 돈 날씨</title>
+  <meta name="description" content="광고·연동 없는 프라이버시 가계부. 10초 만에 기록하고 오늘 쓸 수 있는 돈을 날씨로 확인하세요." />
+  <meta name="theme-color" content="#F6F4FF" media="(prefers-color-scheme: light)" />
+  <meta name="theme-color" content="#0F0E1A" media="(prefers-color-scheme: dark)" />
+  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <script>
     // 첫 화면 깜빡임 방지: 렌더 전에 다크 클래스 결정
     try { var t = localStorage.getItem('theme'); if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark'); } catch (e) {}
   </script>
 </head>
-<body><div id="app"></div><script type="module" src="/src/main.js"></script></body>
+<body>
+  <div id="app"><div style="min-height:100vh;display:grid;place-items:center;font-family:sans-serif;color:#5B5775">가계부를 여는 중…</div></div>
+  <noscript>가계부는 JavaScript가 필요해요.</noscript>
+  <script type="module" src="/src/main.js"></script>
+</body>
 </html>

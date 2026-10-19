@@ -22,3 +22,8 @@ export function initTheme() {
   applyTheme(resolveTheme(getSavedTheme(), mq()?.matches));
   mq()?.addEventListener?.('change', (e) => { if (!getSavedTheme()) applyTheme(e.matches ? 'dark' : 'light'); });
 }
+export function themeMode() { return getSavedTheme() ?? 'system'; }
+export function setThemeMode(mode) {
+  try { mode === 'system' ? localStorage.removeItem(KEY) : localStorage.setItem(KEY, mode); } catch {}
+  applyTheme(resolveTheme(getSavedTheme(), mq()?.matches));
+}
