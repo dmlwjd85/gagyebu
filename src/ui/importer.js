@@ -251,7 +251,7 @@ function step4(m, imp) {
   const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-semibold tabular-nums text-right">${v}</dd></div>`;
   return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 확인해요</h2>
       <dl class="mt-2">${row('파일', esc(imp.fileName))}${s.count ? row('기간', `${dot(s.from)} ~ ${dot(s.to)}`) : ''}${row('가져올 거래', `${s.count}건`)}
-        ${row('지출 합계', s.expense < 0 ? `0원 <span class="block text-caption text-income">환불이 ${formatWon(-s.expense)} 더 많아요</span>` : `<span class="text-expense">${s.expense ? '−' : ''}${formatWon(s.expense)}</span>`)}
+        ${row('지출 합계', s.expense < 0 ? `0원 <span class="block text-caption text-income">환불이 ${formatWon(-s.expense)} 더 많아요</span>` : `<span class="text-expense tabular-nums">${s.expense ? '−' : ''}${formatWon(s.expense)}</span>`)}
         ${s.refund ? row('환불·취소 차감', `<span class="text-income">+${formatWon(s.refund)}</span> <span class="text-caption text-ink-sub font-normal">(지출 합계에 반영)</span>`) : ''}
         ${row('수입', `<span class="text-income">+${formatWon(s.income)}</span>`)}
         ${row('건너뛰는 거래', `중복 ${skipped + d.sure.length} · 취소 ${d.cancelled}${d.offset ? ` · 상계 ${d.offset}` : ''}`)}</dl></section>

@@ -200,7 +200,7 @@ export function chartView(m, ui) {
       ${overList}`
         : empty('🌱', `이 기간에는 ${kind === 'expense' ? '지출' : '수입'}이 없어요.`)}
     </section>
-      ${ins ? `<section class="glass p-4 flex flex-wrap gap-3 items-start"><span class="text-2xl" aria-hidden="true">💡</span><p class="flex-1 min-w-[min(100%,8em)] text-body">지난달보다 <b>${esc(catOf(m, ins.categoryId).emoji)} ${esc(catOf(m, ins.categoryId).name)}</b> 지출이 <b class="text-expense">${ins.pct}%</b>(${numSpan(formatWon(ins.diff))}) 늘었어요.</p></section>` : ''}
+      ${ins ? `<section class="glass p-4 flex flex-wrap gap-3 items-start"><span class="text-2xl" aria-hidden="true">💡</span><p class="flex-1 min-w-[min(100%,8em)] text-body">지난달보다 <b>${esc(catOf(m, ins.categoryId).emoji)} ${esc(catOf(m, ins.categoryId).name)}</b> 지출이 <b class="text-expense tabular-nums">${ins.pct}%</b>(${numSpan(formatWon(ins.diff))}) 늘었어요.</p></section>` : ''}
     </div>
     ${trendCard(m, ui)}
    </div></div>`;
@@ -284,7 +284,7 @@ const scaleControl = (v) => {
         <input id="content-scale" class="range flex-1" type="range" min="85" max="160" step="5" value="${pct}" aria-valuetext="${pct}%" data-content-scale />
         <button class="scale-btn text-body" data-scale-step="1" aria-label="본문 글자 크게" aria-disabled="${v >= 1.6}">가+</button>
       </div>
-      <p class="text-caption text-ink-sub">위·아래 메뉴는 그대로 두고 가운데 내용만 커지거나 작아져요. PC에서는 Ctrl(맥은 ⌘)을 누른 채 휠을 돌리거나 +/− 키로도 바꿀 수 있어요. Ctrl + 0을 누르면 기본 크기로 돌아와요.</p>
+      <p class="text-caption text-ink-sub">위·아래 메뉴는 그대로 두고 가운데 내용만 커지거나 작아져요. PC에서는 Ctrl(맥은 ⌘)을 누른 채 휠을 돌리거나 +/− 키로도 바꿀 수 있어요. Ctrl + <span class="tabular-nums">0</span>을 누르면 기본 크기로 돌아와요.</p>
       <button class="btn-ghost self-start" data-scale-reset>기본 크기로</button>
     </div>`;
 };
