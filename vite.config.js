@@ -24,7 +24,8 @@ function preloadMainFonts() {
 
 export default defineConfig({
   base: BASE,
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // 배포마다 달라지는 빌드 표시: GitHub Actions의 커밋 앞 7자리(설정 아래 버전 옆). 로컬 빌드는 비어 있음
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __APP_BUILD__: JSON.stringify((process.env.GITHUB_SHA || '').slice(0, 7)) },
   plugins: [
     preloadMainFonts(),
     VitePWA({

@@ -7,8 +7,8 @@ import { EMOJI_CHOICES } from '../lib/defaults.js';
 import { symbol } from './brand.js';
 import { goalsCard, rulesCard } from './m2views.js';
 
-// 설정 아래 버전 표시(package.json version, vite.config의 define)
-const VERSION = typeof __APP_VERSION__ === 'string' ? `v${__APP_VERSION__}` : '';
+// 설정 아래 버전 표시(package.json version + 배포 빌드의 커밋 앞 7자리, vite.config의 define)
+const VERSION = (typeof __APP_VERSION__ === 'string' ? `v${__APP_VERSION__}` : '') + (typeof __APP_BUILD__ === 'string' && __APP_BUILD__ ? ` · ${__APP_BUILD__}` : '');
 
 const ACC_EMOJI = ['💳', '💵', '🏦', '📱', '🪙', '💰', '🎫', '🧾', '👛', '🏧'];
 const catOf = (m, id) => m.catMap.get(id) ?? { emoji: '🧾', name: '기타' };
