@@ -98,11 +98,13 @@ service cloud.firestore {
         allow create: if isOwner(uid) && txOk(docId) && (!isRecTxId(docId) || recMonthOpen(uid, docId));
         // 고치기: 자동 기록은 '없을 때만 만들기'. 이미 있는 문서를 자동 기록이 덮어쓰지 못하게(QA D1: 오프라인 대기열은 트랜잭션이 안 돼 규칙으로 막음)
         //  - origin == 'auto'(이 버전의 자동 기록)인 쓰기는, 원래 문서도 자동 기록일 때만(카테고리 옮기기 같은 부분 고치기용)
-        //  - createdAt이 이번 요청 시각(serverTimestamp)인 쓰기 = 새로 만든다는 쓰기 → 이미 있는 문서엔 거부(예전 버전 앱의 자동 기록도 여기서 막힘)
+        //  - rec- 문서에 createdAt이 이번 요청 시각(serverTimestamp)인 쓰기 = 새로 만든다는 쓰기 → 이미 있으면 거부(예전 버전 앱의 자동 기록도 여기서 막힘)
+        //    자동 기록은 rec- id에만 쓰므로 이 검사는 rec- 문서에만 둠. 일반 기록은 본인이 고치는 것이라 막을 까닭이 없고,
+        //    막으면 예전 앱이 createdAt 없는 기록을 되돌릴 때 같은 칸에 못 써서 새 기록을 하나 더 만듦(QA 3차 한계 ④: 금액이 두 번 잡힘)
         //  사용자 고치기는 origin을 빼고, createdAt은 원래 값(또는 없음)을 그대로 보냄
         allow update: if isOwner(uid) && txOk(docId)
           && !(d().get('origin', '') == 'auto' && resource.data.get('origin', '') != 'auto')
-          && d().get('createdAt', null) != request.time;
+          && (!isRecTxId(docId) || d().get('createdAt', null) != request.time);
       }
       // 반복 자동 기록 문서의 그 달이 반복 문서에서 '지운 달'로 표시돼 있지 않은지
       function recMonthOpen(uid, docId) {

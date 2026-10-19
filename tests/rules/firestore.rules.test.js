@@ -656,6 +656,19 @@ describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시
     await assertSucceeds(deleteDoc(doc(db, p)));
     await assertSucceeds(setDoc(doc(db, p), { ...AUTO, createdAt: old.createdAt, updatedAt: serverTimestamp() })); // 같은 id 되살리기
   });
+  // QA 3차 한계 ④: 예전 앱(941dd7f·640ff0f)은 createdAt 없는 기록을 되돌릴 때 createdAt에 새 시각을 넣어 같은 칸에 씀.
+  // 수정 전 규칙은 이걸 거부 → 예전 앱이 새 기록을 하나 더 만들어 금액이 두 번 잡혔음. 이제 일반 기록은 허용, rec- 문서는 그대로 거부
+  test('한계 ④: 일반 기록은 createdAt 새 시각으로 같은 칸 되돌리기 허용, rec- 문서는 계속 거부', async () => {
+    await env.withSecurityRulesDisabled((c) => setDoc(doc(c.firestore(), 'users/alice/transactions/noCa1'), { ...TX, amount: 30000, memo: '저녁' }));
+    const db = alice();
+    await assertSucceeds(setDoc(doc(db, 'users/alice/transactions/noCa1'), { ...TX, amount: 35000, memo: '저녁', updatedAt: serverTimestamp() })); // 고치기
+    await assertSucceeds(setDoc(doc(db, 'users/alice/transactions/noCa1'), { ...TX, amount: 30000, memo: '저녁', ...ts() })); // 예전 앱 되돌리기(수정 전 규칙에선 실패)
+    expect((await getDoc(doc(db, 'users/alice/transactions/noCa1'))).data()).toMatchObject({ amount: 30000 });
+    await seed();
+    await assertSucceeds(setDoc(doc(db, p), { ...AUTO, ...ts() }));
+    await assertFails(setDoc(doc(db, p), { ...AUTO, ...ts() }));
+    await assertFails(setDoc(doc(bob(), 'users/alice/transactions/noCa1'), { ...TX, ...ts() })); // 남의 기록은 그대로 거부
+  });
   test('앱 생성 함수 id(rec-·자동 id·고정 id kp/tx/rx) 전부 기존대로 만들기·고치기·지우기', async () => {
     const db = alice();
     const ids = [recTxId('r31', '2026-11'), recTxId(fixedRecId('q1w2e3r4t5y6u7i8o9p0a1s2d3'), '2026-10'), editTarget({ id: 'legacyTx1234567890123' }).id, doc(collection(db, 'users/alice/transactions')).id];
