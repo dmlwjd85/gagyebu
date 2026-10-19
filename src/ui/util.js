@@ -18,21 +18,24 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
 }
 
 // 가벼운 확인 대화상자 (alert/confirm 대체)
-export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false }) {
+export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
       <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
+      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
       <div class="mt-5 flex gap-2 justify-end">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
-        <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1">${esc(ok)}</button></div></div>`;
+        <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
     const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
     const onKey = (e) => e.key === 'Escape' && done(false);
-    wrap.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b) done(b.dataset.v === '1'); else if (e.target === wrap) done(false); });
+    wrap.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) done(b.dataset.v === '1'); else if (e.target === wrap) done(false); });
     document.addEventListener('keydown', onKey);
     document.body.append(wrap);
-    wrap.querySelector('[data-v="1"]').focus();
+    const typed = wrap.querySelector('[data-type]');
+    if (typed) { typed.addEventListener('input', () => { wrap.querySelector('[data-v="1"]').disabled = typed.value.trim() !== typeToConfirm; }); typed.focus(); }
+    else wrap.querySelector('[data-v="1"]').focus();
   });
 }
 

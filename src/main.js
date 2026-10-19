@@ -16,7 +16,7 @@ import { topBar, homeView, calendarView, chartView, budgetView, settingsView, lo
 initTheme();
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
-const ui = { view: 'home', viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, loginError: '' };
+const ui = { view: 'home', viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, loginError: '' };
 const today = () => ymd(new Date());
 
 function model() {
@@ -37,7 +37,7 @@ function model() {
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine,
+    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine,
   };
 }
 
@@ -55,9 +55,9 @@ function render() {
   app.innerHTML = `
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
-    <div class="app-shell">
+    <div class="app-shell ${ui.view === 'settings' ? '' : 'has-nav'}">
       ${topBar(m)}
-      <main id="main" class="mt-3 pb-36 ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
+      <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
     </div>
     ${ui.view === 'settings' ? '' : tabBar()}
     <div id="tip-slot"></div>`;
@@ -115,8 +115,8 @@ function onDelete(id) {
   data.deleteTx(id);
   toast('삭제했어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
 }
-function download(name, text) {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
+function download(name, text, type = 'text/csv;charset=utf-8') {
+  const url = URL.createObjectURL(new Blob([text], { type }));
   const a = Object.assign(document.createElement('a'), { href: url, download: name });
   document.body.append(a); a.click(); a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1000);
@@ -136,6 +136,8 @@ async function editBudget(m) {
 }
 
 app.addEventListener('click', async (e) => {
+  const bar = e.target.closest('[data-bar]');
+  if (bar) { ui.barYm = bar.dataset.bar; return render(); }
   const t = e.target.closest('button, [data-tx]');
   if (!t || t.disabled) return;
   const d = t.dataset;
@@ -156,6 +158,7 @@ app.addEventListener('click', async (e) => {
   if (d.filterCat) return go('calendar', { mode: 'list', catFilter: d.filterCat });
   if (d.theme) { setThemeMode(d.theme); return render(); }
   if (d.catKind) { ui.catKind = d.catKind; ui.emojiFor = null; return render(); }
+  if (d.chartKind) { ui.chartKind = d.chartKind; return render(); }
   if (d.catMenu) { ui.catMenu = ui.catMenu === d.catMenu ? null : d.catMenu; ui.emojiFor = null; return render(); }
   if (d.emojiFor) { ui.emojiFor = ui.emojiFor === d.emojiFor ? null : d.emojiFor; return render(); }
   if (d.pick) { const c = state.categories.find((x) => x.id === ui.emojiFor); ui.emojiFor = null; if (c) data.saveCategory({ ...c, emoji: d.pick }); return render(); }
@@ -207,8 +210,15 @@ app.addEventListener('click', async (e) => {
       setTimeout(() => { const el = app.querySelector(`[data-name-for="${CSS.escape(id)}"]`); el?.focus(); el?.select(); }, 60);
       return;
     }
+    case 'json-all':
+      try {
+        const txs = await data.allTransactions();
+        const strip = ({ createdAt, updatedAt, ...r }) => r;
+        download(`가계부_백업_${m.today}.json`, JSON.stringify({ app: 'gagyebu', version: 1, exportedAt: new Date().toISOString(), profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs.map(strip) }, null, 2), 'application/json');
+      } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+      return;
     case 'delete-all':
-      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 지워지고 되돌릴 수 없어요. 필요하면 먼저 CSV로 내보내세요.', ok: '모두 삭제', danger: true }))) return;
+      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 지워지고 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
       try { const r = await data.deleteEverything(); toast(r === 'deleted' ? '모두 지웠어요.' : '기록을 지웠어요. 계정 삭제는 다시 로그인한 뒤 해 주세요.'); }
       catch { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
   }
@@ -226,7 +236,11 @@ app.addEventListener('change', (e) => {
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
   if (t.dataset.toggleEnv !== undefined) { ui.envelopes = t.checked; if (!t.checked && state.budget?.byCategory) data.setBudget(model().viewYm, state.budget.total ?? 0, undefined); render(); }
 });
-app.addEventListener('keydown', (e) => { if (e.key === 'Enter' && e.target.dataset?.nameFor) e.target.blur(); });
+app.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && e.target.dataset?.nameFor) e.target.blur();
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.bar) { e.preventDefault(); ui.barYm = e.target.dataset.bar; render(); }
+});
+window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => state.user && render());
 document.addEventListener('keydown', (e) => {
   if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
   if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
