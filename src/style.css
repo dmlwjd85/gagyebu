@@ -313,6 +313,11 @@
 @media (max-width: 359px) { .app-top [data-action="theme"] { display: none; } }
 /* 오프라인 표시: 자리를 차지하지 않게 설정 버튼 귀퉁이의 작은 표시로 */
 .offline-badge { position: absolute; top: 2px; right: 0; font-size: 12px; line-height: 1; pointer-events: none; }
+/* 낮은 창(높이 700px 이하)에서 대화상자 위아래 여백을 줄여 폼이 화면 안에 들어가게(QA L8: 360×640 반복 폼 2px 넘침) */
+@media (max-height: 700px) {
+  .dlg-wrap.dlg-wrap { padding-top: 8px; padding-bottom: 8px; }
+  .dlg-wrap > [role="dialog"] { padding-top: 16px; padding-bottom: 16px; }
+}
 .versym { width: 24px; height: 24px; flex: none; }
 .pclogo { display: none; }
 @media (min-width: 1024px) {
