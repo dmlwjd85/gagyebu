@@ -1,0 +1,22 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    function isOwner(uid) { return request.auth != null && request.auth.uid == uid; }
+
+    // 거래: amount 는 정수(원)여야 함
+    match /users/{uid}/transactions/{txId} {
+      allow read, delete: if isOwner(uid);
+      allow create, update: if isOwner(uid)
+        && request.resource.data.amount is int;
+    }
+
+    // 본인 데이터만. (규칙은 OR 결합이므로 transactions 는 위 규칙과 분리)
+    match /users/{uid} {
+      allow read, write: if isOwner(uid);
+    }
+    match /users/{uid}/{collection}/{document=**} {
+      allow read, write: if isOwner(uid) && collection != 'transactions';
+    }
+    // 그 외 모든 경로는 기본 deny (공용 와일드카드 쓰기 금지)
+  }
+}
