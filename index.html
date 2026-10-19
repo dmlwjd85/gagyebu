@@ -7,7 +7,10 @@
   <meta name="description" content="광고·연동 없는 프라이버시 가계부, 쓱 가계부. 10초 만에 기록하고 오늘 쓸 수 있는 돈을 날씨로 확인하세요." />
   <meta name="theme-color" content="#F6F4FF" media="(prefers-color-scheme: light)" />
   <meta name="theme-color" content="#0F0E1A" media="(prefers-color-scheme: dark)" />
-  <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+  <!-- 파비콘: 16·32px PNG(16px는 픽셀 힌팅판) + ico. SVG는 작게 줄이면 힌팅이 사라져 탭용으로 쓰지 않음(design-spec 16-3) -->
+  <link rel="icon" href="/favicon.ico" sizes="16x16 24x24 32x32 48x48" />
+  <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
+  <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <script>
     // 첫 화면 깜빡임 방지: 렌더 전에 다크 클래스 결정
@@ -16,8 +19,8 @@
 </head>
 <body>
   <div id="app"><main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10" aria-busy="true"><div class="w-full max-w-sm flex flex-col gap-4">
-    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap">☀️ 내 돈 날씨</p><h1 class="mt-2 text-display">쓱 가계부</h1>
-      <p class="mt-3 text-body">10초 기록, 하루 한 번 보는 내 돈 날씨.</p></section>
+    <h1 class="flex justify-center" id="boot-logo"><svg class="boot-logo" role="img" aria-label="쓱 가계부" xmlns="http://www.w3.org/2000/svg" viewBox="-23.88 -22.38 303.86 152.25"><defs><linearGradient id="lgBoot" gradientUnits="userSpaceOnUse" x1="1.5" y1="3" x2="100.5" y2="104.5"><stop offset="0" stop-color="var(--lg1)"/><stop offset=".55" stop-color="var(--lg2)"/><stop offset="1" stop-color="var(--lg3)"/></linearGradient></defs><path d="M14 34 Q22.1 13 28 10 Q33.9 13 42 34 M60 34 Q68.1 13 74 10 Q79.9 13 88 34" fill="none" stroke="url(#lgBoot)" stroke-width="14" stroke-linecap="round" stroke-linejoin="round"/><path d="M9 53 Q51 61.0 93 53" fill="none" stroke="url(#lgBoot)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/><path d="M21 76 H70 Q81 76 81 87 V97" fill="none" stroke="url(#lgBoot)" stroke-width="15" stroke-linecap="round" stroke-linejoin="round"/><g style="color:var(--logo-ink)" transform="translate(112.68 56.80)"><g transform="translate(0.21 2.74) scale(0.4222)"><path d="M9 24 H39 Q48 24 47 33 Q45 62 16 88" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/><path d="M77 8 V96" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/><path d="M77 51 H94" fill="none" stroke="currentColor" stroke-width="17.7" stroke-linecap="round" stroke-linejoin="round"/></g><g transform="translate(48.93 2.74) scale(0.4222)"><path d="M6 24 H24 Q32 24 31 33 Q29 60 8 86" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/><path d="M68 12 V90" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/><path d="M95 6 V96" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 38 H68" fill="none" stroke="currentColor" stroke-width="17.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M54 62 H68" fill="none" stroke="currentColor" stroke-width="17.7" stroke-linecap="round" stroke-linejoin="round"/></g><g transform="translate(99.34 2.74) scale(0.4222)"><path d="M22 3 V47 M76 3 V47" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/><path d="M22 23 H76 M22 47 H76" fill="none" stroke="currentColor" stroke-width="17.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M6 69 H92" fill="none" stroke="currentColor" stroke-width="17.7" stroke-linecap="round" stroke-linejoin="round"/><path d="M49 69 V97" fill="none" stroke="currentColor" stroke-width="19" stroke-linecap="round" stroke-linejoin="round"/></g></g></svg></h1>
+    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap">☀️ 내 돈 날씨</p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
     <section class="card-solid p-5 flex flex-col gap-3" id="boot-card"><p class="text-body text-ink-sub">여는 중…</p></section></div></main></div>
   <noscript>쓱 가계부는 JavaScript가 필요해요.</noscript>
   <script type="module" src="/src/main.js"></script>

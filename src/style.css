@@ -1,4 +1,3 @@
-@import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';
 @import '../design/tokens-a.css';
 @tailwind base;
 @tailwind components;
@@ -177,3 +176,18 @@
 @keyframes grow { from { transform: scaleY(0); } }
 .bar-g { cursor: pointer; outline: none; }
 .bar-g:focus-visible > rect:first-child { stroke: var(--primary); stroke-width: 2; }
+
+/* ── 로고(design-spec 16-3): 색은 변수로 라이트·다크 자동 전환 ── */
+:root { --lg1: #7048F2; --lg2: #C2457E; --lg3: #B85A3E; --logo-ink: #2A2540; }
+.dark { --lg1: #B9A6FF; --lg2: #F59AC4; --lg3: #F7B48A; --logo-ink: #F2EEFF; }
+/* 가로 로고: 높이 40px 이상만 허용 → 상자 72px(여백 포함, 글자 잉크 약 50px) */
+.boot-logo { height: 72px; width: auto; }
+/* 40px 미만 자리는 심볼만: 모바일 헤더 28px(S), 설정 아래 버전 24px(S), PC 탭 48px(M) */
+.hsym { width: 28px; height: 28px; flex: none; }
+.versym { width: 24px; height: 24px; flex: none; }
+.pclogo { display: none; }
+@media (min-width: 1024px) {
+  .hsym { display: none; }
+  .pclogo { display: flex; justify-content: center; order: -2; margin-bottom: 4px; }
+  .pcsym { width: 48px; height: 48px; }
+}

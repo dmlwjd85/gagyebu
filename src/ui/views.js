@@ -4,6 +4,10 @@ import { addDays, parseYmd, prettyDate, WEEK, monthLabel } from '../lib/dates.js
 import { byCategory, byDay, heatLevel } from '../lib/stats.js';
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
+import { symbol } from './brand.js';
+
+// 설정 아래 버전 표시(package.json version, vite.config의 define)
+const VERSION = typeof __APP_VERSION__ === 'string' ? `v${__APP_VERSION__}` : '';
 
 const ACC_EMOJI = ['💳', '💵', '🏦', '📱', '🪙', '💰', '🎫', '🧾', '👛', '🏧'];
 const catOf = (m, id) => m.catMap.get(id) ?? { emoji: '🧾', name: '기타' };
@@ -25,6 +29,7 @@ const empty = (icon, text, extra = '') => `<div class="py-8 text-center"><p clas
 export function topBar(m) {
   return `<header class="flex items-center justify-between gap-2 pt-[max(12px,env(safe-area-inset-top))]">
     <div class="flex items-center gap-1">
+      ${symbol('S', { cls: 'hsym mr-0.5', label: '쓱 가계부' })}
       <button class="icon-btn" data-month="-1" aria-label="이전 달">‹</button>
       <button class="month-btn" data-month="0" aria-label="${esc(monthLabel(m.viewYm, m.sd))}, 이번 달로 이동">${esc(monthLabel(m.viewYm, m.sd))}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary">이번 달로</span>' : ''}</button>
       <button class="icon-btn" data-month="1" aria-label="다음 달" ${m.viewYm >= m.curYm ? 'disabled' : ''}>›</button>
@@ -281,7 +286,8 @@ export function settingsView(m, ui) {
         </li>`).join('')}</ul>
       <button class="btn-ghost mt-3" data-action="add-cat">＋ 카테고리 추가</button>
       <p class="mt-2 text-caption text-ink-sub">지운 카테고리의 기록은 '기타'로 옮겨져요.</p>
-    </section></div></div></div>`;
+    </section></div></div>
+    <p class="flex items-center justify-center gap-1.5 mt-2 text-caption text-ink-sub">${symbol('S', { cls: 'versym' })}쓱 가계부 ${VERSION}</p></div>`;
 }
 
 export function loginView({ emulator, error }) {
