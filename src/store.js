@@ -1,11 +1,13 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
-import { dueOccurrences, recTxId } from './lib/recurring.js';
+import { dueOccurrences } from './lib/recurring.js';
+import { safeRef, isRuleId, fixedRecId } from './lib/ids.js';
+import { restorePlans, keptList, keepTx, unkeep } from './lib/restore.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
@@ -21,6 +23,8 @@ export function stopAll() {
 }
 const u = (...p) => doc(db, 'users', state.user.uid, ...p);
 const col = (name) => collection(db, 'users', state.user.uid, name);
+// 새 자동 id: 규칙이 거부하는 카드번호 모양(숫자 13개 이상)이면 다시 뽑음(QA R5)
+const newRef = (name) => safeRef(() => doc(col(name)));
 
 // 쓰기는 오프라인에서도 즉시 로컬 반영되고, 서버 응답은 기다리지 않는다.
 function fire(promise, onError) {
@@ -28,6 +32,7 @@ function fire(promise, onError) {
 }
 
 export function startUser() {
+  state.kept = keptList(state.user.uid);
   unsubs.push(onSnapshot(u(), { includeMetadataChanges: true }, (snap) => {
     state.profile = snap.exists() ? snap.data() : { monthStartDay: 1 };
     state.profileLoaded = true;
@@ -60,24 +65,32 @@ export function startUser() {
   unsubs.push(onSnapshot(col('recurring'), { includeMetadataChanges: true }, (s) => {
     state.recurring = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.dayOfMonth - b.dayOfMonth);
     // 서버 기준 목록을 받은 뒤 한 번만 밀린 회차 기록(캐시만 보고 쓰면 다른 기기 기록을 모름)
-    if (!posted && !s.metadata.fromCache) { posted = true; postRecurring(ymd(new Date())); }
+    if (!posted && !s.metadata.fromCache) { posted = true; postRecurring(ymd(new Date())); retryKept({ quiet: true }); }
     emit();
   }));
 }
 
 // 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
+// 반복마다 따로 씀(QA R5): 한 반복이 거부돼도 다른 반복의 기록은 막히지 않음.
+// 규칙에 맞지 않는 예전 반복 id(숫자 13개 이상)는 같은 묶음에서 늘 같은 새 id로 옮긴 뒤 기록.
+const recFields = (r) => clean({ name: r.name, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
+  active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, createdAt: r.createdAt });
 export function postRecurring(today) {
-  const b = writeBatch(db); let n = 0;
+  let n = 0;
   for (const r of state.recurring) {
-    const due = dueOccurrences(r, today);
-    if (!due.length) continue;
+    const rid = isRuleId(r.id) ? r.id : fixedRecId(r.id);
+    const due = dueOccurrences({ ...r, id: rid }, today);
+    if (!due.length && rid === r.id) continue;
+    const b = writeBatch(db);
     for (const o of due) {
-      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: r.id, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
-      n++;
+      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: rid, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
     }
-    b.update(u('recurring', r.id), { lastPosted: due[due.length - 1].ym, updatedAt: serverTimestamp() });
+    const lastPosted = due.length ? due[due.length - 1].ym : r.lastPosted;
+    if (rid === r.id) b.update(u('recurring', rid), { lastPosted, updatedAt: serverTimestamp() });
+    else { b.set(u('recurring', rid), { ...recFields({ ...r, lastPosted }), updatedAt: serverTimestamp() }); b.delete(u('recurring', r.id)); }
+    fire(b.commit(), writeErrorHandler);
+    n += due.length;
   }
-  if (n) fire(b.commit(), writeErrorHandler);
   return n;
 }
 
@@ -120,7 +133,7 @@ const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, impor
 export const tagsOf = (memo = '') => [...new Set((memo.match(/#[^\s#]{1,20}/g) || []).map((t) => t.slice(1)))].slice(0, 20);
 
 export function saveTx(tx) {
-  const ref = tx.id ? u('transactions', tx.id) : doc(col('transactions'));
+  const ref = tx.id ? u('transactions', tx.id) : newRef('transactions');
   const data = { ...txFields({ ...tx, tags: tagsOf(tx.memo) }), updatedAt: serverTimestamp(), ...(tx.id ? {} : { createdAt: serverTimestamp() }) };
   if (tx.id && tx.createdAt) data.createdAt = tx.createdAt;
   fire(setDoc(ref, data), writeErrorHandler);
@@ -130,26 +143,51 @@ export function saveTx(tx) {
 export async function saveTxBatch(list) {
   for (let i = 0; i < list.length; i += 400) {
     const b = writeBatch(db);
-    list.slice(i, i + 400).forEach((tx) => b.set(doc(col('transactions')), { ...txFields({ ...tx, tags: tagsOf(tx.memo) }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    list.slice(i, i + 400).forEach((tx) => b.set(newRef('transactions'), { ...txFields({ ...tx, tags: tagsOf(tx.memo) }), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
     await b.commit();
   }
 }
-// 되돌리기: 같은 id로 되살림. 규칙이 그 id 쓰기를 거부하면(예전 형식·일시 오류) 새 자동 id로 살려 유실을 막음.
-export function restoreTx(tx) {
-  const { id, ...rest } = tx;
-  const data = { ...txFields(rest), ...(rest.createdAt ? { createdAt: rest.createdAt } : {}), updatedAt: serverTimestamp() };
-  const p = setDoc(u('transactions', id), data).catch(async (e) => {
-    if (e?.code !== 'permission-denied') throw e;
-    const ref = doc(col('transactions'));
-    await setDoc(ref, { ...data, createdAt: rest.createdAt || serverTimestamp() });
-    writeErrorHandler?.({ code: 'restored-as-new', message: '같은 칸에 되돌리지 못해 새 기록으로 살렸어요.' });
-  });
-  fire(p, writeErrorHandler);
+// 되돌리기: 같은 id로 되살림. 거부되면 새 자동 id로, 그래도 거부되면 반복·묶음 연결을 뺀 내용으로 살림(QA R5).
+// 끝내 저장하지 못하면 이 기기에 보관하고 안내(설정 › 데이터에서 다시 저장하거나 CSV로 받기).
+export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
+  const uid = state.user.uid;
+  const createdAt = tx.createdAt || (tx.createdAtMs ? Timestamp.fromMillis(tx.createdAtMs) : undefined);
+  const plans = restorePlans(tx);
+  const run = async () => {
+    for (const [i, p] of plans.entries()) {
+      if (!p.newId && !tx.id) continue;
+      const ref = p.newId ? newRef('transactions') : u('transactions', tx.id);
+      try {
+        await setDoc(ref, { ...p.data, createdAt: createdAt || serverTimestamp(), updatedAt: serverTimestamp() });
+        if (fromKeep) { state.kept = unkeep(uid, tx.keepKey); emit(); }
+        if (i > 0 && !quiet) writeErrorHandler?.({ code: 'restored-as-new', message: '같은 칸에 되돌리지 못해 새 기록으로 살렸어요.' });
+        return true;
+      } catch (e) {
+        console.error(e);
+        if (e?.code !== 'permission-denied') break; // 거부가 아닌 오류(일시 장애 등)는 더 바꿔 보지 않고 보관
+      }
+    }
+    if (!fromKeep) { keepTx(uid, tx); state.kept = keptList(uid); emit(); }
+    if (!quiet) writeErrorHandler?.({ code: 'kept-locally', message: '서버에 저장하지 못해 이 기기에 따로 보관해 두었어요. 설정 › 데이터에서 다시 저장하거나 CSV로 받을 수 있어요.' });
+    return false;
+  };
+  const p = run();
+  p.catch((e) => console.error(e));
+  return p;
+}
+// 이 기기에 보관해 둔 기록 다시 저장(앱을 열 때 조용히 한 번, 설정에서 버튼으로)
+export async function retryKept({ quiet = false } = {}) {
+  state.kept = keptList(state.user.uid);
+  const list = [...state.kept];
+  if (!list.length) return { saved: 0, left: 0 };
+  let saved = 0;
+  for (const t of list) if (await restoreTx(t, { fromKeep: true, quiet: true })) saved++;
+  return { saved, left: list.length - saved };
 }
 export const deleteTx = (id) => fire(deleteDoc(u('transactions', id)), writeErrorHandler);
 
 export function saveCategory(c) {
-  const ref = c.id ? u('categories', c.id) : doc(col('categories'));
+  const ref = c.id ? u('categories', c.id) : newRef('categories');
   fire(setDoc(ref, clean({ name: c.name.trim(), emoji: c.emoji, kind: c.kind, order: c.order ?? 0, archived: c.archived || undefined, budget: c.budget })), writeErrorHandler);
   return ref.id;
 }
@@ -169,7 +207,7 @@ export async function deleteCategory(c) {
   return docs.length;
 }
 export function saveAccount(a) {
-  const ref = a.id ? u('accounts', a.id) : doc(col('accounts'));
+  const ref = a.id ? u('accounts', a.id) : newRef('accounts');
   fire(setDoc(ref, clean({ name: a.name.trim(), type: a.type ?? 'card', emoji: a.emoji, order: a.order ?? 0, archived: a.archived || undefined })), writeErrorHandler);
   return ref.id;
 }
@@ -188,22 +226,30 @@ export function setProfile(patch) {
 }
 // ── M2 ──
 export function saveRule(r) {
-  const ref = r.id ? u('rules', r.id) : doc(col('rules'));
+  const ref = r.id ? u('rules', r.id) : newRef('rules');
   fire(setDoc(ref, { match: r.match.trim().slice(0, 40), field: 'memo', categoryId: r.categoryId, updatedAt: serverTimestamp() }), writeErrorHandler);
   return ref.id;
 }
 export const deleteRule = (id) => fire(deleteDoc(u('rules', id)), writeErrorHandler);
 
 export function saveRecurring(r) {
-  const ref = r.id ? u('recurring', r.id) : doc(col('recurring'));
-  fire(setDoc(ref, clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) })), writeErrorHandler);
+  const data = clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) });
+  // 규칙에 맞지 않는 예전 id면 늘 같은 새 id로 옮김: 새 문서 쓰기와 예전 문서 지우기를 한 묶음으로(둘 다 되거나 둘 다 안 됨, QA R5)
+  if (r.id && !isRuleId(r.id)) {
+    const id = fixedRecId(r.id), b = writeBatch(db);
+    b.set(u('recurring', id), data); b.delete(u('recurring', r.id));
+    fire(b.commit(), writeErrorHandler);
+    return id;
+  }
+  const ref = r.id ? u('recurring', r.id) : newRef('recurring');
+  fire(setDoc(ref, data), writeErrorHandler);
   return ref.id;
 }
 export const deleteRecurring = (id) => fire(deleteDoc(u('recurring', id)), writeErrorHandler);
 
 export function saveGoal(g) {
-  const ref = g.id ? u('goals', g.id) : doc(col('goals'));
+  const ref = g.id ? u('goals', g.id) : newRef('goals');
   fire(setDoc(ref, clean({ name: g.name.trim(), emoji: g.emoji, target: g.target, saved: g.saved ?? 0, due: g.due, order: g.order ?? 0, updatedAt: serverTimestamp() })), writeErrorHandler);
   return ref.id;
 }
@@ -221,7 +267,7 @@ export async function txsInRange(from, to) {
 export function importTxs(items, batchId, meta = {}) {
   for (let i = 0; i < items.length; i += 400) {
     const b = writeBatch(db);
-    items.slice(i, i + 400).forEach((x) => b.set(doc(col('transactions')), {
+    items.slice(i, i + 400).forEach((x) => b.set(newRef('transactions'), {
       ...txFields({ date: x.date, amount: x.amount, kind: x.kind, categoryId: x.categoryId, accountId: x.accountId, memo: x.memo,
         tags: tagsOf(x.memo), importHash: x.importHash, importBatch: batchId, card4: x.card4 ?? undefined }),
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),

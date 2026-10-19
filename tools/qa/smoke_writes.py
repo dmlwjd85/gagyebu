@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """앱의 모든 쓰기 경로를 에뮬레이터에서 한 번씩 돌리고 권한 오류 0건을 확인(QA 4차 R1 교훈).
 사용: 에뮬레이터(auth 9099·firestore 8080) + VITE_USE_EMULATOR 미리보기 띄운 뒤
-  python3 tools/qa/smoke_writes.py [URL]
+  python3 tools/qa/smoke_writes.py [URL] [사진 접두사]
+  사진 접두사 기본값은 /tmp/gagyebu-smoke- (예전 작업 사진을 덮어쓰지 않게). 예: /workspace/gagyebu-m2fu-
 종료 코드 0 = 권한 오류 없음·핵심 기록이 서버에 있음.
 """
 import json, sys, urllib.request as U
@@ -10,7 +11,7 @@ from playwright.sync_api import sync_playwright
 URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
 PROJ = 'demo-gagyebu'
 FS = f'http://127.0.0.1:8080/v1/projects/{PROJ}/databases/(default)/documents'
-SHOT = '/workspace/gagyebu-m2fix4-'
+SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gagyebu-smoke-'
 
 def wipe():
     for u in [f'http://127.0.0.1:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents',

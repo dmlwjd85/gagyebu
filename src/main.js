@@ -45,7 +45,7 @@ function model() {
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
     sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
-    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
+    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, kept: state.kept, txs: state.txs,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
@@ -419,6 +419,13 @@ app.addEventListener('click', async (e) => {
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
     case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
+    case 'kept-retry': {
+      if (!navigator.onLine) return toast('인터넷이 연결되면 다시 눌러 주세요. 기록은 이 기기에 그대로 있어요.');
+      const r = await data.retryKept();
+      if (!r.left) return toast(r.saved > 1 ? `보관해 둔 기록 ${r.saved}건을 모두 저장했어요.` : '보관해 둔 기록을 저장했어요.');
+      return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두시면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
+    }
+    case 'kept-csv': return download(`쓱가계부_보관기록_${m.today}.csv`, toCSV(state.kept, state));
     case 'csv-month': return download(`쓱가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
       try { download(`쓱가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
@@ -578,12 +585,14 @@ if (isFirebaseConfigured) {
   initSheet({ getState: () => state, onSave, onDelete });
   data.onWriteError((e) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
+    if (e?.code === 'kept-locally') return toast(e.message, { action: '설정 열기', onAction: () => go('settings'), duration: 8000 });
     if (e?.code === 'permission-denied') {
       // 로그인 만료와 규칙 거부를 구분(반복 id 거부 때 '다시 로그인'은 틀린 안내였음, QA R1)
+      // 앱 안에 문의 창구가 없으므로 사용자가 직접 할 수 있는 일을 안내(QA R8)
       const signedIn = !!data.state?.user;
-      return toast(signedIn
-        ? '저장이 거부됐어요. 문제가 계속되면 알려 주세요.'
-        : '로그인이 만료됐어요. 다시 로그인해 주세요.');
+      return signedIn
+        ? toast('이번 기록은 저장되지 않았어요. 새로 고친 뒤 한 번 더 해 주세요. 계속 안 되면 설정 › 데이터에서 백업을 받아 두시면 안심이에요.', { action: '새로 고침', onAction: () => location.reload(), duration: 8000 })
+        : toast('로그인이 만료됐어요. 다시 로그인해 주세요.');
     }
     return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
   });

@@ -4,6 +4,8 @@ import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebas
 import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
 import { recTxId } from '../../src/lib/recurring.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../../src/lib/defaults.js';
+import { safeRef, fixedRecId, looksLikeCard } from '../../src/lib/ids.js';
+import { restorePlans } from '../../src/lib/restore.js';
 
 let env;
 beforeAll(async () => {
@@ -508,5 +510,52 @@ describe('R2 N8 잔여: 영문자 끼운 카드번호 모양', () => {
   test('정상 자동 id·짧은 id는 그대로 허용', async () => {
     await assertSucceeds(tx({ recurringId: 'Xk3J9aZ0qLm2nB7cD4eF', categoryId: 'food', accountId: 'card' }));
     await assertSucceeds(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { food: 1, Xk3J9aZ0qLm2nB7cD4eF: 2, n1234567890: 3 } }));
+  });
+});
+
+// ── QA 5차 R6: 예산 키에 영문·밑줄을 섞은 카드번호 모양 ──
+describe('R6 예산 키: 영문·밑줄 섞인 카드번호 모양 거부', () => {
+  const b = (byCategory) => setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory });
+  test('섞은 구분자 거부(한 키·여러 키 사이)', async () => {
+    for (const v of ['1234a5678_9012b3456', '1234_5678x9012_3456', '1234_a5678_B9012_c3456', 'a1_2b3_4c5_6d7_8e9_0f1_2g3', '1234567890123']) {
+      await assertFails(b({ [v]: 1 }));
+      await assertFails(b({ food: 1, [v]: 2, cafe: 3 }));
+    }
+  });
+  test('앱이 만드는 키는 통과: 기본 카테고리 id·자동 id(생성 함수)·하이픈 기본 id', async () => {
+    const auto = Array.from({ length: 10 }, () => safeRef(() => doc(collection(alice(), 'users/alice/categories'))).id);
+    const keys = [...DEFAULT_CATEGORIES.map((c) => c.id), ...auto].slice(0, 30);
+    await assertSucceeds(b(Object.fromEntries(keys.map((k, i) => [k, i]))));
+    await assertSucceeds(b({ 'etc-in': 1, a_b: 2, n1234567890: 3, Xk3J9aZ0qLm2nB7cD4eF: 4 }));
+  });
+});
+
+// ── QA 5차 R5: 형식 밖 반복 id(숫자 13개 이상) ──
+describe('R5 형식 밖 반복 id: 새 id 만들기·옮기기·되돌리기', () => {
+  const BAD = 'q1w2e3r4t5y6u7i8o9p0a1s2d3';
+  const REC = { name: '월세', amount: 550000, kind: 'expense', categoryId: 'housing', dayOfMonth: 1, active: true, startYm: '2026-10', lastPosted: '2026-10' };
+  test('safeRef: 카드번호 모양 id는 다시 뽑아 규칙을 통과', async () => {
+    const ids = ['1a2b3c4d5e6f7g8h9i0j1k2l3', 'Xk3J9aZ0qLm2nB7cD4eF']; let i = 0;
+    const ref = safeRef(() => doc(alice(), `users/alice/recurring/${ids[i++]}`));
+    expect(ref.id).toBe('Xk3J9aZ0qLm2nB7cD4eF');
+    await assertSucceeds(setDoc(ref, REC));
+    // 자동 id 100개: 모두 규칙 통과
+    for (let k = 0; k < 100; k++) expect(looksLikeCard(safeRef(() => doc(collection(alice(), 'users/alice/recurring'))).id)).toBe(false);
+  });
+  test('예전 반복을 같은 새 id로 옮기는 묶음(새 문서 쓰기+예전 문서 지우기)과 그 rec- 기록이 허용됨', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), `users/alice/recurring/${BAD}`), REC));
+    await assertFails(setDoc(doc(alice(), `users/alice/recurring/${BAD}`), REC)); // 예전 id로는 못 씀
+    const nid = fixedRecId(BAD);
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/recurring/${nid}`), { ...REC, lastPosted: '2026-11' }));
+    await assertSucceeds(deleteDoc(doc(alice(), `users/alice/recurring/${BAD}`)));
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${recTxId(nid, '2026-11')}`), { ...TX, date: '2026-11-01', categoryId: 'housing', recurringId: nid, memo: '월세' }));
+  });
+  test('되돌리기 시도 순서: 같은 id·새 id는 거부, 마지막(반복 id 뺌)은 새 id로 허용', async () => {
+    const tx = { id: `rec-${BAD}-2026-10`, date: '2026-10-01', amount: 550000, kind: 'expense', categoryId: 'housing', memo: '월세', recurringId: BAD };
+    const plans = restorePlans(tx);
+    expect(plans).toHaveLength(3);
+    await assertFails(setDoc(doc(alice(), `users/alice/transactions/${tx.id}`), plans[0].data));
+    await assertFails(setDoc(doc(collection(alice(), 'users/alice/transactions')), plans[1].data));
+    await assertSucceeds(setDoc(doc(collection(alice(), 'users/alice/transactions')), { ...plans[2].data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
 });
