@@ -1,6 +1,7 @@
 // Ctrl(⌘)+휠·트랙패드 핀치·Ctrl(⌘)+/−/0 을 '본문 글자 배율'로 가로채는 부분만 따로 모은 곳.
-// ▶ 이 동작을 끄려면(브라우저 줌을 그대로 쓰게) 아래 한 줄만 false 로 바꾸면 됨. 설정 화면의 슬라이더·가−/가+ 버튼은 그대로 동작.
-export const INTERCEPT_BROWSER_ZOOM = true;
+// 지금은 꺼 둠(QA M3 결정): Ctrl(⌘)+/−/0·Ctrl+휠은 브라우저가 처리(화면 전체 확대·축소). 본문 글자 크기는 설정 화면의 슬라이더·가−/가+ 버튼으로만.
+// ▶ 다시 가로채게 하려면 아래 한 줄만 true 로 바꾸면 됨.
+export const INTERCEPT_BROWSER_ZOOM = false;
 
 import { scaleKeyAction, stepScale } from './contentScale.js';
 

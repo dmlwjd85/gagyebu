@@ -284,7 +284,7 @@ const scaleControl = (v) => {
         <input id="content-scale" class="range flex-1" type="range" min="85" max="160" step="5" value="${pct}" aria-valuetext="${pct}%" data-content-scale />
         <button class="scale-btn text-body" data-scale-step="1" aria-label="본문 글자 크게" aria-disabled="${v >= 1.6}">가+</button>
       </div>
-      <p class="text-caption text-ink-sub">위·아래 메뉴는 그대로 두고 가운데 내용만 커지거나 작아져요. PC에서는 Ctrl(맥은 ⌘)을 누른 채 휠을 돌리거나 +/− 키로도 바꿀 수 있어요. Ctrl + <span class="tabular-nums">0</span>을 누르면 기본 크기로 돌아와요.</p>
+      <p class="text-caption text-ink-sub">위·아래 메뉴는 그대로 두고 가운데 내용만 커지거나 작아져요. 화면 전체를 키우려면 브라우저 확대(Ctrl(맥은 ⌘) + +/−)를 쓰면 돼요. Ctrl + <span class="tabular-nums">0</span>은 브라우저 확대를 기본으로 돌려요.</p>
       <button class="btn-ghost self-start" data-scale-reset>기본 크기로</button>
     </div>`;
 };

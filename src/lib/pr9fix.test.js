@@ -11,16 +11,21 @@ const fakeTarget = () => { const h = {}; return { h, addEventListener: (t, f) =>
 const ev = (o) => ({ preventDefault: vi.fn(), ...o });
 
 describe('M3 Ctrl/휠 가로채기 분리', () => {
-  it('기본값은 지금과 같은 동작(켜짐)', () => expect(INTERCEPT_BROWSER_ZOOM).toBe(true));
+  it('기본값은 꺼짐: Ctrl +/−/0·Ctrl+휠은 브라우저가 처리(M3 결정)', () => expect(INTERCEPT_BROWSER_ZOOM).toBe(false));
+  it('기본값으로 설치하면 아무 것도 가로채지 않음', () => {
+    const t = fakeTarget();
+    installScaleShortcuts({ getScale: () => 1, setScale: vi.fn(), target: t });
+    expect(Object.keys(t.h)).toEqual([]);
+  });
   it('끄면 아무 것도 가로채지 않음', () => {
     const t = fakeTarget();
     installScaleShortcuts({ getScale: () => 1, setScale: vi.fn(), enabled: false, target: t });
     expect(Object.keys(t.h)).toEqual([]);
   });
-  it('켜면 Ctrl + = 은 배율을 키우고, 끝(160%)에서는 브라우저 줌에 맡김', () => {
+  it('(다시 켤 때) 켜면 Ctrl + = 은 배율을 키우고, 끝(160%)에서는 브라우저 줌에 맡김', () => {
     let cur = 1.5; const set = vi.fn((v) => { cur = v; });
     const t = fakeTarget();
-    const off = installScaleShortcuts({ getScale: () => cur, setScale: set, target: t });
+    const off = installScaleShortcuts({ getScale: () => cur, setScale: set, enabled: true, target: t });
     const e1 = ev({ ctrlKey: true, key: '=' }); t.h.keydown(e1);
     expect(set).toHaveBeenCalledWith(1.6); expect(e1.preventDefault).toHaveBeenCalled();
     const e2 = ev({ ctrlKey: true, key: '=' }); t.h.keydown(e2);
@@ -29,7 +34,7 @@ describe('M3 Ctrl/휠 가로채기 분리', () => {
   });
   it('시트·대화상자가 열려 있으면(blocked) 가로채지 않음, 휠은 50만큼 모여야 한 단계', () => {
     const set = vi.fn(); const t = fakeTarget(); let blocked = true;
-    installScaleShortcuts({ getScale: () => 1, setScale: set, blocked: () => blocked, target: t });
+    installScaleShortcuts({ getScale: () => 1, setScale: set, blocked: () => blocked, enabled: true, target: t });
     const e = ev({ ctrlKey: true, deltaY: -100 }); t.h.wheel(e); expect(e.preventDefault).not.toHaveBeenCalled();
     blocked = false;
     t.h.wheel(ev({ ctrlKey: true, deltaY: -30 })); expect(set).not.toHaveBeenCalled();

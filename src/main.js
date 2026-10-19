@@ -602,8 +602,8 @@ let fitRaf = 0;
 window.addEventListener('resize', () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(() => { fitNums(); syncRailShift(); }); });
 
 // ── 본문 글자 배율(위·아래 메뉴는 그대로, 가운데 본문만) ─────────────
-// 설정 슬라이더·Ctrl(⌘)+휠·Ctrl(⌘)+/−/0. 손가락 핀치 줌은 막지 않음(접근성: 브라우저 확대는 늘 가능).
-// 끝(85%·160%)에 닿은 뒤 더 누르면 가로채지 않고 브라우저 줌에 맡김 → 160%보다 더 크게 보고 싶은 분도 확대 가능.
+// 설정 슬라이더·가−/가+ 버튼. Ctrl(⌘)+휠·Ctrl(⌘)+/−/0 은 가로채지 않고 브라우저 확대에 맡김(QA M3 결정, scaleShortcuts.js).
+// 손가락 핀치 줌도 막지 않음(접근성: 브라우저 확대는 늘 가능).
 function setScale(v, { announce = false } = {}) {
   const prev = contentScale;
   const main = $('#main') && scroller();
@@ -627,7 +627,7 @@ function syncScaleUi() {
   $('[data-scale-step="1"]')?.setAttribute('aria-disabled', String(contentScale >= SCALE_MAX));
 }
 const scaleBlocked = () => !state.user || !$('#main') || isSheetOpen() || !!document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)');
-// Ctrl(⌘)+휠·Ctrl(⌘)+/−/0 가로채기: src/lib/scaleShortcuts.js 의 INTERCEPT_BROWSER_ZOOM 한 줄로 켜고 끔
+// Ctrl(⌘)+휠·Ctrl(⌘)+/−/0 가로채기: 지금은 꺼짐(브라우저 확대). src/lib/scaleShortcuts.js 의 INTERCEPT_BROWSER_ZOOM 한 줄로 켜고 끔
 installScaleShortcuts({ getScale: () => contentScale, setScale: (v) => setScale(v, { announce: true }), blocked: scaleBlocked });
 // 다른 탭에서 배율을 바꾸면 이 탭도 따라감(QA L4)
 window.addEventListener('storage', (e) => {
