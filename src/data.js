@@ -1,5 +1,5 @@
 // Firestore 데이터 계층. 모든 경로는 users/{uid} 아래.
-import { onAuthStateChanged, signInWithPopup, signInWithRedirect, signInWithCredential, signOut, GoogleAuthProvider, deleteUser } from 'firebase/auth';
+import { onAuthStateChanged, signInWithPopup, signInWithRedirect, browserPopupRedirectResolver, getRedirectResult, signInWithCredential, signOut, GoogleAuthProvider, deleteUser } from 'firebase/auth';
 import { doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
 import { auth, db, googleProvider } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
@@ -25,6 +25,8 @@ export const onWriteError = (fn) => (writeErrorHandler = fn);
 
 export function initAuth() {
   if (!auth) { state.ready = true; emit(); return; }
+  // 팝업이 막혀 리다이렉트로 로그인한 경우에만 결과 처리기를 불러옴
+  if (sessionStorage.getItem('authRedirect')) { sessionStorage.removeItem('authRedirect'); getRedirectResult(auth, browserPopupRedirectResolver).catch((e) => console.error(e)); }
   onAuthStateChanged(auth, (user) => {
     unsubs.forEach((f) => f()); unsubs = []; txUnsub?.(); txUnsub = null; budgetUnsub?.(); budgetUnsub = null;
     Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], txWindow: null, txLoaded: false, ready: true });
@@ -128,6 +130,13 @@ export async function deleteCategory(c) {
   if (!docs.length) await deleteDoc(u('categories', c.id));
   return docs.length;
 }
+export function saveAccount(a) {
+  const ref = a.id ? u('accounts', a.id) : doc(col('accounts'));
+  fire(setDoc(ref, clean({ name: a.name.trim(), type: a.type ?? 'card', emoji: a.emoji, order: a.order ?? 0, archived: a.archived || undefined })), writeErrorHandler);
+  return ref.id;
+}
+// 결제수단 삭제: 기존 기록은 그대로 두고(이름만 사라짐) 문서만 지움
+export const deleteAccount = (id) => fire(deleteDoc(u('accounts', id)), writeErrorHandler);
 export function reorderCategories(list) {
   const b = writeBatch(db);
   list.forEach((c, i) => b.update(u('categories', c.id), { order: i }));
@@ -159,9 +168,10 @@ export async function deleteEverything() {
 }
 
 export async function login() {
-  try { await signInWithPopup(auth, googleProvider); }
+  try { await signInWithPopup(auth, googleProvider, browserPopupRedirectResolver); }
   catch (e) {
-    if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') return signInWithRedirect(auth, googleProvider);
+    if (e.code === 'auth/popup-blocked' || e.code === 'auth/operation-not-supported-in-this-environment') sessionStorage.setItem('authRedirect', '1');
+      return signInWithRedirect(auth, googleProvider, browserPopupRedirectResolver);
     if (e.code === 'auth/popup-closed-by-user' || e.code === 'auth/cancelled-popup-request') return;
     throw e;
   }

@@ -1,4 +1,4 @@
-# 가계부 (gagyebu)
+# 쓱 가계부 (gagyebu)
 10초 기록, 하루 한 번 보는 내 돈 날씨 — 광고·연동 없는 프라이버시 웹 가계부.
 
 - 스택: Vite + Vanilla JS + Tailwind, Firebase(Auth·Firestore, 오프라인 캐시), PWA, GitHub Pages
