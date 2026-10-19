@@ -4,15 +4,33 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 export const haptic = (ms = 8) => { if (localStorage.getItem('haptic') !== 'off') navigator.vibrate?.(ms); };
 
+// 문장 속 금액: 숫자 폭을 고르게(tabular-nums) + 금액 중간에서 줄이 갈리지 않게
+export const numSpan = (txt) => `<span data-fit class="num tabular-nums">${txt}</span>`;
+
+// 큰 금액 한 줄 맞춤: 금액은 자르거나(…) 쪼개지 않고, 칸보다 넓을 때만 글자를 조금씩 줄여 칸 안에 다 보이게(최소 55%)
+export function fitNum(el) {
+  if (!el || !el.isConnected) return;
+  el.style.fontSize = '';
+  const base = parseFloat(getComputedStyle(el).fontSize);
+  // 가운데 정렬(flex items-center 등)로 상자 자체가 부모보다 넓어지는 경우도 넘침으로 봄
+  // 문장 속 금액(inline)은 자기 폭이 없으니(clientWidth 0) 부모 폭만 봄 → 한 줄을 통째로 차지해도 넘칠 때만 줄임
+  const par = el.parentElement, ps = par && getComputedStyle(par);
+  const room = () => Math.min(el.clientWidth || Infinity, par ? par.clientWidth - parseFloat(ps.paddingLeft) - parseFloat(ps.paddingRight) : Infinity);
+  const need = () => Math.max(el.scrollWidth, el.getBoundingClientRect().width);
+  for (let k = 1; k <= 9 && need() > room() + 0.5; k++) el.style.fontSize = `${base * (1 - k * 0.05)}px`;
+}
+export const fitNums = (root = document) => $$('[data-fit]', root).forEach(fitNum);
+
 // 숫자 롤링(카운트업) — 420ms, reduced-motion 이면 즉시
 export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0)) {
   el.dataset.value = to;
-  if (reducedMotion() || from === to) { el.textContent = format(to); return; }
+  if (reducedMotion() || from === to) { el.textContent = format(to); fitNum(el); return; }
   const t0 = performance.now(), dur = 420, ease = (t) => 1 - Math.pow(1 - t, 3);
   const step = (now) => {
     const t = Math.min(1, (now - t0) / dur);
     el.textContent = format(Math.round(from + (to - from) * ease(t)));
     if (t < 1 && el.dataset.value == to) requestAnimationFrame(step);
+    else if (t >= 1) fitNum(el);
   };
   requestAnimationFrame(step);
 }
@@ -21,7 +39,7 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
 export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6 fade-in';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
       <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
       ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
@@ -54,7 +72,7 @@ export function toast(msg, { action, onAction, duration = 3500 } = {}) {
 export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6 fade-in';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass"><form>
       <h2 id="pa-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
       <label class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg px-4 h-14 focus-within:ring-2 focus-within:ring-primary">
@@ -89,7 +107,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
 export function formDialog({ title, body = '', fields, ok = '저장', validate = () => null }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4 fade-in overflow-y-auto';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-4 fade-in';
     const inputCls = 'mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body';
     const field = (f) => {
       const id = `fd-${f.name}`;

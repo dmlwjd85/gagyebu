@@ -35,7 +35,7 @@ export function donut(items, { total, center = '총지출', size = 220, stroke =
       <circle r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none" stroke="var(--line)" stroke-width="${stroke}"/>${segs}
     </svg>
     <div class="absolute inset-0 grid place-items-center pointer-events-none text-center">
-      <div><p class="text-caption text-ink-sub">${esc(center)}</p><p class="text-head tabular-nums">${formatWon(total)}</p></div></div>`;
+      <div class="w-[min(64%,136px)]"><p class="text-caption text-ink-sub">${esc(center)}</p><p data-fit class="text-head tabular-nums whitespace-nowrap">${formatWon(total)}</p></div></div>`;
 }
 
 // 월 추이 막대: 지출(c1)과 남긴 돈(수입색), 왼쪽 눈금·점선 격자, 막대(월)를 누르면 아래에 상세

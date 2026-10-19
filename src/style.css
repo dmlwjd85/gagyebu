@@ -45,11 +45,16 @@
   .app-shell { @apply mx-auto w-full; max-width: var(--shell-max); padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   @media (min-width: 640px) { .app-shell { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); } }
   @media (min-width: 1024px) {
-    .app-frame.has-nav .app-shell { max-width: calc(var(--shell-max) + var(--rail-space) + 32px); padding-left: calc(var(--rail-space) + 8px); padding-right: 32px; }
+    .app-frame.has-nav .app-shell { max-width: calc(var(--shell-max) + var(--rail-space) + 16px); padding-left: calc(var(--rail-space) + 8px); padding-right: 16px; }
     .app-frame:not(.has-nav) .app-shell { max-width: calc(var(--shell-max) + 64px); padding-left: 32px; padding-right: 32px; }
     .app-main > .app-shell { padding-bottom: 32px; }
   }
   .view-grid { @apply flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start; }
+  /* 금액·날짜 숫자: 글자를 키우거나 칸이 좁아도 숫자 중간에서 쪼개지지 않게(공백에서는 줄바꿈 허용) */
+  .tabular-nums { overflow-wrap: normal; }
+  .num { white-space: nowrap; overflow-wrap: normal; flex-shrink: 0; }
+  /* 홈 카드 큰 금액: 아주 좁은 폭(브라우저 확대 등)에서도 한 줄에 다 보이게 화면 폭에 맞춰 줄어듦 */
+  #main .text-display { font-size: min(calc(40px * var(--fs, 1)), 12.5vw); line-height: 1.12; white-space: nowrap; }
   .skip-link { @apply sr-only focus:not-sr-only focus:fixed focus:top-2 focus:left-2 focus:z-50 focus:bg-surface-solid focus:px-4 focus:py-2 focus:rounded-md; }
 
   .glass { background: var(--surface); border: 1px solid var(--glass-border); backdrop-filter: blur(18px) saturate(160%); -webkit-backdrop-filter: blur(18px) saturate(160%); @apply shadow-glass rounded-3xl; }
@@ -57,9 +62,11 @@
   .card-solid { background: var(--surface-solid); border: 1px solid var(--line); @apply shadow-glass rounded-3xl; }
   .hero-card { background-image: var(--hero-gradient); color: var(--hero-ink); text-shadow: var(--hero-shadow); @apply shadow-glow rounded-3xl; }
   .hero-btn { @apply inline-flex items-center min-h-[44px] px-4 rounded-2xl bg-white font-semibold; color: #4b2fc4; text-shadow: none; }
-  .stat-v { @apply text-head font-bold truncate; }
-  /* 지출·수입·남긴 돈: 보통은 3칸, 본문 글자를 크게 하면 칸이 좁아 숫자가 잘리기 전에 2칸으로 */
-  .stat-grid { display: grid; gap: 8px; grid-template-columns: repeat(auto-fit, minmax(calc(88px * var(--fs, 1)), 1fr)); }
+  /* 금액은 절대 자르지 않음(말줄임 없음, 줄바꿈 없음) */
+  .stat-v { @apply text-head font-bold whitespace-nowrap; overflow-wrap: normal; }
+  /* 지출·수입·남긴 돈: 칸마다 '실제 금액 폭'만큼은 꼭 확보하고, 한 줄에 다 안 들어가면 다음 줄로(글자 배율·금액 길이에 따라 3칸 → 2+1 → 1칸) */
+  .stat-grid { display: flex; flex-wrap: wrap; gap: 8px; }
+  .stat-grid > * { flex: 1 1 0; min-width: min(100%, max-content); }
   @media (max-width: 380px) { .stat-v { font-size: calc(15px * var(--fs, 1)); } }
 
   .icon-btn { @apply inline-grid place-items-center w-11 h-11 rounded-full text-lg transition-colors; }
@@ -78,14 +85,15 @@
   .btn-danger { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-semibold border; color: var(--expense); border-color: var(--expense); background: transparent; }
   .btn-google { @apply flex items-center justify-center gap-3 min-h-[52px] rounded-2xl font-bold border text-ink; border-color: var(--line); background: var(--surface-solid); }
   .btn-google:hover { border-color: var(--primary); }
-  .seg { @apply inline-flex p-1 rounded-2xl; background: var(--line); }
-  .seg > button { @apply min-h-[44px] px-4 rounded-xl text-caption font-semibold text-ink-sub; }
+  .seg { @apply inline-flex p-1 rounded-2xl; background: var(--line); max-width: 100%; }
+  .seg > button { @apply min-h-[44px] px-4 rounded-xl text-caption font-semibold text-ink-sub; flex: 1 1 auto; min-width: 0; }
+  @media (max-width: 299px) { .seg > button { padding-left: 8px; padding-right: 8px; } }
   .seg > button[aria-checked="true"] { background: var(--surface-solid); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   /* 긴 옵션(공백 없는 20자 결제수단 등)이 있어도 화면 밖으로 밀리지 않게: 폭은 부모 안, 넘치면 말줄임(QA N13) */
   .select { @apply min-h-[44px] rounded-xl px-3 border text-body min-w-0 max-w-full text-ellipsis; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
   .opt-row { @apply flex items-center justify-between gap-2 text-body min-h-[44px] min-w-0; }
   .opt-row:has(> .opt-k) { flex-wrap: wrap; } /* 이름표+선택 상자: 자리가 모자라면(글자 크게 등) 선택 상자를 다음 줄로 */
-  .opt-row > .opt-k { @apply shrink-0 whitespace-nowrap; }
+  .opt-row > .opt-k { @apply shrink-0 max-w-full; } /* 한 줄을 넘는 아주 좁은 폭에서만 이름표 안에서 줄바꿈 */
   .opt-row > .select { @apply flex-initial; max-width: min(100%, 260px); min-width: calc(80px * var(--fs, 1)); }
   .switch { @apply relative inline-block w-12 h-7 shrink-0; }
   .switch::before { content: ''; position: absolute; inset: -9px -2px; } /* 누르는 영역 52×44 */
@@ -105,16 +113,22 @@
   .swipe-li.swipe-ready .swipe-bg { opacity: 1; }
   .tx-row { @apply relative flex w-full items-center gap-3 min-h-[56px] px-2 py-2 rounded-2xl; touch-action: pan-y pinch-zoom; /* 밀어서 지우기는 JS가, 두 손가락 확대는 브라우저가(핀치 막지 않음) */ transition: transform .2s ease-out, background-color .15s; background: var(--surface-solid); }
   .tx-row.swiping { transition: none; }
+  /* 아주 좁은 폭·큰 글자: 이름이 최소 5글자 폭보다 좁아지면 금액을 다음 줄 오른쪽으로(금액은 자르지 않음) */
+  .tx-row, .legend-row { flex-wrap: wrap; }
+  .tx-row > span.flex-1, .legend-row > span.flex-1 { min-width: min(100%, 5em); }
   .tx-row:hover { background: var(--bg); }
   .tx-emoji { @apply grid place-items-center w-10 h-10 rounded-2xl text-xl shrink-0; background: var(--heat-1); }
   .legend-row { @apply flex w-full items-center gap-2 min-h-[44px] px-2 rounded-xl text-body; }
   .legend-row:hover:not(:disabled) { background: var(--bg); }
   .skeleton { background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 
-  .cal-cell { @apply flex flex-col items-center justify-start gap-0.5 rounded-xl pt-1.5 min-h-[52px] min-w-[44px] transition-colors; }
+  .cal-cell { @apply flex flex-col items-center justify-start gap-0.5 rounded-xl pt-1.5 min-h-[52px] min-w-0 transition-colors; } /* 폭은 칸(1/7)에 맞춤: 넓을 때 44px 이상, 아주 좁은 폭에서 이웃 칸과 겹치지 않게 */
   /* 달력 칸(폭 고정 7칸): 본문 글자를 크게 해도 금액이 두 줄로 쪼개지지 않게 칸 안 글자는 1.2배까지만 */
   .cal-cell > span.text-micro { font-size: calc(11px * min(var(--fs, 1), 1.2)); line-height: calc(14px * min(var(--fs, 1), 1.2)); white-space: nowrap; }
   .cal-cell > span.text-caption { font-size: calc(13px * min(var(--fs, 1), 1.3)); line-height: calc(18px * min(var(--fs, 1), 1.3)); }
+  /* 칸이 금액보다 좁아지는 아주 좁은 폭(160px 등): 칸 안 금액은 숨기고 색(많이 쓴 정도)만. 금액은 칸 이름(읽기)·목록 보기에 그대로 */
+  .cal-cell { container-type: inline-size; }
+  @container (max-width: 34px) { .cal-cell > span.text-micro { display: none; } }
   .cal-cell.is-today > span:nth-child(2) { text-decoration: underline 2px var(--primary); text-underline-offset: 3px; }
   .cal-cell.is-today { box-shadow: inset 0 0 0 2px var(--primary); }
   .cal-cell.is-future { color: var(--ink-sub); }
@@ -132,26 +146,52 @@
   .tab > span:first-child { @apply text-xl; filter: grayscale(.6); opacity: .8; }
   .tab.on { color: var(--primary); }
   .tab.on > span:first-child { filter: none; opacity: 1; }
-  /* 아주 좁은 폭(작은 폰에서 브라우저 150% 확대 등): 누르는 영역 44px은 지키고 간격만 줄임 */
-  @media (max-width: 299px) { .tab { min-width: 44px; flex: 1 1 0; } .tabbar { padding-left: 4px; padding-right: 4px; } .tabbar .fab { width: 52px; height: 52px; flex: none; } }
+  /* 좁은 폭(작은 폰에서 브라우저 150~200% 확대 등): 5칸을 똑같이 나눠 어떤 폭에서도 5개 모두 보이고 눌리게.
+     228px까지는 칸마다 44px 이상, 그보다 좁으면 칸이 화면 폭에 맞춰 줄어듦(높이는 48px 유지).
+     240px 미만은 글자 라벨을 숨기고 아이콘만(이름은 화면 읽기 프로그램용으로 남김), ＋도 칸 크기에 맞춤 */
+  @media (max-width: 339px) {
+    .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; justify-items: center; padding-top: 4px;
+      padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
+    .tab { min-width: 0; width: 100%; max-width: 64px; }
+    .tabbar .fab { width: min(48px, 100%); height: 48px; border-radius: 24px; margin-top: 0; font-size: 26px; } /* 아주 좁으면 세로로 긴 알약 모양(높이 48px 유지) */
+  }
+  @media (max-width: 239px) {
+    .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .tab > span:first-child { font-size: 18px; }
+  }
   @media (min-width: 1024px) {
     /* 왼쪽 세로 메뉴: 화면이 아무리 넓어도 본문 덩어리의 왼쪽에 붙어 있음 */
-    .tabbar { position: fixed; top: max(16px, env(safe-area-inset-top)); bottom: 16px; left: max(16px, calc(50% - (var(--shell-max) + var(--rail-space) + 32px) / 2 + 16px)); right: auto;
-      width: 88px; flex-direction: column; justify-content: flex-start; align-items: center; gap: 8px; padding: 16px 0; border-radius: 28px; border: 1px solid var(--glass-border); }
+    .tabbar { position: fixed; top: max(16px, env(safe-area-inset-top)); bottom: 16px; left: max(calc(16px + var(--rail-shift, 0px)), calc(50% - (var(--shell-max) + var(--rail-space) + 16px) / 2 + 16px)); right: auto; /* --rail-shift: 본문 스크롤 막대 자리(양쪽)만큼 → 좌우 여백이 같게(main.js) */
+      width: 88px; overflow-y: auto; overscroll-behavior: contain; flex-direction: column; justify-content: flex-start; align-items: center; gap: 8px; padding: 16px 0; border-radius: 28px; border: 1px solid var(--glass-border); }
     .tabbar .fab { order: -1; margin: 0 0 12px; }
     .tab { min-width: 64px; min-height: 64px; font-size: 12px; }
   }
   .fab { @apply grid place-items-center w-16 h-16 -mt-7 rounded-full text-white text-3xl font-light shadow-glow transition-transform; background-image: linear-gradient(135deg, var(--fab-1), var(--fab-2)); }
   .fab:active { transform: scale(.92); transition-duration: 90ms; }
+  /* 높이가 낮은 화면(400% 확대, 가로 모드, 키보드가 올라와 창이 줄어든 안드로이드 등, WCAG 1.4.10):
+     위 메뉴는 고정을 풀어 본문과 함께 스크롤되고, 아래 메뉴는 아이콘만 남긴 낮은 막대로 → 본문이 화면 대부분을 씀 */
+  @media (max-height: 500px) {
+    body.has-frame { overflow: visible; }
+    .app-frame { display: block; height: auto; min-height: 100dvh; overflow: visible; }
+    .app-main { overflow: visible; overflow-x: clip; } /* clip 은 스크롤 상자를 만들지 않아 아래 메뉴(sticky)가 화면 기준으로 붙음 */
+    .app-main > .app-shell { padding-bottom: 16px; }
+    .app-top header { padding-top: 0; }
+  }
+  @media (max-height: 500px) and (max-width: 1023px) {
+    .tabbar { position: sticky; bottom: 0; display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; justify-items: center;
+      padding-top: 2px; padding-bottom: max(2px, env(safe-area-inset-bottom)); }
+    .tab { min-height: 44px; min-width: 0; width: 100%; max-width: 64px; }
+    .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+    .tabbar .fab { width: min(44px, 100%); height: 44px; border-radius: 22px; margin-top: 0; font-size: 24px; }
+  }
+  /* 화면 키보드가 올라온 동안(입력칸 포커스 + 보이는 높이가 크게 줄어듦, main.js에서 감지): 아래 메뉴를 숨겨 입력칸·본문 자리를 확보 */
+  @media (max-width: 1023px) { html.kbd-open .tabbar { display: none; } }
 
-  .tip { @apply fixed z-20 right-4 flex items-start gap-2 max-w-[min(300px,calc(100%-32px))] px-3 py-2.5 rounded-2xl text-caption shadow-glass fade-up;
-    bottom: calc(96px + env(safe-area-inset-bottom)); background: var(--surface-solid); border: 1px solid var(--line); }
-  .tip.collapsed { @apply p-0 border-0 bg-transparent shadow-none; }
-  .tip-x { @apply grid place-items-center w-11 h-11 -my-2 -mr-2 rounded-full text-ink-sub shrink-0; }
-  .tip-mini { @apply grid place-items-center w-11 h-11 rounded-full text-lg shadow-glass; background: var(--surface-solid); }
-  /* 팁은 본문 가운데 폭의 오른쪽 끝에 맞춤(넓은 화면에서 화면 끝에 동떨어져 뜨지 않게) */
-  .tip { right: max(16px, calc(50% - var(--shell-max) / 2 + 12px)); }
-  @media (min-width: 1024px) { .tip { right: max(16px, calc(50% - (var(--shell-max) + var(--rail-space) + 32px) / 2 + 32px)); bottom: 24px; } }
+
+  /* 팁: 화면 위에 떠서 내용을 가리지 않도록 홈 본문 흐름 안의 작은 줄로(토스트와도 겹치지 않음) */
+  .tip { @apply flex items-start gap-2 pl-4 pr-1 py-1.5 rounded-2xl text-caption fade-up; background: var(--surface); border: 1px solid var(--glass-border); }
+  .tip > p { @apply flex-1 py-1.5; }
+  .tip-x { @apply grid place-items-center w-11 h-11 rounded-full text-ink-sub shrink-0; }
 
   .toast { @apply fixed left-1/2 z-[60] flex items-center gap-3 w-max max-w-[min(92vw,440px)] px-4 py-3 rounded-2xl text-caption font-semibold shadow-glass pointer-events-none opacity-0;
     bottom: calc(100px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px); transition: opacity .22s ease-out, transform .22s ease-out;
@@ -160,17 +200,22 @@
   .toast.show { @apply opacity-100 pointer-events-auto; transform: translate(-50%, 0); }
   .toast-btn { @apply min-h-[44px] px-2 font-bold shrink-0 whitespace-nowrap; color: var(--toast-action); }
 
+  /* 확인·입력 대화상자 바탕: 내용이 화면보다 길면 바탕 안에서 스크롤(위·아래가 화면 밖으로 잘리지 않게 m-auto 가운데),
+     바탕에서 굴린 휠이 뒤쪽 본문으로 넘어가지 않게 */
+  .dlg-wrap { display: grid; overflow-y: auto; overscroll-behavior: contain; }
+  .dlg-wrap > * { margin: auto; }
+
   /* 입력 시트 */
   #sheet-root { @apply fixed inset-0 z-50 pointer-events-none overflow-hidden; visibility: hidden; transition: visibility 0s .2s; }
   .sheet-backdrop { @apply absolute inset-0 bg-black/40 opacity-0 transition-opacity duration-200; }
-  .sheet { @apply absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-[28px] outline-none overflow-y-auto; max-height: 100dvh;
+  .sheet { @apply absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-[28px] outline-none overflow-y-auto; max-height: calc(100dvh - env(safe-area-inset-top) - 8px); overscroll-behavior: contain;
     background: var(--surface-solid); transform: translateY(105%); transition: transform .2s cubic-bezier(.32,.72,0,1); box-shadow: 0 -10px 40px rgba(0,0,0,.18); }
   @media (min-width: 1024px) { .sheet { max-width: 420px; bottom: 50%; transform: translateY(60%) scale(.98); opacity: 0; border-radius: 28px; transition: transform .28s cubic-bezier(.32,.72,0,1), opacity .2s; } }
   #sheet-root.open { @apply pointer-events-auto; visibility: visible; transition-delay: 0s; }
   #sheet-root.open .sheet-backdrop { @apply opacity-100; }
   #sheet-root.open .sheet { transform: translateY(0); transition-duration: .28s; }
   @media (min-width: 1024px) { #sheet-root.open .sheet { transform: translateY(50%); opacity: 1; } }
-  .amount-display { font-size: 40px; line-height: 48px; font-weight: 800; letter-spacing: -0.02em; }
+  .amount-display { white-space: nowrap; font-size: min(40px, 11vw); line-height: 48px; font-weight: 800; letter-spacing: -0.02em; }
   .cat-grid { @apply grid grid-cols-4 gap-2; }
   .cat-chip { @apply flex flex-col items-center justify-center gap-1 min-h-[64px] rounded-2xl border transition-transform; border-color: var(--line); }
   .cat-chip[aria-checked="true"] { border-color: var(--primary); background: var(--heat-1); box-shadow: inset 0 0 0 1px var(--primary); }
@@ -220,8 +265,9 @@
   .search-box { @apply flex items-center gap-2 min-h-[52px] px-4 rounded-2xl border; border-color: var(--line); background: var(--surface-solid); }
   .search-box:focus-within { border-color: var(--primary); box-shadow: 0 0 0 1px var(--primary); }
   .search-box input:focus-visible { outline: none; }
-  .amount-in { @apply w-[88px] min-h-[44px] px-2 rounded-xl border text-caption text-right tabular-nums; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
-  .goal { @apply flex items-center gap-3 p-3 rounded-2xl; background: var(--bg); }
+  .amount-in { @apply w-[min(88px,100%)] min-h-[44px] px-2 rounded-xl border text-caption text-right tabular-nums; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
+  .goal { @apply flex flex-wrap items-center gap-3 p-3 rounded-2xl; background: var(--bg); }
+  .goal > div.flex-1 { min-width: min(100%, 8em); } /* 아주 좁으면 진행 링 아래로 글을 내려 금액이 잘리지 않게 */
 }
 
 /* 동적으로 붙는 클래스 (Tailwind 정리 대상에서 제외하려고 레이어 밖에 둠) */
@@ -257,8 +303,12 @@
 .hsym { width: 28px; height: 28px; flex: none; }
 /* 위 메뉴는 화면에 고정되므로 좁은 폰에서도 한 줄에 들어가야 함:
    오프라인 표시나 '↩ 이번 달로'가 더해지면 심볼을 잠깐 숨기고, 아주 좁으면(브라우저 확대 등) 늘 숨김 */
-@media (max-width: 419px) { .is-offline .hsym, .is-past .hsym { display: none; } }
-@media (max-width: 339px) { .hsym { display: none; } }
+@media (max-width: 419px) { .is-past .hsym { display: none; } }
+@media (max-width: 339px) { .hsym { display: none; } .app-shell { padding-left: max(8px, env(safe-area-inset-left)); padding-right: max(8px, env(safe-area-inset-right)); } }
+/* 360px 미만(320폰, 360폰 125% 확대 등): 테마 버튼은 설정 > 화면에도 있으니 위 메뉴에서 빼서 한 줄 유지(남은 버튼은 모두 44px) */
+@media (max-width: 359px) { .app-top [data-action="theme"] { display: none; } }
+/* 오프라인 표시: 자리를 차지하지 않게 설정 버튼 귀퉁이의 작은 표시로 */
+.offline-badge { position: absolute; top: 2px; right: 0; font-size: 12px; line-height: 1; pointer-events: none; }
 .versym { width: 24px; height: 24px; flex: none; }
 .pclogo { display: none; }
 @media (min-width: 1024px) {

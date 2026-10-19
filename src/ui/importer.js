@@ -206,7 +206,7 @@ function step2(m, imp) {
       ${miss.length ? '<p class="mt-3 text-body text-ink-sub">열을 맞추면 미리보기가 나와요.</p>' : `<ul class="mt-2 flex flex-col">${items.slice(0, 5).map((x) => {
         const c = catMap.get(x.categoryId) ?? { emoji: '🧾', name: '기타' };
         return `<li class="flex items-center gap-3 min-h-[52px] border-b last:border-0" style="border-color:var(--line)">
-          <span class="text-caption text-ink-sub tabular-nums w-11">${dot(x.date)}</span>
+          <span class="text-caption text-ink-sub tabular-nums num min-w-[2.75rem]">${dot(x.date)}</span>
           <span class="tx-emoji !w-9 !h-9 ${x.by === 'fallback' ? 'opacity-60' : ''}" aria-hidden="true">${esc(c.emoji)}</span>
           <span class="flex-1 min-w-0"><span class="block text-body truncate">${esc(x.desc || c.name)}</span><span class="block text-caption text-ink-sub truncate">${esc(c.name)}${x.by === 'rule' ? ' · 내 규칙' : x.by === 'keyword' ? ' · 자동 추정' : ''}${x.card4 ? ` · 카드 끝 ${esc(x.card4)}` : ''}</span></span>
           <span class="text-body font-semibold tabular-nums ${isPlus(x) ? 'text-income' : 'text-expense'}">${signedWon(x.amount, x.kind)}</span></li>`;
