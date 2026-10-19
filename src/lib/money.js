@@ -27,7 +27,9 @@ export function formatWon(n) {
   const v = Math.trunc(Number(n) || 0);
   return (v < 0 ? '−' : '') + Math.abs(v).toLocaleString('ko-KR') + '원';
 }
-export const signedWon = (amount, kind) => (kind === 'income' ? '+' : '−') + formatWon(Math.abs(amount));
+// 음수 지출 = 카드 환불(지출 차감) → '+'로 보임
+export const signedWon = (amount, kind) => (kind === 'income' || amount < 0 ? '+' : '−') + formatWon(Math.abs(amount));
+export const isPlus = (t) => t.kind === 'income' || t.amount < 0;
 // 짧은 표기(달력 칸): 12,300 → "1.2만", 9,800 → "9,800"
 export function shortWon(n) {
   const v = Math.abs(Math.trunc(n));

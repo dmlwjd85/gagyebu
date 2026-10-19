@@ -17,7 +17,8 @@ import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, hap
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
-import { merchantKey, matchRule, classify } from './lib/classify.js';
+import { ruleSuggestion, josa, classify } from './lib/classify.js';
+import { buildBackup } from './lib/backup.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
@@ -43,7 +44,7 @@ function model() {
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
     sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
-    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, txs: state.txs,
+    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
@@ -85,7 +86,7 @@ function render() {
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-shell ${nav ? 'has-nav' : ''}">
-      ${topBar(m)}
+      ${topBar(m, { month: !NO_NAV.has(ui.view) })}
       <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
     </div>
     ${nav ? tabBar() : ''}
@@ -133,24 +134,27 @@ function onSave(tx, { repeat = false } = {}) {
   const id = data.saveTx(tx);
   const c = state.categories.find((x) => x.id === tx.categoryId);
   if (ui.view === 'search') refreshSearch();
-  if (repeat) {
+  if (repeat && tx.amount > 0) {
     // 이번 회차는 방금 기록했으니 lastPosted = 이번 달 → 다음 달부터 자동 기록
     const ym = tx.date.slice(0, 7);
     data.saveRecurring({ name: (tx.memo || c?.name || '반복').split(' #')[0].slice(0, 30), amount: tx.amount, kind: tx.kind, categoryId: tx.categoryId, accountId: tx.accountId, dayOfMonth: Number(tx.date.slice(8)), active: true, startYm: ym, lastPosted: ym });
     return setTimeout(() => toast(`🔁 매달 ${Number(tx.date.slice(8))}일에 ${formatWon(tx.amount)} 자동으로 기록할게요.`, { action: '반복 보기', onAction: () => go('recurring') }), 50);
   }
-  // 분류를 고치면 규칙 제안: 앞으로 같은 가맹점은 이 카테고리로
-  const key = merchantKey(tx.memo);
-  if (isEdit && before && before.categoryId !== tx.categoryId && key && matchRule(tx.memo, state.rules)?.categoryId !== tx.categoryId) {
-    return setTimeout(() => toast(`고쳤어요. 앞으로 '${key}'은(는) ${c?.emoji ?? ''} ${c?.name ?? ''}(으)로 분류할까요?`, {
-      action: '그렇게 하기', duration: 6000,
-      onAction: () => { const old = state.rules.find((r) => r.match === key); data.saveRule({ id: old?.id, match: key, categoryId: tx.categoryId }); toast('규칙을 만들었어요. 설정에서 고칠 수 있어요.'); },
+  // 분류를 고치면 규칙 제안: 앞으로 같은 가맹점은 이 카테고리로('10월' 같은 일반어·이미 맞는 규칙은 묻지 않음)
+  const sug = isEdit ? ruleSuggestion(before, tx, state.rules) : null;
+  if (sug) {
+    const old = sug.existing, oc = old && state.categories.find((x) => x.id === old.categoryId);
+    const q = old ? `'${sug.key}' 규칙(${oc?.name ?? '다른 카테고리'})을 ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 바꿀까요?`
+      : `앞으로 ${josa(`'${sug.key}'`, '은는')} ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 분류할까요?`;
+    return setTimeout(() => toast(`고쳤어요. ${q}`, {
+      action: old ? '바꾸기' : '그렇게 하기', duration: 6000,
+      onAction: () => { data.saveRule({ id: old?.id, match: sug.key, categoryId: tx.categoryId }); toast(old ? '규칙을 바꿨어요.' : '규칙을 만들었어요. 설정에서 고칠 수 있어요.'); },
     }), 50);
   }
   setTimeout(() => {
     const m = model();
     const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
-    toast(`${c?.name ?? ''} ${formatWon(tx.amount)} ${isEdit ? '고쳤어요.' : '기록!'}${extra}`, {
+    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요.' : '기록!'}${extra}`, {
       action: '되돌리기', onAction: () => (before ? data.restoreTx(before) : data.deleteTx(id)),
     });
   }, 50);
@@ -267,11 +271,11 @@ async function onImportClick(d) {
   }
   if (d.impUndo) {
     if (!(await confirmDialog({ title: '이번에 가져온 거래를 모두 지울까요?', body: '이 묶음으로 들어온 거래만 지워요. 직접 남긴 기록은 그대로예요.', ok: '되돌리기', danger: true }))) return;
-    try { const n = await data.undoImport(d.impUndo); IMP.clearLastImport(); ui.imp = IMP.newImport(); render(); toast(`가져온 거래 ${n}건을 지웠어요.`); }
+    try { const n = await data.undoImport(d.impUndo); ui.imp = IMP.newImport(); render(); toast(`가져온 거래 ${n}건을 지웠어요.${navigator.onLine ? '' : ' 연결되면 서버에서도 지울게요.'}`); }
     catch { toast('되돌리지 못했어요. 인터넷 연결을 확인해 주세요.'); }
     return;
   }
-  if (d.impEnc !== undefined) return impLoad(imp.bytes, imp.fileName, imp.table.encoding === 'euc-kr' ? 'utf-8' : 'euc-kr');
+  if (d.impEnc !== undefined && imp.bytes) return impLoad(imp.bytes, imp.fileName, imp.table.encoding === 'euc-kr' ? 'utf-8' : 'euc-kr');
   if (d.impHdr) { IMP.setHeaderRow(imp, imp.headerRow + Number(d.impHdr)); return render(); }
   if (d.impSheet) { IMP.setSheet(imp, Number(d.impSheet)); return render(); }
   if (d.impSkipall !== undefined) { imp.choice = {}; return render(); }
@@ -298,7 +302,11 @@ app.addEventListener('click', async (e) => {
   if (!t || t.disabled) return;
   const d = t.dataset;
   const m = state.user ? model() : null;
-  if (d.nav) return go(d.nav, d.mode ? { mode: d.mode, catFilter: null } : {});
+  if (d.nav) {
+    // '목록에서 보기'(가져오기 완료): 가져온 거래가 있는 달로 이동
+    const ym = d.date ? periodOf(d.date, m?.sd) : null;
+    return go(d.nav, { ...(d.mode ? { mode: d.mode, catFilter: null } : {}), ...(ym ? { viewYm: m && ym >= m.curYm ? null : ym, selDate: null } : {}) });
+  }
   if (d.tx) { const tx = findTx(d.tx); return tx && openSheet(tx); }
   if (Object.keys(d).some((k) => k.startsWith('imp'))) return onImportClick(d);
   // 검색
@@ -307,7 +315,11 @@ app.addEventListener('click', async (e) => {
   if (d.searchTry) { ui.search.q = d.searchTry; render(); return $('[data-search-q]')?.focus(); }
   // 반복 거래
   if (d.recEdit) return editRecurring(state.recurring.find((r) => r.id === d.recEdit));
-  if (d.recFrom) { const c = { id: classify({ desc: d.recFrom, kind: 'expense' }, state.rules, new Set(state.categories.map((x) => x.id))).categoryId }; return editRecurring({ name: d.recFrom.slice(0, 30), amount: Number(d.amount), kind: 'expense', categoryId: c?.id, dayOfMonth: 1, active: true }); }
+  if (d.recFrom) {
+    const ids = new Set(state.categories.map((x) => x.id));
+    const categoryId = ids.has(d.cat) ? d.cat : classify({ desc: d.recFrom, kind: 'expense' }, state.rules, ids).categoryId;
+    return editRecurring({ name: d.recFrom.slice(0, 30), amount: Number(d.amount), kind: 'expense', categoryId, dayOfMonth: Math.min(31, Math.max(1, Number(d.day) || 1)), active: true });
+  }
   if (d.recDel) {
     const r = state.recurring.find((x) => x.id === d.recDel);
     if (!r || !(await confirmDialog({ title: `'${r.name}' 반복을 지울까요?`, body: '이미 기록된 거래는 그대로 남아요.', ok: '지우기', danger: true }))) return;
@@ -375,6 +387,9 @@ app.addEventListener('click', async (e) => {
     if (v == null) return;
     const by = { ...(state.budget?.byCategory ?? {}) };
     v ? (by[d.env] = v) : delete by[d.env];
+    // 규칙과 같은 한도: 카테고리 30개까지, 한도 100억 원까지(정수)
+    if (Object.keys(by).length > 30) return toast('카테고리 한도는 30개까지 정할 수 있어요.');
+    if (v > 10_000_000_000) return toast('한도는 100억 원까지 정할 수 있어요.');
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, by);
   }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
@@ -414,9 +429,10 @@ app.addEventListener('click', async (e) => {
     }
     case 'json-all':
       try {
-        const txs = await data.allTransactions();
-        const strip = ({ createdAt, updatedAt, ...r }) => r;
-        download(`쓱가계부_백업_${m.today}.json`, JSON.stringify({ app: 'gagyebu', version: 1, exportedAt: new Date().toISOString(), profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs.map(strip) }, null, 2), 'application/json');
+        // 규칙·반복·목표·모든 달 예산·가져오기 기록까지(QA M4)
+        const [txs, budgets] = await Promise.all([data.allTransactions(), data.allBudgets()]);
+        const b = buildBackup({ profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports });
+        download(`쓱가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'delete-all':
@@ -498,6 +514,16 @@ document.addEventListener('keydown', (e) => {
 });
 
 window.addEventListener('online', render);
+// 앱을 켜 둔 채 날짜가 바뀌면(자정) 반복 거래 기록·오늘 기준 화면 새로 고침(QA L10)
+let lastDay = null;
+const dayCheck = () => {
+  if (!state?.user) return;
+  const t = today();
+  if (lastDay && t !== lastDay) { data.postRecurring(t); render(); }
+  lastDay = t;
+};
+document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
+setInterval(dayCheck, 60_000);
 window.addEventListener('hashchange', () => { if (hashView() !== ui.view) go(hashView()); });
 window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());

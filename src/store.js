@@ -1,10 +1,10 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
-import { period, shiftYm, ymd } from './lib/dates.js';
+import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
@@ -43,6 +43,14 @@ export function startUser() {
     emit();
   }));
   // M2: 자동 분류 규칙·반복 거래·저축 목표 (모두 개수가 적어 전체 구독)
+  // 가져오기 묶음 기록(되돌리기용): 묶음 id·건수·기간·형식 이름만(파일 이름·원본 없음)
+  unsubs.push(onSnapshot(col('imports'), (s) => {
+    // at(서버 시각) → 이 기기 시간 기준 'YYYY-MM-DDTHH:mm' 글자
+    const local = (t) => { const x = t?.toDate?.(); return x ? `${ymd(x)}T${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}` : ''; };
+    state.imports = s.docs.map((d) => { const v = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...v, at: local(v.at) }; })
+      .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
+    emit();
+  }));
   unsubs.push(onSnapshot(col('rules'), (s) => { state.rules = s.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }));
   unsubs.push(onSnapshot(col('goals'), (s) => {
     state.goals = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
@@ -193,13 +201,16 @@ export function saveGoal(g) {
 }
 export const deleteGoal = (id) => fire(deleteDoc(u('goals', id)), writeErrorHandler);
 
-// 가져오기: 겹치는 기간의 기존 거래(중복 검사용)
+// 오프라인이면 서버를 기다리지 않고 이 기기 캐시에서 읽음(가져오기가 멈추지 않게)
+const read = (q) => (navigator.onLine ? getDocs(q) : getDocsFromCache(q));
+// 가져오기: 겹치는 기간의 기존 거래(중복 검사용). 날짜 ±1일 근접 중복도 보므로 앞뒤 하루씩 넓혀 읽음
 export async function txsInRange(from, to) {
-  const s = await getDocs(query(col('transactions'), where('date', '>=', from), where('date', '<=', to)));
+  const s = await read(query(col('transactions'), where('date', '>=', addDays(from, -1)), where('date', '<=', addDays(to, 1))));
   return s.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
-// 가져오기 저장: 원본 줄은 저장하지 않고 앱 형식 칸 + 지문·묶음 id·카드 끝 4자리만
-export async function importTxs(items, batchId) {
+// 가져오기 저장: 원본 줄은 저장하지 않고 앱 형식 칸 + 지문·묶음 id·카드 끝 4자리만.
+// 쓰기는 이 기기에 바로 반영되고 서버 응답은 기다리지 않음(오프라인이면 연결될 때 올라감)
+export function importTxs(items, batchId, meta = {}) {
   for (let i = 0; i < items.length; i += 400) {
     const b = writeBatch(db);
     items.slice(i, i + 400).forEach((x) => b.set(doc(col('transactions')), {
@@ -207,19 +218,26 @@ export async function importTxs(items, batchId) {
         tags: tagsOf(x.memo), importHash: x.importHash, importBatch: batchId, card4: x.card4 ?? undefined }),
       createdAt: serverTimestamp(), updatedAt: serverTimestamp(),
     }));
-    await b.commit();
+    if (i === 0) b.set(u('imports', batchId), clean({ count: items.length, from: meta.from, to: meta.to, label: meta.label?.slice(0, 20), at: serverTimestamp() }));
+    fire(b.commit(), writeErrorHandler);
   }
-  return items.length;
+  return { count: items.length, pending: !navigator.onLine };
 }
-// 이번 가져오기 묶음 전체 되돌리기
+// 가져오기 묶음 전체 되돌리기(고친 거래도 묶음 id가 남아 있어 함께 지워짐)
 export async function undoImport(batchId) {
-  const s = await getDocs(query(col('transactions'), where('importBatch', '==', batchId)));
-  for (let i = 0; i < s.docs.length; i += 400) {
+  const s = await read(query(col('transactions'), where('importBatch', '==', batchId)));
+  for (let i = 0; i < s.docs.length || i === 0; i += 400) {
     const b = writeBatch(db);
     s.docs.slice(i, i + 400).forEach((d) => b.delete(d.ref));
-    await b.commit();
+    if (i === 0) b.delete(u('imports', batchId));
+    fire(b.commit(), writeErrorHandler);
   }
   return s.docs.length;
+}
+// JSON 백업용: 모든 달 예산
+export async function allBudgets() {
+  const s = await read(col('budgets'));
+  return s.docs.map((d) => ({ ym: d.id, ...d.data() }));
 }
 
 export async function allTransactions() {
@@ -228,7 +246,7 @@ export async function allTransactions() {
 }
 // 모든 기록 삭제(계정 삭제 포함)
 export async function deleteEverything() {
-  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals']) {
+  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports']) {
     const s = await getDocs(col(name));
     for (let i = 0; i < s.docs.length; i += 400) {
       const b = writeBatch(db);

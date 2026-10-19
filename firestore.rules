@@ -10,6 +10,47 @@ service cloud.firestore {
     function optInt(k, min, max) { return !(k in d()) || (d()[k] is int && d()[k] >= min && d()[k] <= max); }
     function optBool(k) { return !(k in d()) || d()[k] is bool; }
     function optTs(k) { return !(k in d()) || d()[k] is timestamp; }
+    // 실제 있는 날짜만(2026-13-45, 2026-02-30 거부). 윤년 계산 포함
+    function leap(y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
+    function mdays(y, m) { return m == 2 ? (leap(y) ? 29 : 28) : (m in [4, 6, 9, 11] ? 30 : 31); }
+    function ymd(v) {
+      return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])-(0[1-9]|[12][0-9]|3[01])$')
+        && int(v[8:10]) <= mdays(int(v[0:4]), int(v[5:7]));
+    }
+    function ym(v) { return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])$'); }
+    function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,64}$'); }
+    // 태그 20개·각 1~20자 문자열. join 한 번으로 전체 검사(숫자 원소는 칸별로 거부, 줄바꿈 금지)
+    function tagsOk(t) {
+      return t is list && t.size() <= 20
+        && (t.size() == 0 || t.join('\n').matches('^[^\n]{1,20}(\n[^\n]{1,20})*$'))
+        && tagStr(t, t.size());
+    }
+    function tagStr(t, n) {
+      return (n <= 0 || t[0] is string) && (n <= 1 || t[1] is string) && (n <= 2 || t[2] is string) && (n <= 3 || t[3] is string) && (n <= 4 || t[4] is string)
+        && (n <= 5 || t[5] is string) && (n <= 6 || t[6] is string) && (n <= 7 || t[7] is string) && (n <= 8 || t[8] is string) && (n <= 9 || t[9] is string)
+        && (n <= 10 || t[10] is string) && (n <= 11 || t[11] is string) && (n <= 12 || t[12] is string) && (n <= 13 || t[13] is string) && (n <= 14 || t[14] is string)
+        && (n <= 15 || t[15] is string) && (n <= 16 || t[16] is string) && (n <= 17 || t[17] is string) && (n <= 18 || t[18] is string) && (n <= 19 || t[19] is string);
+    }
+    // 카테고리별 예산: 카테고리 30개까지(규칙 식 1000개 한도), 키는 id 형식(join 한 번으로 검사), 값은 0원 ~ 100억 원 정수.
+    // 규칙 언어에 반복문이 없어 칸 번호로 하나씩 검사
+    function limitsOk(m) {
+      return m is map && m.size() <= 30
+        && (m.size() == 0 || m.keys().join(',').matches('^[A-Za-z0-9_-]{1,64}(,[A-Za-z0-9_-]{1,64})*$'))
+        && limVals(m.values(), m.size());
+    }
+    function limVals(v, n) {
+      return (n <= 0 || (v[0] is int && v[0] >= 0 && v[0] <= 10000000000)) && (n <= 1 || (v[1] is int && v[1] >= 0 && v[1] <= 10000000000)) && (n <= 2 || (v[2] is int && v[2] >= 0 && v[2] <= 10000000000))
+        && (n <= 3 || (v[3] is int && v[3] >= 0 && v[3] <= 10000000000)) && (n <= 4 || (v[4] is int && v[4] >= 0 && v[4] <= 10000000000)) && (n <= 5 || (v[5] is int && v[5] >= 0 && v[5] <= 10000000000))
+        && (n <= 6 || (v[6] is int && v[6] >= 0 && v[6] <= 10000000000)) && (n <= 7 || (v[7] is int && v[7] >= 0 && v[7] <= 10000000000)) && (n <= 8 || (v[8] is int && v[8] >= 0 && v[8] <= 10000000000))
+        && (n <= 9 || (v[9] is int && v[9] >= 0 && v[9] <= 10000000000)) && (n <= 10 || (v[10] is int && v[10] >= 0 && v[10] <= 10000000000)) && (n <= 11 || (v[11] is int && v[11] >= 0 && v[11] <= 10000000000))
+        && (n <= 12 || (v[12] is int && v[12] >= 0 && v[12] <= 10000000000)) && (n <= 13 || (v[13] is int && v[13] >= 0 && v[13] <= 10000000000)) && (n <= 14 || (v[14] is int && v[14] >= 0 && v[14] <= 10000000000))
+        && (n <= 15 || (v[15] is int && v[15] >= 0 && v[15] <= 10000000000)) && (n <= 16 || (v[16] is int && v[16] >= 0 && v[16] <= 10000000000)) && (n <= 17 || (v[17] is int && v[17] >= 0 && v[17] <= 10000000000))
+        && (n <= 18 || (v[18] is int && v[18] >= 0 && v[18] <= 10000000000)) && (n <= 19 || (v[19] is int && v[19] >= 0 && v[19] <= 10000000000)) && (n <= 20 || (v[20] is int && v[20] >= 0 && v[20] <= 10000000000))
+        && (n <= 21 || (v[21] is int && v[21] >= 0 && v[21] <= 10000000000)) && (n <= 22 || (v[22] is int && v[22] >= 0 && v[22] <= 10000000000)) && (n <= 23 || (v[23] is int && v[23] >= 0 && v[23] <= 10000000000))
+        && (n <= 24 || (v[24] is int && v[24] >= 0 && v[24] <= 10000000000)) && (n <= 25 || (v[25] is int && v[25] >= 0 && v[25] <= 10000000000)) && (n <= 26 || (v[26] is int && v[26] >= 0 && v[26] <= 10000000000))
+        && (n <= 27 || (v[27] is int && v[27] >= 0 && v[27] <= 10000000000)) && (n <= 28 || (v[28] is int && v[28] >= 0 && v[28] <= 10000000000)) && (n <= 29 || (v[29] is int && v[29] >= 0 && v[29] <= 10000000000));
+    }
+    function batchId(v) { return v is string && v.matches('^imp-[0-9a-z]{1,20}$'); }
 
     // 사용자 설정 문서
     match /users/{uid} {
@@ -21,22 +62,24 @@ service cloud.firestore {
         && optInt('monthStartDay', 1, 28)
         && optBool('seeded') && optTs('createdAt') && optTs('updatedAt');
 
-      // 거래: 금액은 1원 ~ 10억 원 정수
+      // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
       match /transactions/{id} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
                                  'importHash', 'importBatch', 'recurringId', 'card4'])
-          && d().amount is int && d().amount > 0 && d().amount <= 1000000000
+          && d().amount is int && d().amount <= 1000000000
+          && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
           && d().kind in ['expense', 'income']
-          && d().date is string && d().date.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')
-          && str(d().categoryId, 1, 64)
-          && optStr('accountId', 64) && optStr('memo', 200)
-          && (!('tags' in d()) || (d().tags is list && d().tags.size() <= 20))
+          && ymd(d().date)
+          && id(d().categoryId)
+          && (!('accountId' in d()) || id(d().accountId)) && optStr('memo', 200)
+          && (!('tags' in d()) || tagsOk(d().tags))
           // 가져오기 지문(16자리 hex)·묶음 id·반복 id. 카드번호는 끝 4자리 숫자만 허용
           && (!('importHash' in d()) || (d().importHash is string && d().importHash.matches('^[0-9a-f]{16}$')))
-          && optStr('importBatch', 40) && optStr('recurringId', 64)
+          && (!('importBatch' in d()) || batchId(d().importBatch))
+          && (!('recurringId' in d()) || id(d().recurringId))
           && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
           && optTs('createdAt') && optTs('updatedAt');
       }
@@ -70,7 +113,7 @@ service cloud.firestore {
           && d().keys().hasAll(['total'])
           && d().keys().hasOnly(['total', 'byCategory', 'updatedAt'])
           && d().total is int && d().total >= 0 && d().total <= 100000000000
-          && (!('byCategory' in d()) || (d().byCategory is map && d().byCategory.size() <= 100))
+          && (!('byCategory' in d()) || limitsOk(d().byCategory))
           && optTs('updatedAt');
       }
 
@@ -80,7 +123,7 @@ service cloud.firestore {
         allow create, update: if isOwner(uid)
           && d().keys().hasAll(['match', 'categoryId'])
           && d().keys().hasOnly(['match', 'field', 'categoryId', 'createdAt', 'updatedAt'])
-          && str(d().match, 1, 40) && str(d().categoryId, 1, 64)
+          && str(d().match, 1, 40) && id(d().categoryId)
           && (!('field' in d()) || d().field == 'memo')
           && optTs('createdAt') && optTs('updatedAt');
       }
@@ -93,11 +136,11 @@ service cloud.firestore {
           && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
-          && d().kind in ['expense', 'income'] && str(d().categoryId, 1, 64) && optStr('accountId', 64)
+          && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
           && d().dayOfMonth is int && d().dayOfMonth >= 1 && d().dayOfMonth <= 31
           && d().active is bool
-          && d().startYm is string && d().startYm.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')
-          && (!('lastPosted' in d()) || (d().lastPosted is string && d().lastPosted.matches('^[0-9]{4}-(0[1-9]|1[0-2])$')))
+          && ym(d().startYm)
+          && (!('lastPosted' in d()) || ym(d().lastPosted))
           && optTs('createdAt') && optTs('updatedAt');
       }
 
@@ -110,8 +153,18 @@ service cloud.firestore {
           && str(d().name, 1, 30) && optStr('emoji', 16)
           && d().target is int && d().target > 0 && d().target <= 10000000000
           && d().saved is int && d().saved >= 0 && d().saved <= 10000000000
-          && (!('due' in d()) || (d().due is string && d().due.matches('^[0-9]{4}-[0-9]{2}-[0-9]{2}$')))
+          && (!('due' in d()) || ymd(d().due))
           && optInt('order', 0, 1000) && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 가져오기 묶음 기록(여러 묶음·다른 기기에서도 되돌리기): 문서 id = 묶음 id, 건수·기간·형식 이름만
+      match /imports/{bid} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid) && batchId(bid)
+          && d().keys().hasAll(['count', 'at'])
+          && d().keys().hasOnly(['count', 'from', 'to', 'label', 'at'])
+          && d().count is int && d().count >= 0 && d().count <= 100000
+          && (!('from' in d()) || ymd(d().from)) && (!('to' in d()) || ymd(d().to))
+          && optStr('label', 20) && d().at is timestamp;
       }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부
     }

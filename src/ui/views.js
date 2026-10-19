@@ -1,5 +1,5 @@
 import { esc } from './util.js';
-import { formatWon, signedWon, shortWon, compactWon } from '../lib/money.js';
+import { formatWon, signedWon, shortWon, compactWon, isPlus } from '../lib/money.js';
 import { addDays, parseYmd, prettyDate, WEEK, monthLabel } from '../lib/dates.js';
 import { byCategory, byDay, heatLevel } from '../lib/stats.js';
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
@@ -21,19 +21,20 @@ export function txRow(m, t) {
     <span class="tx-emoji" aria-hidden="true">${esc(c.emoji)}</span>
     <span class="min-w-0 flex-1 text-left"><span class="block text-body truncate">${esc(c.name)}</span>
       ${sub ? `<span class="block text-caption text-ink-sub truncate">${esc(sub)}</span>` : ''}</span>
-    <span class="text-body font-semibold tabular-nums ${t.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(t.amount, t.kind)}</span>
+    <span class="text-body font-semibold tabular-nums ${isPlus(t) ? 'text-income' : 'text-expense'}">${signedWon(t.amount, t.kind)}</span>
   </button></li>`;
 }
 
 const empty = (icon, text, extra = '') => `<div class="py-8 text-center"><p class="text-4xl" aria-hidden="true">${icon}</p><p class="mt-2 text-body text-ink-sub">${esc(text)}</p>${extra}</div>`;
 
-export function topBar(m) {
+// month: 달 이동 막대(가져오기·검색·반복·설정처럼 달과 상관없는 화면에서는 숨김)
+export function topBar(m, { month = true } = {}) {
   return `<header class="flex items-center justify-between gap-2 pt-[max(12px,env(safe-area-inset-top))]">
     <div class="flex items-center gap-1">
       ${symbol('S', { cls: 'hsym mr-0.5', label: '쓱 가계부' })}
-      <button class="icon-btn" data-month="-1" aria-label="이전 달">‹</button>
+      ${month ? `<button class="icon-btn" data-month="-1" aria-label="이전 달">‹</button>
       <button class="month-btn" data-month="0" aria-label="${esc(monthLabel(m.viewYm, m.sd))}, 이번 달로 이동">${esc(monthLabel(m.viewYm, m.sd))}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary">이번 달로</span>' : ''}</button>
-      <button class="icon-btn" data-month="1" aria-label="다음 달" ${m.viewYm >= m.curYm ? 'disabled' : ''}>›</button>
+      <button class="icon-btn" data-month="1" aria-label="다음 달" ${m.viewYm >= m.curYm ? 'disabled' : ''}>›</button>` : ''}
     </div>
     <div class="flex items-center gap-1">
       ${m.offline ? '<span class="icon-btn text-base" role="status" title="오프라인: 연결되면 자동으로 올릴게요"><span aria-hidden="true">☁️</span><span class="sr-only">오프라인. 기록은 저장해 두고 연결되면 자동으로 올릴게요.</span></span>' : ''}

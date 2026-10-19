@@ -5,6 +5,12 @@ import { byCategory } from '../lib/stats.js';
 
 const W = 1080, H = 1350;
 const FONT = '"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+// 글자가 maxW보다 넓으면 글자 크기를 줄임(최소 40%)
+function fit(ctx, text, weight, size, maxW) {
+  ctx.font = `${weight} ${size}px ${FONT}`;
+  const w = ctx.measureText(text).width;
+  if (w > maxW) ctx.font = `${weight} ${Math.max(Math.floor(size * 0.4), Math.floor((size * maxW) / w))}px ${FONT}`;
+}
 
 /** 리포트에 넣을 숫자 모으기(화면 미리보기와 이미지가 같은 값을 씀) */
 export function reportData(m) {
@@ -40,11 +46,18 @@ export async function drawReport(d, { dark = false } = {}) {
   const g = ctx.createLinearGradient(80, 190, W - 80, 640); g.addColorStop(0, '#7048F2'); g.addColorStop(.55, '#C2457E'); g.addColorStop(1, '#B85A3E');
   roundRect(ctx, 80, 190, W - 160, 450, 56); ctx.fillStyle = g; ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = `600 40px ${FONT}`; ctx.fillText(`${d.month}월에 남긴 돈`, 140, 290);
-  ctx.font = `800 120px ${FONT}`; ctx.fillText(formatWon(d.saved), 140, 430);
+  // 큰 금액(수십억)도 카드 밖으로 넘치지 않게 글자 크기를 폭에 맞춤(QA L1)
+  fit(ctx, formatWon(d.saved), 800, 120, W - 280); ctx.fillText(formatWon(d.saved), 140, 430);
   ctx.font = `600 36px ${FONT}`;
-  ctx.fillText(d.rate != null ? `저축률 ${d.rate}%` : '수입 기록 없음', 140, 520);
-  if (d.diff != null) { ctx.textAlign = 'right'; ctx.fillText(`지출 지난달보다 ${d.diff > 0 ? `${d.diff}% ↑` : d.diff < 0 ? `${-d.diff}% ↓` : '같음'}`, W - 140, 520); ctx.textAlign = 'left'; }
-  ctx.font = `500 32px ${FONT}`; ctx.fillText(`수입 ${formatWon(d.income)} · 지출 ${formatWon(d.expense)}`, 140, 590);
+  const rateText = d.rate != null ? `저축률 ${d.rate < 0 ? '−' : ''}${Math.abs(d.rate)}%` : '수입 기록 없음';
+  ctx.fillText(rateText, 140, 520);
+  if (d.diff != null) {
+    const dt = `지출 지난달보다 ${d.diff > 0 ? `${d.diff}% ↑` : d.diff < 0 ? `${-d.diff}% ↓` : '같음'}`;
+    fit(ctx, dt, 600, 36, W - 280 - ctx.measureText(rateText).width - 40);
+    ctx.textAlign = 'right'; ctx.fillText(dt, W - 140, 520); ctx.textAlign = 'left';
+  }
+  const sum = `수입 ${formatWon(d.income)} · 지출 ${formatWon(d.expense)}`;
+  fit(ctx, sum, 500, 32, W - 280); ctx.fillText(sum, 140, 590);
   // 많이 쓴 곳 TOP 3
   roundRect(ctx, 80, 680, W - 160, 400, 48); ctx.fillStyle = card; ctx.fill();
   ctx.fillStyle = ink; ctx.font = `700 40px ${FONT}`; ctx.fillText('많이 쓴 곳 TOP 3', 140, 760);
@@ -53,7 +66,7 @@ export async function drawReport(d, { dark = false } = {}) {
     const y = 840 + i * 80;
     ctx.font = `48px ${FONT}`; ctx.fillText(t.emoji, 140, y + 14);
     ctx.font = `600 36px ${FONT}`; ctx.fillStyle = ink; ctx.fillText(t.name, 210, y + 8);
-    ctx.textAlign = 'right'; ctx.font = `700 36px ${FONT}`; ctx.fillText(formatWon(t.amount), W - 140, y + 8); ctx.textAlign = 'left';
+    ctx.textAlign = 'right'; fit(ctx, formatWon(t.amount), 700, 36, 360); ctx.fillText(formatWon(t.amount), W - 140, y + 8); ctx.textAlign = 'left';
     roundRect(ctx, 210, y + 24, (W - 350) * (t.amount / max), 12, 6); ctx.fillStyle = ['#6D4AFF', '#D63F73', '#C4621A'][i]; ctx.fill(); ctx.fillStyle = ink;
   });
   if (!d.top.length) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText('이 달에는 지출 기록이 없어요.', 140, 860); }

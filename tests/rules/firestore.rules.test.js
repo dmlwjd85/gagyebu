@@ -206,6 +206,8 @@ describe('M2 반복 거래', () => {
   test('타인·비로그인 거부', async () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p), REC));
     await assertFails(getDoc(doc(bob(), p)));
+    await assertFails(getDocs(collection(bob(), 'users/alice/recurring'))); // QA L11: 타인 목록
+    await assertFails(getDocs(collection(anon(), 'users/alice/recurring')));
     await assertFails(setDoc(doc(bob(), p), REC));
     await assertFails(updateDoc(doc(bob(), p), { amount: 1 }));
     await assertFails(deleteDoc(doc(bob(), p)));
@@ -230,7 +232,111 @@ describe('M2 저축 목표', () => {
     await assertFails(getDoc(doc(bob(), p)));
     await assertFails(getDocs(collection(bob(), 'users/alice/goals')));
     await assertFails(updateDoc(doc(bob(), p), { saved: 999 }));
+    await assertFails(setDoc(doc(bob(), 'users/alice/goals/new'), GOAL));
     await assertFails(deleteDoc(doc(bob(), p)));
     await assertFails(getDoc(doc(anon(), p)));
+  });
+});
+
+// ── QA M2 재검수: 필드 검증 빈틈(M5)·환불(H3)·가져오기 묶음 기록(M6) ──
+describe('M5 실제 날짜·형식 검증', () => {
+  const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/v1'), { ...TX, ...data });
+  test('없는 날짜 거부(13월·45일·2월 30일·평년 2월 29일), 윤년 2월 29일 허용', async () => {
+    await assertFails(tx({ date: '2026-13-45' }));
+    await assertFails(tx({ date: '2026-02-30' }));
+    await assertFails(tx({ date: '2026-02-29' }));
+    await assertFails(tx({ date: '2026-04-31' }));
+    await assertFails(tx({ date: '2026-00-10' }));
+    await assertSucceeds(tx({ date: '2028-02-29' }));
+    await assertSucceeds(tx({ date: '2026-12-31' }));
+  });
+  test('목표일·반복 시작 달도 실제 날짜만', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/goals/g9'), { ...GOAL, due: '2027-99-99' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/goals/g9'), { ...GOAL, due: '2027-02-30' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/goals/g9'), { ...GOAL, due: '2027-02-28' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/r9'), { ...REC, startYm: '2026-00' }));
+  });
+  test('importBatch는 imp-영숫자만(카드번호 같은 글 거부)', async () => {
+    await assertSucceeds(tx({ importHash: '0123456789abcdef', importBatch: 'imp-mgx1abc' }));
+    await assertFails(tx({ importBatch: '1234-5678-9012-3456' }));
+    await assertFails(tx({ importBatch: 'imp-' }));
+    await assertFails(tx({ importBatch: 'imp-ABC' }));
+    await assertFails(tx({ importBatch: 'imp-' + 'a'.repeat(21) }));
+  });
+  test('recurringId·categoryId·accountId는 id 형식만', async () => {
+    await assertFails(tx({ recurringId: '월세 4049-4700-0662-7012' }));
+    await assertFails(tx({ recurringId: 'x'.repeat(65) }));
+    await assertFails(tx({ categoryId: '식비 카테고리' }));
+    await assertFails(tx({ accountId: '신한 1234-5678' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/rules/r9'), { ...RULE, categoryId: '아무 글자나' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/r9'), { ...REC, categoryId: 'a b' }));
+  });
+  test('태그: 20개·각 20자까지', async () => {
+    await assertSucceeds(tx({ tags: ['여행', 'x'.repeat(20)] }));
+    // 최대치(20개·각 20자)+가져오기 필드 전부도 규칙 식 한도 안에서 통과
+    await assertSucceeds(tx({ tags: Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(20, 'x')), importHash: '0123456789abcdef', importBatch: 'imp-a1', card4: '7012', recurringId: 'r1', accountId: 'card', memo: 'm'.repeat(200) }));
+    await assertFails(tx({ tags: ['x'.repeat(50000)] }));
+    await assertFails(tx({ tags: ['a', 'x'.repeat(21)] }));
+    await assertFails(tx({ tags: ['a', 3] }));
+    await assertFails(tx({ tags: Array.from({ length: 21 }, (_, i) => `t${i}`) }));
+  });
+});
+
+describe('M5 카테고리별 예산 값 검증', () => {
+  const b = (byCategory) => setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1000000, byCategory });
+  test('정수·0 이상·키 형식만 허용', async () => {
+    await assertSucceeds(b({ food: 400000, cafe: 0, 'etc-in': 1 }));
+    await assertFails(b({ food: 1.5 }));
+    await assertFails(b({ food: '많이' }));
+    await assertFails(b({ food: -500 }));
+    await assertFails(b({ food: 10000000001 }));
+    await assertFails(b({ '식비 칸': 1000 }));
+    await assertFails(b({ a: 1, b: 2, c: -3 })); // 뒤쪽 원소도 검사
+  });
+  test('30개까지(31개 거부), 30개째 값도 검사', async () => {
+    const many = (n, last = 1) => Object.fromEntries(Array.from({ length: n }, (_, i) => [`c${String(i).padStart(2, '0')}`, i === n - 1 ? last : 1]));
+    await assertSucceeds(b(many(30)));
+    await assertFails(b(many(30, -1)));
+    await assertFails(b(many(31)));
+  });
+  test('총예산 정수·양수', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: -1 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 100.5 }));
+  });
+});
+
+describe('H3 카드 환불(지출 차감)', () => {
+  const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/rf'), { ...TX, ...data });
+  test('가져온 지출(지문 있음)만 음수 허용', async () => {
+    await assertSucceeds(tx({ amount: -12000, importHash: '0123456789abcdef', importBatch: 'imp-a1' }));
+    await assertFails(tx({ amount: -12000 })); // 직접 기록은 음수 불가
+    await assertFails(tx({ amount: -12000, kind: 'income', importHash: '0123456789abcdef' }));
+    await assertFails(tx({ amount: -1000000001, importHash: '0123456789abcdef' }));
+    await assertFails(tx({ amount: -1.5, importHash: '0123456789abcdef' }));
+  });
+});
+
+describe('M6 가져오기 묶음 기록', () => {
+  const p = 'users/alice/imports/imp-mgx1abc';
+  const IMP = { count: 8, from: '2026-10-03', to: '2026-10-09', label: '현대카드', at: serverTimestamp() };
+  test('본인: 추가·목록·삭제', async () => {
+    await assertSucceeds(setDoc(doc(alice(), p), IMP));
+    await assertSucceeds(getDocs(collection(alice(), 'users/alice/imports')));
+    await assertSucceeds(deleteDoc(doc(alice(), p)));
+  });
+  test('형식 검증: 문서 id·건수·날짜·추가 필드(파일 이름 등) 거부', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/imports/my-file'), IMP));
+    await assertFails(setDoc(doc(alice(), p), { ...IMP, count: 1.5 }));
+    await assertFails(setDoc(doc(alice(), p), { ...IMP, from: '2026-02-30' }));
+    await assertFails(setDoc(doc(alice(), p), { ...IMP, fileName: '홍길동_현대카드_202610.xlsx' }));
+    await assertFails(setDoc(doc(alice(), p), { ...IMP, label: 'x'.repeat(21) }));
+  });
+  test('타인·비로그인 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p), { count: 1, at: new Date() }));
+    await assertFails(getDoc(doc(bob(), p)));
+    await assertFails(getDocs(collection(bob(), 'users/alice/imports')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/imports/imp-b1'), IMP));
+    await assertFails(deleteDoc(doc(bob(), p)));
+    await assertFails(getDocs(collection(anon(), 'users/alice/imports')));
   });
 });

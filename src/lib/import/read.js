@@ -7,7 +7,18 @@ const isZip = (b) => b[0] === 0x50 && b[1] === 0x4b; // xlsx
 const isOle = (b) => b[0] === 0xd0 && b[1] === 0xcf; // 옛 xls
 const looksHtml = (b) => /<(html|table|meta|!doctype)/i.test(new TextDecoder('latin1').decode(b.subarray(0, 2048)));
 
-const cellText = (v) => (v == null ? '' : v instanceof Date ? v : typeof v === 'number' ? v : String(v).trim());
+// 카드번호처럼 보이는 칸(숫자 13~19자리, 마스킹 '*' 포함 가능)은 읽자마자 끝 4자리만 남김
+// → 화면 미리보기·메모리 어디에도 전체 번호가 남지 않음
+const CARDNO = /^\d{4}(?:[- ]?[\d*xX●•]{4}){2,3}(?:[- ]?[\d*xX●•]{1,4})?$/;
+export function maskCardNo(v) {
+  if (typeof v !== 'string' && typeof v !== 'number') return v;
+  const s = String(v).trim();
+  if (!CARDNO.test(s)) return v;
+  const digits = s.replace(/\D/g, '');
+  if (digits.length < 13 && !/[*xX●•]/.test(s)) return v;
+  return `****-${digits.slice(-4)}`;
+}
+const cellText = (v) => (v == null ? '' : v instanceof Date ? v : typeof v === 'number' ? (v >= 1e12 && Number.isInteger(v) ? maskCardNo(String(v)) : v) : maskCardNo(String(v).trim()));
 
 /**
  * @param {Uint8Array} bytes
@@ -19,7 +30,7 @@ export async function readTable(bytes, name, opt = {}) {
   const enc = opt.encoding ?? 'auto';
   if (isCSV(name, bytes)) {
     const { text, encoding } = decodeBytes(bytes, enc);
-    return { kind: 'csv', encoding, sheets: [{ name: 'CSV', rows: parseCSV(text) }] };
+    return { kind: 'csv', encoding, sheets: [{ name: 'CSV', rows: parseCSV(text).map((r) => r.map(cellText)) }] };
   }
   const XLSX = opt.XLSX ?? (await import('xlsx'));
   const html = !isZip(bytes) && !isOle(bytes) && looksHtml(bytes);

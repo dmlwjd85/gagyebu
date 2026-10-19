@@ -5,6 +5,7 @@ import { ymd, prettyDate, parseYmd, WEEK } from '../lib/dates.js';
 const longDate = (d, today) => { const x = parseYmd(d); return `${x.getFullYear()}년 ${x.getMonth() + 1}월 ${x.getDate()}일 (${WEEK[x.getDay()]})${d === today ? ' · 오늘' : ''}`; };
 import { validateTx, MAX_AMOUNT, MAX_MEMO } from '../lib/validate.js';
 import { suggestOrder } from '../lib/defaults.js';
+import { withKeptFields } from '../lib/txedit.js';
 
 let el, ctx, s, lastFocus, longPressAt = 0;
 const recentKey = 'recentCats';
@@ -39,7 +40,7 @@ export function openSheet(tx = null, { date } = {}) {
   lastFocus = document.activeElement;
   const lastAcc = localStorage.getItem('lastAccount');
   s = tx
-    ? { id: tx.id, createdAt: tx.createdAt, kind: tx.kind, digits: String(tx.amount), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', more: false, showOpts: true, error: '' }
+    ? { id: tx.id, orig: tx, refund: tx.amount < 0, createdAt: tx.createdAt, kind: tx.kind, digits: String(Math.abs(tx.amount)), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', more: false, showOpts: true, error: '' }
     : { kind: 'expense', digits: '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', more: false, showOpts: false, error: '' };
   render();
   el.classList.add('open');
@@ -82,8 +83,8 @@ function render() {
     </div>
     <div class="px-5 pt-3 pb-1 text-right">
       <p class="amount-display tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
-        <span class="${s.kind === 'income' ? 'text-income' : 'text-expense'}">${amt ? (s.kind === 'income' ? '+' : '−') : ''}</span>${amt.toLocaleString('ko-KR')}<span class="text-head ml-1 text-ink">원</span></p>
-      <p class="h-5 text-caption text-expense" role="alert">${esc(s.error)}</p>
+        <span class="${s.kind === 'income' || (s.refund && s.kind === 'expense') ? 'text-income' : 'text-expense'}">${amt ? (s.kind === 'income' || (s.refund && s.kind === 'expense') ? '+' : '−') : ''}</span>${amt.toLocaleString('ko-KR')}<span class="text-head ml-1 text-ink">원</span></p>
+      ${s.refund && s.kind === 'expense' && !s.error ? '<p class="h-5 text-caption text-ink-sub">↩️ 카드 환불 · 이 달 지출에서 빼요</p>' : `<p class="h-5 text-caption text-expense" role="alert">${esc(s.error)}</p>`}
     </div>
     <div class="px-4">
       <div class="cat-grid" role="radiogroup" aria-label="카테고리">
@@ -129,7 +130,9 @@ function press(k) {
 }
 
 async function save() {
-  const tx = { id: s.id, createdAt: s.createdAt, kind: s.kind, amount: amount(), categoryId: s.categoryId, date: s.date, accountId: s.accountId || undefined, memo: s.memo.trim() };
+  // 카드 환불(음수 지출)은 고쳐도 환불로 남김. 가져오기 지문·묶음 id·카드 끝 4자리·반복 id도 그대로 둠
+  const refund = s.refund && s.kind === 'expense';
+  const tx = withKeptFields({ id: s.id, createdAt: s.createdAt, kind: s.kind, amount: refund ? -amount() : amount(), categoryId: s.categoryId, date: s.date, accountId: s.accountId || undefined, memo: s.memo.trim() }, s.orig);
   const err = validateTx(tx);
   if (err) { s.error = err; s.shake = true; haptic(20); render(); return; }
   if (!s.id) {

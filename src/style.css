@@ -6,7 +6,7 @@
 @layer base {
   html { color-scheme: light; -webkit-tap-highlight-color: transparent; }
   html.dark { color-scheme: dark; }
-  body { @apply bg-bg text-ink font-sans antialiased text-body; min-height: 100dvh; }
+  body { @apply bg-bg text-ink font-sans antialiased text-body; min-height: 100dvh; word-break: keep-all; overflow-wrap: anywhere; }
   html.sheet-open body { overflow: hidden; }
   :focus-visible { outline: 2px solid var(--primary); outline-offset: 2px; border-radius: 10px; }
   button { touch-action: manipulation; }
@@ -157,12 +157,12 @@
   .drop:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 3px; }
   .chip-ok { border-color: var(--income); color: var(--income); }
   .map-table { @apply w-max min-w-full border-separate text-caption; border-spacing: 0; }
-  .map-table th { @apply align-top text-left font-semibold p-2 min-w-[120px] max-w-[160px] border-b-2; border-color: var(--line); }
+  .map-table th { @apply align-top text-left font-semibold p-2 min-w-[136px] max-w-[160px] lg:min-w-[150px] lg:max-w-[200px] border-b-2; border-color: var(--line); }
   .map-table th.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, transparent); }
-  .map-table td { @apply p-2 whitespace-nowrap max-w-[160px] overflow-hidden text-ellipsis tabular-nums border-b; border-color: var(--line); color: var(--ink); }
+  .map-table td { @apply p-2 whitespace-nowrap max-w-[160px] lg:max-w-[200px] overflow-hidden text-ellipsis tabular-nums border-b; border-color: var(--line); color: var(--ink); }
   .map-sel { @apply w-full min-h-[44px] mt-1 px-2 rounded-xl border text-caption font-semibold; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
   .map-table th.on .map-sel { border-color: var(--primary); color: var(--primary); }
-  .imp-foot { @apply sticky z-20 mt-3 max-w-[560px] mx-auto px-1 pt-3; bottom: 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 30%); }
+  .imp-foot { @apply sticky z-20 mt-3 max-w-[560px] lg:max-w-[880px] mx-auto px-1 pt-3; bottom: 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 30%); }
   .done-check { @apply grid place-items-center w-20 h-20 rounded-full; background: var(--income); }
   .done-check path { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw .5s .1s ease-out forwards; }
   .set-link { @apply flex w-full items-center gap-3 min-h-[56px] px-3 rounded-2xl text-body border; border-color: var(--line); background: var(--surface-solid); }

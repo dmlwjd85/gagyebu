@@ -3,7 +3,8 @@ import { parseYmd } from './dates.js';
 export function goalProgress(g, today) {
   const target = Math.max(1, g.target || 0);
   const saved = Math.max(0, g.saved || 0);
-  const pct = Math.min(100, Math.round((saved / target) * 100));
+  // 다 모으기 전에는 내림(999/1,000원이 100%로 보이지 않게)
+  const pct = saved >= target ? 100 : Math.min(99, Math.floor((saved / target) * 100));
   const left = Math.max(0, target - saved);
   let months = null, perMonth = null, overdue = false;
   if (g.due && left > 0) {

@@ -59,12 +59,12 @@ describe('반복 거래', () => {
     expect(nextDue({ ...r, lastPosted: '2026-10' }, '2026-10-26')).toBe('2026-11-25');
     expect(monthlyFixed([r, { ...r, amount: 13500 }, { ...r, active: false }, { ...r, kind: 'income' }])).toBe(663500);
   });
-  test('구독처럼 보이는 거래 찾기', () => {
+  test('구독처럼 보이는 거래 찾기(매달 같은 날 즈음·같은 가맹점·같은 금액)', () => {
     const txs = [
-      { kind: 'expense', memo: '넷플릭스', amount: 13500, date: '2026-08-05' }, { kind: 'expense', memo: '넷플릭스', amount: 13500, date: '2026-09-05' },
-      { kind: 'expense', memo: '스타벅스', amount: 5600, date: '2026-09-01' }, { kind: 'expense', memo: '스타벅스', amount: 5600, date: '2026-09-02' },
+      ...['2026-07-05', '2026-08-05', '2026-09-06'].map((date) => ({ kind: 'expense', memo: '넷플릭스', amount: 13500, date, categoryId: 'telecom' })),
+      { kind: 'expense', memo: '스타벅스', amount: 5600, date: '2026-09-01', categoryId: 'cafe' }, { kind: 'expense', memo: '스타벅스', amount: 5600, date: '2026-09-02', categoryId: 'cafe' },
     ];
-    expect(detectSubscriptions(txs)).toEqual([{ name: '넷플릭스', amount: 13500, months: 2 }]);
+    expect(detectSubscriptions(txs)).toEqual([{ name: '넷플릭스', amount: 13500, months: 3, day: 5, categoryId: 'telecom' }]);
     expect(detectSubscriptions(txs, [{ name: '넷플릭스', amount: 13500 }])).toEqual([]);
     // 한 달에 여러 번(지하철 등)은 구독이 아님
     const subway = ['2026-08-01', '2026-08-02', '2026-08-03', '2026-09-01', '2026-09-02'].map((date) => ({ date, amount: 1450, kind: 'expense', memo: '지하철' }));

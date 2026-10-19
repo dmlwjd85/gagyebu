@@ -65,8 +65,10 @@ describe('열 추정·프리셋', () => {
   test('머리글 줄 찾기(안내문 3줄 아래)', () => {
     expect(detectHeaderRow([['현대카드 이용내역'], ['기간'], [''], ['이용일', '가맹점명', '이용금액'], ['2026.10.03', 'a', '1']])).toBe(3);
   });
-  test('같은 용도는 첫 열만, 입·출금 있으면 금액 열 무시', () => {
-    expect(guessMapping(['이용일', '승인금액', '이용금액']).cols).toEqual(['date', 'amount', 'ignore']);
+  test('같은 용도는 가장 알맞은 열 하나만(이용금액 > 승인금액), 입·출금 있으면 금액 열 무시', () => {
+    // QA H4: 승인금액(해외결제 원화 미확정·부분취소 전 금액)이 아니라 이용금액을 씀
+    expect(guessMapping(['이용일', '승인금액', '이용금액']).cols).toEqual(['date', 'ignore', 'amount']);
+    expect(guessMapping(['이용일', '이용금액', '승인금액']).cols).toEqual(['date', 'amount', 'ignore']);
     expect(guessMapping(['거래일시', '금액', '출금액', '입금액']).cols).toEqual(['date', 'ignore', 'out', 'in']);
   });
   test('필수 열 안내', () => {
@@ -77,12 +79,14 @@ describe('열 추정·프리셋', () => {
 });
 
 describe('예시 파일 끝까지', () => {
-  test('현대카드 .xls(HTML) — 취소 제외, 음수는 환급(수입), 카드 끝 4자리', async () => {
+  test('현대카드 .xls(HTML) — 취소 제외, 원거래 없는 음수는 지출 차감(수입 아님), 카드 끝 4자리', async () => {
     const r = await pipeline('samples/현대카드_예시.xls');
     expect(r.t.kind).toBe('html'); expect(r.h).toBe(2); // 빈 줄은 읽을 때 빠짐 expect(r.preset.id).toBe('hyundai');
     expect(r.items).toHaveLength(8); expect(r.cancelled).toBe(1);
     expect(r.items[0]).toMatchObject({ date: '2026-10-03', amount: 5600, kind: 'expense', desc: '스타벅스 강남R점', approval: '30012345', card4: '5678' });
-    expect(r.items.find((x) => x.desc.startsWith('이마트'))).toMatchObject({ kind: 'income', amount: 12000 });
+    // QA H3: 카드 환불은 수입이 아니라 지출 차감(음수 지출) → 수입·저축률이 부풀지 않음
+    expect(r.items.find((x) => x.desc.startsWith('이마트'))).toMatchObject({ kind: 'expense', amount: -12000, refund: true });
+    expect(r.items.some((x) => x.kind === 'income')).toBe(false);
     expect(r.items.find((x) => x.desc === '쿠팡').memo).toBe('쿠팡 · 3개월');
     expect(JSON.stringify(r.items)).not.toContain('1234-');
   });

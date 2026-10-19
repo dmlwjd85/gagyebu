@@ -74,7 +74,7 @@ export function recordStreak(dates, today) {
 
 // 기간 안에서 오늘 이전의 지출 0원 날 수
 export function noSpendDays(periodTxs, p, today) {
-  const spent = new Set(periodTxs.filter((t) => t.kind === 'expense').map((t) => t.date));
+  const spent = new Set(periodTxs.filter((t) => t.kind === 'expense' && t.amount > 0).map((t) => t.date)); // 환불만 있는 날은 무지출
   let n = 0;
   for (let d = p.start; d < p.end && d < today; d = addDays(d, 1)) if (!spent.has(d)) n++;
   return n;

@@ -4,18 +4,16 @@ import { esc } from './util.js';
 import { formatWon, signedWon } from '../lib/money.js';
 import { readTable } from '../lib/import/read.js';
 import { detectHeaderRow, detectPreset, guessMapping, missingRoles, headerSignature, ROLES, ROLE_LABEL, PRESETS } from '../lib/import/mapping.js';
-import { toCandidates, summarize } from '../lib/import/transform.js';
+import { toCandidates, summarize, skipReasonText } from '../lib/import/transform.js';
 import { excelSerialToYmd } from '../lib/import/normalize.js';
 import { findDuplicates } from '../lib/import/dedupe.js';
 import { classify } from '../lib/classify.js';
+import { isPlus } from '../lib/money.js';
 
 const MAPS_KEY = 'importMaps'; // 이 맞춤 기억하기: 열 이름 서명 → 열 용도(개인정보 없음)
-const LAST_KEY = 'lastImport'; // 24시간 되돌리기용 { id, at, count }
+// 되돌리기: 가져온 묶음 기록은 users/{uid}/imports에 남김(기기·시간 제한 없이 묶음마다 되돌리기). 예전 localStorage 값은 지움
 const loadMaps = () => { try { return JSON.parse(localStorage.getItem(MAPS_KEY)) || {}; } catch { return {}; } };
-export const lastImport = () => {
-  try { const l = JSON.parse(localStorage.getItem(LAST_KEY)); return l && Date.now() - l.at < 86400000 ? l : null; } catch { return null; }
-};
-export const clearLastImport = () => localStorage.removeItem(LAST_KEY);
+try { localStorage.removeItem('lastImport'); } catch { /* 저장소 없음 */ }
 export const SAMPLE_URL = `${import.meta.env.BASE_URL}samples/${encodeURIComponent('현대카드_예시.xls')}`;
 
 export const newImport = () => ({ step: 1, busy: false, error: '', fileName: '', bytes: null, table: null, sheet: 0, headerRow: 0, cols: [], auto: [], opts: { sign: 'expense', excludeCancelled: true, remember: true, accountId: '' }, dup: null, choice: {}, result: null });
@@ -27,6 +25,8 @@ export async function loadFile(imp, bytes, fileName, encoding = 'auto') {
     imp.table = await readTable(bytes, fileName, { encoding });
     if (!imp.table.sheets.length) throw new Error('empty');
     imp.sheet = 0;
+    // 원본 바이트는 바로 버림. 글자 인코딩을 바꿔 다시 읽어야 하는 CSV·HTML만 열 맞추기 단계 동안 들고 있음
+    if (!imp.table.encoding) imp.bytes = null;
     setSheet(imp, 0);
     imp.step = 2;
   } catch (e) {
@@ -61,14 +61,14 @@ export function setCol(imp, i, role) {
 
 /** 열 맞춤 → 우리 형식 후보 + 자동 분류 */
 export function candidates(imp, ctx) {
-  const { items, cancelled, invalid } = toCandidates(dataRows(imp), { cols: imp.cols }, imp.opts);
+  const { items, cancelled, invalid, reasons, offset, summary } = toCandidates(dataRows(imp), { cols: imp.cols }, imp.opts);
   const valid = new Set(ctx.categories.map((c) => c.id));
   for (const it of items) {
     const c = classify(it, ctx.rules, valid);
     it.categoryId = c.categoryId; it.by = c.by;
     if (imp.opts.accountId) it.accountId = imp.opts.accountId;
   }
-  return { items, cancelled, invalid };
+  return { items, cancelled, invalid, reasons, offset, summary };
 }
 
 /** ② → ③: 기존 기록과 비교 */
@@ -78,7 +78,8 @@ export async function checkDuplicates(imp, ctx) {
     const c = candidates(imp, ctx);
     const s = summarize(c.items);
     const existing = s.count ? await ctx.txsInRange(s.from, s.to) : [];
-    imp.dup = { ...findDuplicates(c.items, existing), cancelled: c.cancelled, invalid: c.invalid };
+    imp.dup = { ...findDuplicates(c.items, existing), cancelled: c.cancelled, invalid: c.invalid, reasons: c.reasons, offset: c.offset };
+    imp.bytes = null; // 비교까지 끝나면 원본 바이트는 버림
     imp.choice = {};
     if (imp.opts.remember) {
       const maps = loadMaps();
@@ -95,14 +96,15 @@ export async function checkDuplicates(imp, ctx) {
 export const toImport = (imp) => [...imp.dup.fresh, ...imp.dup.suspect.filter((_, i) => imp.choice[i] === 'add').map((s) => s.item)];
 
 /** ④ → 완료 */
+// 오프라인이어도 멈추지 않음: 쓰기는 이 기기에 먼저 저장되고, 연결되면 올라감(pending)
 export async function commit(imp, ctx) {
   imp.busy = true; imp.error = '';
   const items = toImport(imp);
+  const s = summarize(items);
   const id = `imp-${Date.now().toString(36)}`;
   try {
-    await ctx.importTxs(items, id);
-    localStorage.setItem(LAST_KEY, JSON.stringify({ id, at: Date.now(), count: items.length }));
-    imp.result = { id, count: items.length };
+    const r = await ctx.importTxs(items, id, { from: s.from, to: s.to, label: imp.preset?.id !== 'generic' ? imp.preset?.label : '파일' });
+    imp.result = { id, count: items.length, from: s.from, to: s.to, pending: Boolean(r?.pending) };
     imp.bytes = null; imp.table = null; // 원본은 바로 버림
     imp.step = 5;
   } catch (e) {
@@ -114,6 +116,7 @@ export async function commit(imp, ctx) {
 
 // ── 화면 ─────────────────────────────────────────────
 const STEPS = ['파일', '열 맞추기', '중복 확인', '확정'];
+const BUSY = { 1: '표를 읽고 있어요…', 2: '기존 기록과 비교하고 있어요…', 4: '저장하고 있어요…' };
 const dot = (d) => `${Number(d.slice(5, 7))}.${d.slice(8)}`;
 // 날짜 열의 엑셀 일련번호(46306)는 사람이 읽는 날짜로 보여 줌
 const cell = (v, role) => esc(v instanceof Date ? v.toISOString().slice(0, 10) : role === 'date' && typeof v === 'number' && v > 20000 && v < 80000 ? excelSerialToYmd(v) : String(v ?? ''));
@@ -124,9 +127,9 @@ export function importView(m, imp) {
     <ol class="mt-3 grid grid-cols-4 gap-1.5" aria-label="가져오기 단계">${STEPS.map((l, i) => `<li ${i + 1 === s ? 'aria-current="step"' : ''} class="text-caption ${i + 1 === s ? 'text-ink font-bold' : 'text-ink-sub'}">
       <span class="block h-[5px] rounded-full mb-1.5 ${i < s ? 'bg-primary' : 'bg-line'}" aria-hidden="true"></span><span>${l}</span></li>`).join('')}</ol>`;
   const body = [step1, step2, step3, step4, step5][imp.step - 1](m, imp);
-  return `<div class="max-w-[560px] mx-auto flex flex-col gap-3">${head}
+  return `<div class="max-w-[560px] lg:max-w-[880px] mx-auto flex flex-col gap-3">${head}
     ${imp.error ? `<p class="glass px-4 py-3 text-body text-expense" role="alert">${esc(imp.error)}</p>` : ''}
-    ${imp.busy ? `<div class="card-solid p-5" aria-busy="true"><p class="text-body text-ink-sub">표를 읽고 있어요…</p><div class="mt-3 flex flex-col gap-2">${'<div class="skeleton h-6 rounded-lg"></div>'.repeat(4)}</div></div>` : body}
+    ${imp.busy ? `<div class="card-solid p-5" aria-busy="true"><p class="text-body text-ink-sub" role="status">${BUSY[imp.step] ?? '처리하고 있어요…'}</p><div class="mt-3 flex flex-col gap-2">${'<div class="skeleton h-6 rounded-lg"></div>'.repeat(4)}</div></div>` : body}
   </div>${footer(m, imp)}`;
 }
 
@@ -140,7 +143,7 @@ function footer(m, imp) {
 }
 
 function step1(m, imp) {
-  const last = lastImport();
+  const list = (m.imports || []).slice(0, 5);
   return `<label class="drop" data-drop>
       <span class="text-4xl" aria-hidden="true">📥</span>
       <span class="text-body font-semibold text-center">카드사·은행에서 받은 파일을<br />여기에 끌어다 놓으세요</span>
@@ -149,11 +152,15 @@ function step1(m, imp) {
       <input type="file" class="sr-only" data-imp-file accept=".xls,.xlsx,.csv,.txt,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="가져올 파일 고르기" />
     </label>
     <button class="link-btn self-center" data-imp-sample>예시 파일로 해 보기</button>
-    <p class="glass px-4 py-3 text-caption flex gap-2"><span aria-hidden="true">🔒</span><span>파일은 이 기기 밖으로 나가지 않아요.<br />원본은 저장하지 않고, 카드번호도 끝 4자리 말고는 남기지 않아요.</span></p>
-    <section class="card-solid p-4" aria-labelledby="fmt-h"><h2 id="fmt-h" class="text-head">자동으로 알아보는 형식</h2>
-      <div class="mt-3 flex flex-wrap gap-2">${PRESETS.map((p) => `<span class="chip ${p.verified ? 'chip-ok' : ''}">${p.emoji} ${esc(p.label)}</span>`).join('')}<span class="chip">📄 일반 형식</span></div>
-      <p class="mt-3 text-caption text-ink-sub">다른 카드사 파일도 '일반 형식'으로 열을 맞춰 가져올 수 있어요. 현대·신한도 실제 파일로 확인하기 전까지는 추정 형식이에요.</p></section>
-    ${last ? `<section class="card-solid p-4 flex items-center gap-3"><p class="flex-1 text-body">최근 가져온 ${last.count}건<span class="block text-caption text-ink-sub">가져온 지 24시간 안에는 한 번에 되돌릴 수 있어요.</span></p><button class="btn-ghost" data-imp-undo="${esc(last.id)}">되돌리기</button></section>` : ''}`;
+    <p class="glass px-4 py-3 text-caption flex gap-2"><span aria-hidden="true">🔒</span><span>파일은 이 기기 밖으로 나가지 않아요.<br />원본은 저장하지 않고, 카드번호는 읽자마자 끝 4자리만 남겨요.</span></p>
+    <section class="card-solid p-4" aria-labelledby="fmt-h"><h2 id="fmt-h" class="text-head">알아보려고 하는 형식</h2>
+      <div class="mt-3 flex flex-wrap gap-2">${PRESETS.map((p) => `<span class="chip">${p.emoji} ${esc(p.label)}${p.verified ? '' : ' <span class="text-ink-sub">(추정)</span>'}</span>`).join('')}<span class="chip">📄 일반 형식</span></div>
+      <p class="mt-3 text-caption text-ink-sub">현대·신한·은행 형식은 공개 자료로 만든 추정이라, 실제 파일과 다르면 다음 단계에서 열을 직접 맞춰 주세요. 다른 카드사 파일도 '일반 형식'으로 가져올 수 있어요.</p></section>
+    ${list.length ? `<section class="card-solid p-4" aria-labelledby="hist-h"><h2 id="hist-h" class="text-head">최근 가져온 묶음</h2>
+      <p class="mt-1 text-caption text-ink-sub">묶음마다 한 번에 되돌릴 수 있어요(다른 기기에서도).</p>
+      <ul class="mt-2 flex flex-col">${list.map((x) => `<li class="flex items-center gap-3 min-h-[52px] border-b last:border-0" style="border-color:var(--line)">
+        <span class="flex-1 min-w-0 text-body">${esc(x.label || '파일')} ${x.count}건<span class="block text-caption text-ink-sub tabular-nums">${x.from ? `${dot(x.from)} ~ ${dot(x.to)}` : ''}${x.at ? ` · ${x.at.slice(5, 10).replace('-', '.')} 가져옴` : ''}</span></span>
+        <button class="btn-ghost" data-imp-undo="${esc(x.id)}" aria-label="${esc(x.label || '파일')} ${x.count}건 되돌리기">되돌리기</button></li>`).join('')}</ul></section>` : ''}`;
 }
 
 function step2(m, imp) {
@@ -161,11 +168,12 @@ function step2(m, imp) {
   const preview = rows.slice(imp.headerRow + 1, imp.headerRow + 6);
   const miss = missingRoles(imp.cols);
   const split = imp.cols.includes('out') || imp.cols.includes('in');
-  const { items, cancelled } = candidates(imp, m);
+  const { items, cancelled, offset, reasons } = candidates(imp, m);
+  const refunds = items.filter((x) => x.amount < 0).length;
   const catMap = m.catMap;
   return `<div class="flex flex-wrap gap-2">
-      <span class="chip ${imp.preset.id !== 'generic' ? 'chip-ok' : ''}">${imp.preset.id !== 'generic' ? `✓ ${esc(imp.preset.label)} 형식 같아요` : '📄 일반 형식'}</span>
-      ${t.encoding ? `<button class="chip" data-imp-enc aria-label="글자 인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'}, 눌러서 바꾸기">인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'} ▾</button>` : ''}
+      <span class="chip ${imp.preset.verified ? 'chip-ok' : ''}">${imp.preset.id === 'generic' ? '📄 일반 형식' : imp.preset.verified ? `✓ ${esc(imp.preset.label)} 형식` : `${imp.preset.emoji} ${esc(imp.preset.label)} 형식 같아요(추정) · 열을 확인해 주세요`}</span>
+      ${t.encoding && imp.bytes ? `<button class="chip" data-imp-enc aria-label="글자 인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'}, 눌러서 바꾸기">인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'} ▾</button>` : ''}
       <span class="inline-flex items-center gap-1"><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="-1" aria-label="머리글 줄 위로" ${imp.headerRow === 0 ? 'disabled' : ''}>−</button><span class="text-caption font-semibold">머리글 ${imp.headerRow + 1}번째 줄</span><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="1" aria-label="머리글 줄 아래로">＋</button></span>
       ${t.sheets.length > 1 ? t.sheets.map((sh, i) => `<button class="chip" data-imp-sheet="${i}" aria-pressed="${i === imp.sheet}">${esc(sh.name)}</button>`).join('') : ''}
       ${imp.remembered ? '<span class="chip chip-ok">기억한 맞춤 적용</span>' : ''}
@@ -176,7 +184,7 @@ function step2(m, imp) {
         <thead><tr>${header.map((h, i) => `<th scope="col" class="${imp.cols[i] !== 'ignore' ? 'on' : ''}">
           ${imp.auto[i] ? '<span class="text-micro font-bold text-primary">자동</span>' : '<span class="text-micro">&nbsp;</span>'}
           <select class="map-sel" data-imp-col="${i}" aria-label="'${esc(h || `${i + 1}번째 열`)}' 열의 용도">${ROLES.map((r) => `<option value="${r}" ${imp.cols[i] === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>
-          <span class="block mt-1 text-caption text-ink-sub font-normal truncate">원본: ${esc(h || '(이름 없음)')}</span></th>`).join('')}</tr></thead>
+          <span class="block mt-1 text-caption text-ink-sub font-normal truncate" title="${esc(h)}">원본: ${esc(h || '(이름 없음)')}</span></th>`).join('')}</tr></thead>
         <tbody>${preview.map((r) => `<tr>${header.map((_, i) => `<td>${cell(r[i], imp.cols[i])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
       ${miss.length ? `<p class="mt-3 text-caption text-expense font-semibold" role="alert">● ${miss.join(' ')}</p>` : '<p class="mt-3 text-caption text-ink-sub">보라색 칸은 자동으로 맞춘 것이에요. 눌러서 바꿀 수 있어요.</p>'}
     </section>
@@ -189,25 +197,26 @@ function step2(m, imp) {
     </section>
     <section class="card-solid p-4" aria-labelledby="pv-h">
       <div class="flex items-baseline justify-between"><h2 id="pv-h" class="text-head">이렇게 들어가요</h2><span class="text-caption text-ink-sub">미리보기 · ${items.length}건${cancelled ? ` · 취소 ${cancelled}건 제외` : ''}</span></div>
+      ${!miss.length && (offset || refunds || skipReasonText(reasons)) ? `<p class="mt-2 text-caption text-ink-sub">${[offset ? `취소·환불 ${offset}건은 원래 결제에서 뺐어요.` : '', refunds ? `원래 결제가 이 파일에 없는 환불 ${refunds}건은 지출에서 빼요(수입 아님).` : '', skipReasonText(reasons)].filter(Boolean).join(' ')}</p>` : ''}
       ${miss.length ? '<p class="mt-3 text-body text-ink-sub">열을 맞추면 미리보기가 나와요.</p>' : `<ul class="mt-2 flex flex-col">${items.slice(0, 5).map((x) => {
         const c = catMap.get(x.categoryId) ?? { emoji: '🧾', name: '기타' };
         return `<li class="flex items-center gap-3 min-h-[52px] border-b last:border-0" style="border-color:var(--line)">
           <span class="text-caption text-ink-sub tabular-nums w-11">${dot(x.date)}</span>
           <span class="tx-emoji !w-9 !h-9 ${x.by === 'fallback' ? 'opacity-60' : ''}" aria-hidden="true">${esc(c.emoji)}</span>
           <span class="flex-1 min-w-0"><span class="block text-body truncate">${esc(x.desc || c.name)}</span><span class="block text-caption text-ink-sub truncate">${esc(c.name)}${x.by === 'rule' ? ' · 내 규칙' : x.by === 'keyword' ? ' · 자동 추정' : ''}${x.card4 ? ` · 카드 끝 ${esc(x.card4)}` : ''}</span></span>
-          <span class="text-body font-semibold tabular-nums ${x.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(x.amount, x.kind)}</span></li>`;
+          <span class="text-body font-semibold tabular-nums ${isPlus(x) ? 'text-income' : 'text-expense'}">${signedWon(x.amount, x.kind)}</span></li>`;
       }).join('')}</ul>`}
     </section>`;
 }
 
 function step3(m, imp) {
   const d = imp.dup;
-  const exist = (t) => `<span class="block text-caption text-ink-sub">이미 있는 기록</span><span class="block text-body truncate">${esc(t.memo || (m.catMap.get(t.categoryId)?.name ?? ''))}</span><span class="block text-caption tabular-nums">${dot(t.date)} · ${formatWon(t.amount)}</span>`;
+  const exist = (t) => `<span class="block text-caption text-ink-sub">이미 있는 기록</span><span class="block text-body truncate">${esc(t.memo || (m.catMap.get(t.categoryId)?.name ?? ''))}</span><span class="block text-caption tabular-nums">${dot(t.date)} · ${formatWon(t.amount)}${t.importHash ? ' · 가져온 기록' : ' · 직접 기록'}</span>`;
   return `<div class="grid grid-cols-3 gap-2 text-center">
       <div class="card-solid p-3"><p class="text-title tabular-nums">${d.fresh.length}</p><p class="text-caption text-ink-sub">새 거래</p></div>
       <div class="card-solid p-3"><p class="text-title tabular-nums">${d.suspect.length}</p><p class="text-caption text-ink-sub"><span class="inline-block w-2 h-2 rounded-full bg-chart-3 mr-1 align-middle" aria-hidden="true"></span>중복 의심</p></div>
       <div class="card-solid p-3"><p class="text-title tabular-nums">${d.sure.length + d.cancelled}</p><p class="text-caption text-ink-sub">이미 있음·취소</p></div></div>
-    ${d.sure.length ? `<p class="text-caption text-ink-sub px-1">이미 가져온 거래 ${d.sure.length}건은 자동으로 건너뛰어요.${d.invalid ? ` 날짜나 금액을 읽을 수 없는 줄 ${d.invalid}개도 뺐어요.` : ''}</p>` : d.invalid ? `<p class="text-caption text-ink-sub px-1">날짜나 금액을 읽을 수 없는 줄 ${d.invalid}개는 뺐어요.</p>` : ''}
+    ${d.sure.length || d.invalid || d.offset ? `<p class="text-caption text-ink-sub px-1">${[d.sure.length ? `이미 가져온 거래 ${d.sure.length}건은 자동으로 건너뛰어요.` : '', d.offset ? `취소·환불 ${d.offset}건은 원래 결제에서 뺐어요.` : '', skipReasonText(d.reasons)].filter(Boolean).join(' ')}</p>` : ''}
     ${d.suspect.length ? `<div class="flex items-center justify-between"><h2 class="text-head">중복 의심 ${d.suspect.length}건</h2><button class="chip" data-imp-skipall>모두 건너뛰기</button></div>
     <ul class="flex flex-col gap-2">${d.suspect.map((s, i) => `<li class="card-solid p-3">
       <div class="grid grid-cols-2 gap-3"><div class="min-w-0">${s.reason === 'file' ? `<span class="block text-caption text-ink-sub">파일 안 같은 줄</span><span class="block text-body truncate">${esc(s.match.desc)}</span><span class="block text-caption tabular-nums">${dot(s.match.date)} · ${formatWon(s.match.amount)}</span>` : exist(s.match)}</div>
@@ -224,15 +233,18 @@ function step4(m, imp) {
   const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-semibold tabular-nums text-right">${v}</dd></div>`;
   return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 확인해요</h2>
       <dl class="mt-2">${row('파일', esc(imp.fileName))}${s.count ? row('기간', `${dot(s.from)} ~ ${dot(s.to)}`) : ''}${row('가져올 거래', `${s.count}건`)}
-        ${row('지출 합계', `<span class="text-expense">−${formatWon(s.expense)}</span>`)}${row('수입·환급', `<span class="text-income">+${formatWon(s.income)}</span>`)}
-        ${row('건너뛰는 거래', `중복 ${skipped + d.sure.length} · 취소 ${d.cancelled}`)}</dl></section>
-    <p class="glass px-4 py-3 text-caption flex gap-2"><span aria-hidden="true">↩️</span><span>가져온 뒤 24시간 안에는 이번 묶음을 한 번에 되돌릴 수 있어요.</span></p>`;
+        ${row('지출 합계', `<span class="text-expense">${s.expense < 0 ? '+' : '−'}${formatWon(Math.abs(s.expense))}</span>`)}
+        ${s.refund ? row('환불·취소 차감', `<span class="text-income">+${formatWon(s.refund)}</span> <span class="text-caption text-ink-sub font-normal">(지출 합계에 반영)</span>`) : ''}
+        ${row('수입', `<span class="text-income">+${formatWon(s.income)}</span>`)}
+        ${row('건너뛰는 거래', `중복 ${skipped + d.sure.length} · 취소 ${d.cancelled}${d.offset ? ` · 상계 ${d.offset}` : ''}`)}</dl></section>
+    <p class="glass px-4 py-3 text-caption flex gap-2"><span aria-hidden="true">↩️</span><span>가져온 묶음은 '파일 가져오기' 첫 화면에서 언제든 한 번에 되돌릴 수 있어요.</span></p>`;
 }
 
 function step5(m, imp) {
   return `<div class="card-solid p-6 text-center" role="status">
     <div class="done-check mx-auto" aria-hidden="true"><svg viewBox="0 0 56 56" width="56" height="56"><path d="M14 29l9 9 19-20"/></svg></div>
     <h2 class="mt-3 text-title tabular-nums">${imp.result.count}건을 가져왔어요!</h2>
+    ${imp.result.pending ? '<p class="mt-2 text-body font-semibold" role="alert">📴 지금은 오프라인이라 이 기기에 먼저 저장했어요. 연결되면 자동으로 올릴게요.</p>' : ''}
     <p class="mt-2 text-body text-ink-sub">분류를 한 번 고치면<br />다음부터는 알아서 맞춰 드릴게요.</p>
-    <div class="mt-5 flex gap-2 justify-center"><button class="btn-primary" data-nav="calendar" data-mode="list">목록에서 보기</button><button class="btn-ghost" data-imp-undo="${esc(imp.result.id)}">되돌리기</button></div></div>`;
+    <div class="mt-5 flex gap-2 justify-center"><button class="btn-primary" data-nav="calendar" data-mode="list" ${imp.result.to ? `data-date="${esc(imp.result.to)}"` : ''}>목록에서 보기</button><button class="btn-ghost" data-imp-undo="${esc(imp.result.id)}">되돌리기</button></div></div>`;
 }

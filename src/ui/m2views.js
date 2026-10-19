@@ -67,8 +67,8 @@ export function recurringView(m) {
         return `<li class="flex items-center gap-2 min-h-[64px] py-1 border-b last:border-0" style="border-color:var(--line)">
           <span class="tx-emoji shrink-0" aria-hidden="true">${esc(c.emoji)}</span>
           <button class="flex-1 min-w-0 text-left min-h-[44px]" data-rec-edit="${esc(r.id)}">
-            <span class="flex items-baseline gap-2"><span class="text-body font-semibold truncate">${esc(r.name)}</span><span class="ml-auto text-body font-semibold tabular-nums whitespace-nowrap ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span></span>
-            <span class="block text-caption text-ink-sub truncate">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}</span><span class="sr-only">, 고치기</span></button>
+            <span class="flex items-baseline gap-2"><span class="text-body font-semibold min-w-0 break-words line-clamp-2">${esc(r.name)}</span><span class="ml-auto text-body font-semibold tabular-nums whitespace-nowrap ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span></span>
+            <span class="block text-caption text-ink-sub">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}</span><span class="sr-only">, 고치기</span></button>
           <label class="switch"><input type="checkbox" data-rec-active="${esc(r.id)}" ${r.active ? 'checked' : ''} aria-label="${esc(r.name)} 자동 기록" /><span></span></label>
           <button class="icon-btn" data-rec-del="${esc(r.id)}" aria-label="${esc(r.name)} 삭제">🗑️</button></li>`;
       }).join('')}</ul>` : '<div class="py-6 text-center"><p class="text-4xl" aria-hidden="true">🔁</p><p class="mt-2 text-body text-ink-sub">아직 반복 거래가 없어요.</p></div>'}
@@ -76,9 +76,9 @@ export function recurringView(m) {
       <p class="mt-2 text-caption text-ink-sub">입력 시트에서 '매달 반복'을 켜거나 저장 버튼을 길게 눌러도 만들 수 있어요.</p>
     </section>
     ${subs.length ? `<section class="card-solid p-4" aria-labelledby="sub-h"><h2 id="sub-h" class="text-head">구독 같아요</h2>
-      <p class="mt-1 text-caption text-ink-sub">같은 곳에 같은 금액이 여러 달 나갔어요. 반복으로 등록할까요?</p>
-      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex items-center gap-3 min-h-[52px]"><span class="flex-1 min-w-0 text-body truncate">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · ${formatWon(s.amount)}</span></span>
-        <button class="chip" data-rec-from="${esc(s.name)}" data-amount="${s.amount}">등록</button></li>`).join('')}</ul></section>` : ''}
+      <p class="mt-1 text-caption text-ink-sub">같은 곳에 같은 금액이 매달 비슷한 날에 나갔어요. 반복으로 등록할까요?</p>
+      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex items-center gap-3 min-h-[52px]"><span class="flex-1 min-w-0 text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · 매달 ${s.day}일쯤 · ${formatWon(s.amount)}</span></span>
+        <button class="chip" data-rec-from="${esc(s.name)}" data-amount="${s.amount}" data-day="${s.day}" data-cat="${esc(s.categoryId ?? '')}" aria-label="${esc(s.name)} 반복으로 등록">등록</button></li>`).join('')}</ul></section>` : ''}
   </div>`;
 }
 
