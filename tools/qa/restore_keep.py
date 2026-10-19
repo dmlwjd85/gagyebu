@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """되돌리기가 끝내 저장되지 못할 때 이 기기 보관함으로 지키는지 확인(QA 5차 R5).
-사용: 에뮬레이터(auth 9099·firestore 8080) + VITE_USE_EMULATOR 미리보기 띄운 뒤
+사용: 에뮬레이터(기본 auth 9099·firestore 8080, 바꾸려면 tools/qa/emu.py 참고) + VITE_USE_EMULATOR 미리보기 띄운 뒤
   python3 tools/qa/restore_keep.py [URL] [사진 접두사]
   사진 접두사 기본값 /tmp/gagyebu-keep-
 확인: 보관 안내 토스트 → 설정 › 데이터에 '보관된 기록' 줄 → 새로 고침 뒤에도 남음 → CSV 받기 → 다시 저장(성공하면 줄이 사라짐)
 """
-import json, sys, urllib.request as U
+import json, os, sys, urllib.request as U
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 from playwright.sync_api import sync_playwright
 
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
+URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
 SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gagyebu-keep-'
-PROJ = 'demo-gagyebu'
-FS = f'http://127.0.0.1:8080/v1/projects/{PROJ}/databases/(default)/documents'
-for u in [f'http://127.0.0.1:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://127.0.0.1:9099/emulator/v1/projects/{PROJ}/accounts']:
-    U.urlopen(U.Request(u, method='DELETE'))
+FS = emu.FS_DOCS
+emu.reset()  # 이 실행의 프로젝트(기본 demo-qa-<pid>)만 지움
 
 def tx_docs(uid):
     j = json.load(U.urlopen(U.Request(f'{FS}/users/{uid}/transactions?pageSize=300', headers={'Authorization': 'Bearer owner'})))

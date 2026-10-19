@@ -1,20 +1,19 @@
 #!/usr/bin/env python3
 """보관함 다시 저장이 겹쳐도 1건만 생기는지 확인(QA N1).
-사용: 에뮬레이터(auth 9099·firestore 8080) + VITE_USE_EMULATOR 미리보기 띄운 뒤
+사용: 에뮬레이터(기본 auth 9099·firestore 8080, 바꾸려면 tools/qa/emu.py 참고) + VITE_USE_EMULATOR 미리보기 띄운 뒤
   python3 tools/qa/keep_race.py [URL] [사진 접두사]
 경우: ① [다시 저장하기] 더블클릭·5번 연타 ② 두 탭에서 동시에 누르기 ③ 잠금을 거치지 않고 두 탭이 3번씩 동시에 저장(고정 id만으로 1건인지)
      ④ 앱을 다시 열 때 자동 재저장과 버튼이 겹침 ⑤ 같은 id로 살릴 수 있는 기록(1단계)도 두 탭 동시
 각 경우마다 원래 id는 규칙이 받지 않는 형식(숫자 13개)이라 새 id 단계로 가게 하고, 서버 문서 수를 셈.
 """
-import json, sys, urllib.request as U
+import json, os, sys, urllib.request as U
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 from playwright.sync_api import sync_playwright
 
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
+URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
 SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gagyebu-race-'
-PROJ = 'demo-gagyebu'
-FS = f'http://127.0.0.1:8080/v1/projects/{PROJ}/databases/(default)/documents'
-for u in [f'http://127.0.0.1:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://127.0.0.1:9099/emulator/v1/projects/{PROJ}/accounts']:
-    U.urlopen(U.Request(u, method='DELETE'))
+FS = emu.FS_DOCS
+emu.reset()  # 이 실행의 프로젝트(기본 demo-qa-<pid>)만 지움
 
 def docs_with(uid, memo):
     j = json.load(U.urlopen(U.Request(f'{FS}/users/{uid}/transactions?pageSize=300', headers={'Authorization': 'Bearer owner'})))

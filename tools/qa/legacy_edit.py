@@ -1,19 +1,18 @@
 #!/usr/bin/env python3
 """예전 형식 id 문서 고치기(QA N6): 늘 같은 새 id로 옮겨 저장되는지, 같은 달 자동 기록과 겹쳐 2건이 되지 않는지.
-사용: 에뮬레이터(auth 9099·firestore 8080) + VITE_USE_EMULATOR 미리보기 띄운 뒤
+사용: 에뮬레이터(기본 auth 9099·firestore 8080, 바꾸려면 tools/qa/emu.py 참고) + VITE_USE_EMULATOR 미리보기 띄운 뒤
   python3 tools/qa/legacy_edit.py [URL] [사진 접두사]
 준비(관리자 권한으로 직접 씀): 형식 밖 반복 BAD(lastPosted 10월)와 rec-BAD-2026-10, 형식 밖 반복 BAD2(lastPosted 9월, 예전 앱이 남긴 어긋난 상태)와
   rec-BAD2-2026-10, 형식 밖 일반 거래 LEG.
 """
-import json, sys, urllib.request as U
+import json, os, sys, urllib.request as U
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 from playwright.sync_api import sync_playwright
 
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
+URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
 SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gagyebu-legacy-'
-PROJ = 'demo-gagyebu'
-FS = f'http://127.0.0.1:8080/v1/projects/{PROJ}/databases/(default)/documents'
-for u in [f'http://127.0.0.1:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://127.0.0.1:9099/emulator/v1/projects/{PROJ}/accounts']:
-    U.urlopen(U.Request(u, method='DELETE'))
+FS = emu.FS_DOCS
+emu.reset()  # 이 실행의 프로젝트(기본 demo-qa-<pid>)만 지움
 def F(v):
     if isinstance(v, bool): return {'booleanValue': v}
     if isinstance(v, int): return {'integerValue': str(v)}

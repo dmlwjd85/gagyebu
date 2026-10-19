@@ -1,20 +1,17 @@
 #!/usr/bin/env python3
 """금액 숫자 점검(QA N4·N5): ① 화면마다 금액이 든 글자에 tabular-nums가 빠진 곳 전수 ② 홈 큰 금액이 롤링하는 동안 폭이 흔들리는지.
-사용: 에뮬레이터(auth 9099·firestore 8080) + VITE_USE_EMULATOR 미리보기 띄운 뒤
+사용: 에뮬레이터(기본 auth 9099·firestore 8080, 바꾸려면 tools/qa/emu.py 참고) + VITE_USE_EMULATOR 미리보기 띄운 뒤
   python3 tools/qa/num_check.py [URL] [사진 접두사]
 ① 금액 = '숫자+원/만/억' 또는 '숫자%'가 든 글자(svg 축 글자 포함). 계산값 font-variant-numeric에 tabular-nums가 없으면 실패.
 ② 오늘 지출을 남겨 '오늘 쓸 돈'이 롤링하는 동안 프레임마다 글자 폭(Range)을 재서, 글자 수가 같은데 폭이 다르면 실패. 숫자 0~9 각각 10자 폭도 기록.
 """
-import json, sys, urllib.request as U
+import json, os, sys, urllib.request as U
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 from playwright.sync_api import sync_playwright
 
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
+URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
 SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gagyebu-num-'
-import os
-HOST = os.environ.get('GAGYEBU_EMU_HOST', '127.0.0.1')  # 다른 작업과 겹치지 않게 에뮬레이터 주소·프로젝트를 바꿀 수 있음
-PROJ = os.environ.get('GAGYEBU_PROJECT', 'demo-gagyebu')
-for u in [f'http://{HOST}:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://{HOST}:9099/emulator/v1/projects/{PROJ}/accounts']:
-    U.urlopen(U.Request(u, method='DELETE'))
+emu.reset()  # 이 실행의 프로젝트(기본 demo-qa-<pid>)만 지움
 READY = 'window.__gagyebu && window.__gagyebu.state.user && window.__gagyebu.state.categories.length>0'
 SCAN = r"""()=>{
  const money=/(^|[^0-9])[−+-]?[0-9][0-9,.]*\s*(원|만|억|%)/;

@@ -1,10 +1,11 @@
 # 글자 대비 검사: axe-core 측정 + axe가 판정 못 한 글자는 화면 픽셀로 직접 측정. 사용: npm run emulators & npm run dev:emu 후 python3 tools/qa/contrast_axe.py
-import urllib.request as U, json, sys
+import urllib.request as U, json, sys, os
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 import os; sys.path.insert(0,os.path.dirname(__file__)); from pix import measure
-for u in ['http://127.0.0.1:8080/emulator/v1/projects/demo-gagyebu/databases/(default)/documents','http://127.0.0.1:9099/emulator/v1/projects/demo-gagyebu/accounts']: U.urlopen(U.Request(u,method='DELETE'))
+emu.reset()  # 이 실행의 프로젝트(demo-qa-<pid>)만 지움
 from playwright.sync_api import sync_playwright
 AXE=open(''+os.path.join(os.path.dirname(__file__),'../../node_modules')+'/axe-core/axe.min.js').read()
-URL=sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:5173/gagyebu/'
+URL=emu.app_url(sys.argv[1] if len(sys.argv)>1 else 'http://127.0.0.1:5173/gagyebu/')
 RUN="""async()=>{const r=await axe.run(document,{runOnly:{type:'tag',values:['wcag2a','wcag2aa','wcag21aa','best-practice']},resultTypes:['violations']});
  return {v:r.violations.map(v=>({id:v.id,impact:v.impact,n:v.nodes.length,ex:v.nodes.slice(0,3).map(n=>n.target.join(' ')+' :: '+(n.any[0]?.message||n.failureSummary||'').slice(0,140))})), cc:r.passes?0:0}}"""
 CC="""async()=>{const r=await axe.run(document,{runOnly:['color-contrast'],resultTypes:['passes','violations','incomplete']});

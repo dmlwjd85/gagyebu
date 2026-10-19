@@ -7,11 +7,11 @@
 """
 import sys, json, urllib.request as U
 from playwright.sync_api import sync_playwright
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
+URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
 SHOT = sys.argv[2] if len(sys.argv) > 2 else None
 SAMPLE = 'samples/현대카드_실제형식_예시.xlsx'
-for u in ['http://127.0.0.1:8080/emulator/v1/projects/demo-gagyebu/databases/(default)/documents', 'http://127.0.0.1:9099/emulator/v1/projects/demo-gagyebu/accounts']:
-    U.urlopen(U.Request(u, method='DELETE'))
+emu.reset()  # 이 실행의 프로젝트(demo-qa-<pid>)만 지움
 LONG = '비상금 모으기 프로젝트 이름이 아주 긴 경우 삼십자'
 MEASURE = """() => {
   const de = document.documentElement, W = de.clientWidth;

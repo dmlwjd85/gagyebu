@@ -2,7 +2,7 @@
 """반복 자동 기록이 사용자가 고친·지운 같은 달 기록을 덮어쓰거나 되살리는지(QA D1).
 사용: 에뮬레이터 + VITE_USE_EMULATOR 미리보기를 띄운 뒤
   python3 tools/qa/rec_overwrite.py [A 주소] [B 주소] [사진 접두사]
-  환경 변수: GAGYEBU_EMU_HOST(기본 127.0.0.1) · GAGYEBU_PROJECT(기본 demo-gagyebu) · CASES(기본 1,2,3)
+  에뮬레이터 주소·포트·프로젝트는 tools/qa/emu.py(QA_EMU_HOST·QA_PROJECT 등, 기본 프로젝트 demo-qa-<pid>) · 환경 변수 CASES(기본 1,2,3)
   A·B 주소를 다르게 주면 기기 B만 다른 빌드(예: 예전 버전 앱)로 돌릴 수 있음.
 경우
  ① 예전 형식 반복(lastPosted가 늦음)의 10월 기록을 81,000원으로 고침(새 id로 옮겨짐) → 25일 뒤에 다시 열기 → 81,000원 그대로인지
@@ -10,17 +10,16 @@
  ③ ②와 같은데 A가 그 기록을 지움 → B 연결 → 지운 기록이 다시 살아나지 않는지 → A에서 되돌리기 → 1건으로 돌아오는지
 """
 import json, os, sys, urllib.request as U
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 from playwright.sync_api import sync_playwright
 
-A = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
-B = sys.argv[2] if len(sys.argv) > 2 else A
+A = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
+B = emu.app_url(sys.argv[2]) if len(sys.argv) > 2 else A
 SHOT = sys.argv[3] if len(sys.argv) > 3 else '/tmp/gagyebu-recow-'
-HOST = os.environ.get('GAGYEBU_EMU_HOST', '127.0.0.1'); PROJ = os.environ.get('GAGYEBU_PROJECT', 'demo-gagyebu')
 CASES = os.environ.get('CASES', '1,2,3').split(',')
-FS = f'http://{HOST}:8080/v1/projects/{PROJ}/databases/(default)/documents'
+FS = emu.FS_DOCS
 def wipe():
-    for u in [f'http://{HOST}:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://{HOST}:9099/emulator/v1/projects/{PROJ}/accounts']:
-        U.urlopen(U.Request(u, method='DELETE'))
+    emu.reset()  # 이 실행의 프로젝트만 지움
 def F(v):
     if isinstance(v, bool): return {'booleanValue': v}
     if isinstance(v, int): return {'integerValue': str(v)}
