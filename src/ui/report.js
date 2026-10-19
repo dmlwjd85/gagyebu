@@ -80,7 +80,8 @@ export async function drawReport(d, { dark = false } = {}) {
   });
   if (!d.top.length) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText(d.refund ? `이 달에는 환불만 있었어요(+${formatWon(d.refund)}).` : '이 달에는 지출 기록이 없어요.', 140, 860); }
   // 스티커: 무지출·연속 기록·기록 수
-  const chips = [`🌱 무지출 ${d.noSpend}일`, `🔥 ${d.streak}일 연속 기록`, `🧾 기록 ${d.count}건`];
+  // 연속 0일은 스티커에서 뺌(공유 이미지에 '0일 연속'은 어색함)
+  const chips = [`🌱 무지출 ${d.noSpend}일`, ...(d.streak > 0 ? [`🔥 ${d.streak}일 연속 기록`] : []), `🧾 기록 ${d.count}건`];
   ctx.font = `700 34px ${FONT}`;
   let x = 80;
   for (const t of chips) {

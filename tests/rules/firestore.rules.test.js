@@ -1,7 +1,9 @@
 import { readFileSync } from 'node:fs';
-import { describe, test, beforeAll, afterAll, beforeEach } from 'vitest';
+import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
 import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { recTxId } from '../../src/lib/recurring.js';
+import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../../src/lib/defaults.js';
 
 let env;
 beforeAll(async () => {
@@ -376,10 +378,11 @@ describe('N8 잔여 구분자 전수', () => {
       await assertFails(tx({ recurringId: v }));
     }
   });
-  test('예산 키: 밑줄·쉼표로 이은 카드번호 거부(쉼표 키가 여러 키처럼 통과하던 틈 포함)', async () => {
+  test('예산 키: 밑줄·쉼표·영문으로 이은 카드번호 거부(쉼표 키가 여러 키처럼 통과하던 틈 포함)', async () => {
     const b = (byCategory) => setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory });
     for (const v of CARD) await assertFails(b({ food: 1, [v]: 1 }));
     await assertFails(b({ 'food,cafe': 1 }));
+    await assertFails(b({ '1234a5678b9012c3456': 1 }));
     await assertSucceeds(b({ food: 1, cafe: 2, 'etc-in': 3, a_b: 4, Xk3J9aZ0qLm2nB7cD4eF: 5, n1234567890: 6 }));
   });
   test('문서 id(경로)도 같은 형식: 카드번호 모양 문서 거부, 정상 id 허용', async () => {
@@ -403,5 +406,107 @@ describe('N8 잔여 구분자 전수', () => {
   });
   test('카드 끝 4자리·자동 id·하이픈 기본 id는 그대로 허용', async () => {
     await assertSucceeds(tx({ importHash: '0123456789abcdef', card4: '7012', categoryId: 'etc-in', accountId: 'Xk3J9aZ0qLm2nB7cD4eF', recurringId: 'r1_2' }));
+  });
+});
+
+// ── QA 4차 R1: 앱이 실제로 만드는 문서 id로 생성·수정·삭제·복구 한 번씩 성공 ──
+// 하드코딩 문자열만으로 끝내지 않음 → 앱 생성 함수·기본값에서 id를 가져와 씀
+describe('R1 앱이 만드는 문서 id (생성 함수로 만든 id)', () => {
+  const TXB = { date: '2026-11-30', amount: 550000, kind: 'expense', categoryId: 'housing', memo: '월세', recurringId: 'r31' };
+
+  test('recTxId(반복id, ym)로 만든 거래: 생성·수정·삭제·복구', async () => {
+    // 짧은 영문 id·자동 id 모양·하이픈 기본 id를 반복 id로 씀(앱 saveRecurring은 Firestore 자동 id)
+    const rids = ['r31', 'r29', 'Xk3J9aZ0qLm2nB7cD4eF', 'rent_home'];
+    for (const rid of rids) {
+      const id = recTxId(rid, '2026-11');
+      expect(id).toBe(`rec-${rid}-2026-11`);
+      const ref = doc(alice(), `users/alice/transactions/${id}`);
+      await assertSucceeds(setDoc(ref, { ...TXB, recurringId: rid }));
+      await assertSucceeds(updateDoc(ref, { amount: 560000, memo: '월세 조정' }));
+      await assertSucceeds(deleteDoc(ref));
+      // 삭제 후 같은 id로 되살리기(restoreTx)
+      await assertSucceeds(setDoc(ref, { ...TXB, recurringId: rid, amount: 550000 }));
+      await assertSucceeds(deleteDoc(ref));
+    }
+    // 월말·윤년 경계 ym
+    for (const ym of ['2026-02', '2027-02', '2026-12']) {
+      const id = recTxId('r31', ym);
+      await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${id}`), { ...TXB, date: `${ym}-28`, recurringId: 'r31' }));
+    }
+  });
+
+  test('기본 카테고리·결제수단 id(defaults.js)로 문서·필드 쓰기', async () => {
+    for (const c of DEFAULT_CATEGORIES) {
+      await assertSucceeds(setDoc(doc(alice(), `users/alice/categories/${c.id}`), { name: c.name, emoji: c.emoji, kind: c.kind, order: c.order ?? 0 }));
+      await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tDef'), { ...TX, categoryId: c.id, kind: c.kind === 'income' ? 'income' : 'expense', amount: 1000 }));
+    }
+    for (const a of DEFAULT_ACCOUNTS) {
+      await assertSucceeds(setDoc(doc(alice(), `users/alice/accounts/${a.id}`), { name: a.name, type: a.type, emoji: a.emoji, order: 0 }));
+      await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tAcc'), { ...TX, accountId: a.id }));
+    }
+  });
+
+  test('Firestore 자동 id(doc)로 만든 거래·규칙·반복·목표: 생성·수정·삭제', async () => {
+    const txRef = doc(collection(alice(), 'users/alice/transactions'));
+    await assertSucceeds(setDoc(txRef, TX));
+    await assertSucceeds(updateDoc(txRef, { amount: 2000 }));
+    await assertSucceeds(deleteDoc(txRef));
+    await assertSucceeds(setDoc(txRef, TX)); // 복구
+
+    const ruleRef = doc(collection(alice(), 'users/alice/rules'));
+    await assertSucceeds(setDoc(ruleRef, { match: '스타벅스', categoryId: 'cafe', field: 'memo' }));
+    await assertSucceeds(updateDoc(ruleRef, { match: '스타벅스 리저브' }));
+    await assertSucceeds(deleteDoc(ruleRef));
+
+    const recRef = doc(collection(alice(), 'users/alice/recurring'));
+    await assertSucceeds(setDoc(recRef, { name: '넷플릭스', amount: 17000, kind: 'expense', categoryId: 'telecom', dayOfMonth: 15, active: true, startYm: '2026-10' }));
+    // 그 반복 id로 자동 기록 문서
+    const auto = recTxId(recRef.id, '2026-10');
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${auto}`), { ...TX, date: '2026-10-15', categoryId: 'telecom', recurringId: recRef.id, memo: '넷플릭스' }));
+    await assertSucceeds(updateDoc(doc(alice(), `users/alice/transactions/${auto}`), { amount: 18000 }));
+    await assertSucceeds(deleteDoc(doc(alice(), `users/alice/transactions/${auto}`)));
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${auto}`), { ...TX, date: '2026-10-15', categoryId: 'telecom', recurringId: recRef.id, memo: '넷플릭스' }));
+
+    const goalRef = doc(collection(alice(), 'users/alice/goals'));
+    await assertSucceeds(setDoc(goalRef, { name: '여행', target: 1000000, saved: 0, emoji: '✈️' }));
+    await assertSucceeds(updateDoc(goalRef, { saved: 10000 }));
+    await assertSucceeds(deleteDoc(goalRef));
+  });
+
+  test('가져오기 묶음 id(imp- + Date.now().toString(36)) 생성·거래 연결·삭제', async () => {
+    // src/ui/importer.js:105 와 같은 방식
+    const batchId = `imp-${Date.now().toString(36)}`;
+    expect(batchId).toMatch(/^imp-[0-9a-z]{6,12}$/);
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/imports/${batchId}`), { count: 2, at: serverTimestamp(), from: '2026-10-01', to: '2026-10-05', label: '현대카드' }));
+    const t1 = doc(collection(alice(), 'users/alice/transactions'));
+    await assertSucceeds(setDoc(t1, { ...TX, importHash: '0123456789abcdef', importBatch: batchId, card4: '7012' }));
+    await assertSucceeds(deleteDoc(t1));
+    await assertSucceeds(deleteDoc(doc(alice(), `users/alice/imports/${batchId}`)));
+  });
+
+  test('예산 ym 문서·카테고리 키(기본 id), 잘못된 rec- 형식은 거부', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/budgets/2026-11'), { total: 1500000, byCategory: { food: 400000, 'etc-in': 0, housing: 550000 } }));
+    // 가운데가 카드번호 모양·빈 구간·잘못된 달
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/rec-1234_5678_9012_3456-2026-11'), TXB));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/rec--2026-11'), TXB));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/rec-r31-2026-13'), TXB));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/rec-r31-202611'), TXB));
+    // 카테고리 문서에는 rec- 형식 불가(txDocId가 아님)
+    await assertFails(setDoc(doc(alice(), 'users/alice/categories/rec-r31-2026-11'), { name: 'x', emoji: '💳', kind: 'expense' }));
+  });
+});
+
+describe('R2 N8 잔여: 영문자 끼운 카드번호 모양', () => {
+  const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/n8c'), { ...TX, ...data });
+  test('recurringId·예산 키에서 영문자 구분 카드번호 거부', async () => {
+    for (const v of ['1234a5678b9012c3456', '4049x4700x0662x7012', '1234A5678B9012C3456']) {
+      await assertFails(tx({ recurringId: v }));
+      await assertFails(tx({ categoryId: v }));
+      await assertFails(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { [v]: 1 } }));
+    }
+  });
+  test('정상 자동 id·짧은 id는 그대로 허용', async () => {
+    await assertSucceeds(tx({ recurringId: 'Xk3J9aZ0qLm2nB7cD4eF', categoryId: 'food', accountId: 'card' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { food: 1, Xk3J9aZ0qLm2nB7cD4eF: 2, n1234567890: 3 } }));
   });
 });

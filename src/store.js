@@ -134,9 +134,17 @@ export async function saveTxBatch(list) {
     await b.commit();
   }
 }
-export function restoreTx(tx) { // 되돌리기: 같은 id로 되살림
+// 되돌리기: 같은 id로 되살림. 규칙이 그 id 쓰기를 거부하면(예전 형식·일시 오류) 새 자동 id로 살려 유실을 막음.
+export function restoreTx(tx) {
   const { id, ...rest } = tx;
-  fire(setDoc(u('transactions', id), { ...txFields(rest), ...(rest.createdAt ? { createdAt: rest.createdAt } : {}), updatedAt: serverTimestamp() }), writeErrorHandler);
+  const data = { ...txFields(rest), ...(rest.createdAt ? { createdAt: rest.createdAt } : {}), updatedAt: serverTimestamp() };
+  const p = setDoc(u('transactions', id), data).catch(async (e) => {
+    if (e?.code !== 'permission-denied') throw e;
+    const ref = doc(col('transactions'));
+    await setDoc(ref, { ...data, createdAt: rest.createdAt || serverTimestamp() });
+    writeErrorHandler?.({ code: 'restored-as-new', message: '같은 칸에 되돌리지 못해 새 기록으로 살렸어요.' });
+  });
+  fire(p, writeErrorHandler);
 }
 export const deleteTx = (id) => fire(deleteDoc(u('transactions', id)), writeErrorHandler);
 

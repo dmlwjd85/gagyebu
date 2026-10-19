@@ -18,13 +18,28 @@ service cloud.firestore {
         && int(v[8:10]) <= mdays(int(v[0:4]), int(v[5:7]));
     }
     function ym(v) { return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])$'); }
-    // id 형식: Firestore 자동 id(영문·숫자 20자)·짧은 영문 id('food'), 또는 소문자 낱말을 하이픈으로 이은 기본 id('etc-in').
-    // 쓸 수 있는 구분자는 밑줄(_)과 하이픈(-)뿐이고, 하이픈 묶음은 소문자만이라 숫자가 못 들어감.
-    // 숫자 13개 이상이 바로 붙거나 밑줄로만 이어지면 거부('1234567890123456', '1234_5678_9012_3456', '1_2_..._3')
-    // → 공백·점·하이픈·쉼표·슬래시 등 다른 구분자는 형식에서 이미 거부되므로 카드번호 모양 글자가 id 칸에 들어갈 수 없음
-    function id(v) {
-      return v is string && ((v.matches('^[A-Za-z0-9_]{1,64}$') && !v.matches('.*([0-9]_*){12}[0-9].*')) || v.matches('^[a-z]{1,20}(-[a-z]{1,20}){1,3}$'));
+    // id 형식(필드 값·대부분의 문서 경로): Firestore 자동 id(영문·숫자 20자)·짧은 영문 id('food'),
+    // 또는 소문자 낱말을 하이픈으로 이은 기본 id('etc-in').
+    // 카드번호 1차 방어는 앱이 끝 4자리만 저장하는 것(card4). 규칙의 2차 방어:
+    //   - 숫자 13개 이상(사이가 비어 있거나 영문·밑줄만 있어도) → 거부
+    //     예: '1234567890123', '1234_5678_9012_3456', '1234a5678b9012c3456'
+    //   - 공백·점·하이픈(숫자 끼움)·쉼표·슬래시 등은 위 문자 집합에 없어 형식에서 이미 거부
+    // 한계: 영문·숫자가 비슷하게 섞인 20자(자동 id와 비슷)는 막을 수 없음. 자동 id에 숫자 13개 이상일 확률은 극히 낮음.
+    function looksLikeCard(v) {
+      return v.matches('.*([0-9][A-Za-z_]*){12}[0-9].*');
     }
+    function id(v) {
+      return v is string && ((v.matches('^[A-Za-z0-9_]{1,64}$') && !looksLikeCard(v)) || v.matches('^[a-z]{1,20}(-[a-z]{1,20}){1,3}$'));
+    }
+    // 반복 거래 자동 기록 문서 id: 'rec-' + 유효한 반복 id + '-' + YYYY-MM (src/lib/recurring.js recTxId)
+    // 앞 4글자('rec-')와 뒤 8글자('-YYYY-MM')를 떼면 가운데가 반복 문서 id. 앱이 이미 쓰는 형식이라 바꾸지 않음.
+    function isRecTxId(v) {
+      return v is string && v.size() >= 12 && v.size() <= 80
+        && v.matches('^rec-.+-[0-9]{4}-(0[1-9]|1[0-2])$')
+        && id(v[4:v.size() - 8]);
+    }
+    // 거래 문서 경로 id: 일반 id 또는 반복 자동 기록 id
+    function txDocId(v) { return id(v) || isRecTxId(v); }
     // 태그 20개·각 1~20자 문자열. join 한 번으로 전체 검사(숫자 원소는 칸별로 거부, 줄바꿈 금지)
     function tagsOk(t) {
       return t is list && t.size() <= 20
@@ -39,12 +54,14 @@ service cloud.firestore {
     }
     // 카테고리별 예산: 카테고리 30개까지(규칙 식 1000개 한도), 키는 id 형식(join 한 번으로 검사), 값은 0원 ~ 100억 원 정수.
     // 키 안에 쉼표가 있으면 join 뒤 조각 수가 키 수보다 많아짐 → 거부('1234,5678,9012,3456' 한 키가 네 키처럼 통과하던 틈)
-    // 규칙 언어에 반복문이 없어 칸 번호로 하나씩 검사
+    // 카드번호 모양: 밑줄로 이은 것 + 영문으로 이은 것(쉼표 join이라 키 경계를 넘지 않음). 규칙 식 한도 때문에 칸마다 id()는 안 씀.
+    // 규칙 언어에 반복문이 없어 값은 칸 번호로 하나씩 검사
     function limitsOk(m) {
       return m is map && m.size() <= 30
         && (m.size() == 0 || (m.keys().join(',').matches('^([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3})(,([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3}))*$')
             && m.keys().join(',').split(',').size() == m.size()
-            && !m.keys().join(',').matches('.*([0-9]_*){12}[0-9].*')))
+            && !m.keys().join(',').matches('.*([0-9]_*){12}[0-9].*')
+            && !m.keys().join(',').matches('.*([0-9][A-Za-z]*){12}[0-9].*')))
         && limVals(m.values(), m.size());
     }
     function limVals(v, n) {
@@ -76,7 +93,7 @@ service cloud.firestore {
       match /transactions/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
-          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
+          && txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
                                  'importHash', 'importBatch', 'recurringId', 'card4'])

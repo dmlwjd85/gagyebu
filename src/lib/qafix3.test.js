@@ -8,6 +8,7 @@ import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from './defaults.js';
 import { homeView, chartView, budgetView, calendarView, topBar } from '../ui/views.js';
 import { searchView, recurringView } from '../ui/m2views.js';
 import { reportData } from '../ui/report.js';
+import { recTxId } from './recurring.js';
 
 // QA 재현: 10월 지출 40,000 + 9월 결제(89,000)의 10월 환불 −89,000, 8월은 환불만 3건, 10월 수입 100,000
 const T = (date, amount, categoryId, kind = 'expense', extra = {}) => ({ id: `${date}${categoryId}${amount}`, date, amount, kind, categoryId, accountId: 'card', ...extra });
@@ -45,15 +46,15 @@ describe('N10 환불이 지출보다 많은 달의 지출 표기', () => {
     expect(minusWon(40000, compactWon)).toBe('−40,000원');
     expect(minusWon(0)).toBe('0원');
   });
-  test('홈 요약 카드: "지출 0원" + "환불 +49,000원", 빼기 겹침·말줄임 없음', () => {
+  test('홈 요약 카드: "0원 +4.9만" 한 줄(360px 높이 유지), 빼기 겹침·말줄임 없음', () => {
     const m = model('2026-10');
     expect(m.tot.expense).toBe(-49000);
     const h = homeView(m);
     noBadSigns(h);
-    expect(text(h)).toMatch(/지출 0원 환불 \+49,000원/);
     expect(h).toContain('aria-label="지출 0원, 환불 49,000원이 더 많아요"');
-    // 환불 줄은 truncate(말줄임) 없이 줄바꿈 가능, 금액은 한 덩어리
-    expect(h).toMatch(/break-keep[^>]*>환불 <span class="whitespace-nowrap">\+49,000원/);
+    expect(text(h)).toMatch(/지출 0원 \+4\.9만/);
+    expect(h).toContain('>+4.9만</span>');
+    expect(h).toContain('whitespace-nowrap');
   });
   test('8월(환불만): 홈·차트·예산·달력·검색 모두 음수 지출 표기 없음', () => {
     const m = model('2026-08', { budget: { total: 300000 } });
@@ -214,5 +215,27 @@ describe('추가로 찾은 것', () => {
     expect(heatLevel(-20000, 50000)).toBe(0);
     expect(heatLevel(50000, 50000)).toBe(4);
     expect(heatLevel(10, 0)).toBe(0);
+  });
+});
+
+describe('QA 4차 낮음·표기', () => {
+  test('예산 카테고리 환불 문구에 +', () => {
+    const m = model('2026-10', { budget: { total: 300000, byCategory: { fashion: 30000 } } });
+    // 쇼핑·패션에 환불 −89000 → envelope refund
+    expect(budgetView(m, { envelopes: true })).toContain('환불 +89,000원이 더 많아 사용 0원으로 봐요');
+  });
+  test('리포트 스티커: 연속 0일이면 제외', () => {
+    const d = reportData(model('2026-10'));
+    expect(d.streak).toBe(0);
+    // drawReport chips 구성은 소스에서 확인
+    const src = readFileSync('src/ui/report.js', 'utf8');
+    expect(src).toMatch(/d\.streak > 0 \? .*연속 기록/);
+  });
+});
+
+describe('R1 recTxId 형식(앱·규칙 공통)', () => {
+  test('rec-{id}-{YYYY-MM}', () => {
+    expect(recTxId('r31', '2026-11')).toBe('rec-r31-2026-11');
+    expect(recTxId('Xk3J9aZ0qLm2nB7cD4eF', '2027-02')).toBe('rec-Xk3J9aZ0qLm2nB7cD4eF-2027-02');
   });
 });

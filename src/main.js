@@ -576,7 +576,17 @@ if (isFirebaseConfigured) {
   data = await import('./data.js');
   state = data.state;
   initSheet({ getState: () => state, onSave, onDelete });
-  data.onWriteError((e) => toast(e?.code === 'permission-denied' ? '저장 권한이 없어요. 다시 로그인해 주세요.' : '저장하지 못했어요. 잠시 후 다시 시도해 주세요.'));
+  data.onWriteError((e) => {
+    if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
+    if (e?.code === 'permission-denied') {
+      // 로그인 만료와 규칙 거부를 구분(반복 id 거부 때 '다시 로그인'은 틀린 안내였음, QA R1)
+      const signedIn = !!data.state?.user;
+      return toast(signedIn
+        ? '저장이 거부됐어요. 문제가 계속되면 알려 주세요.'
+        : '로그인이 만료됐어요. 다시 로그인해 주세요.');
+    }
+    return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+  });
   data.subscribe(schedule);
   data.initAuth();
   pickTip();

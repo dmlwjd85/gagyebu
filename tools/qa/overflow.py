@@ -38,7 +38,7 @@ with sync_playwright() as p:
     pg.evaluate(f"""(() => {{ const g = window.__gagyebu, d = g.data, t = g.state.txs[0]?.date || '2026-10-10';
       d.saveGoal({{ name: '{LONG}', emoji: '🛟', target: 3000000, saved: 2100000, order: 0 }});
       d.saveGoal({{ name: 'Supercalifragilisticexpialidocious', emoji: '✈️', target: 1200000, saved: 10, order: 1 }});
-      d.saveRecurring({{ name: '넷플릭스 프리미엄 가족 요금제 4인 공유', amount: 17000, kind: 'expense', categoryId: 'telecom', dayOfMonth: 31, active: true, startYm: '2026-10', lastPosted: '2026-10' }});
+      d.saveRecurring({{ name: '넷플릭스 프리미엄 가족 요금제 4인 공유', amount: 17000, kind: 'expense', categoryId: 'telecom', dayOfMonth: 31, active: true, startYm: '2026-10' }});
       d.saveCategory({{ name: '아주아주긴카테고리이름스무자까지', emoji: '🧪', kind: 'expense', order: 99 }});
       d.saveAccount({{ name: '아주아주긴결제수단이름스무자까지요', emoji: '💳', type: 'card', order: 9 }});
       d.saveTx({{ date: t, amount: 123456789, kind: 'expense', categoryId: 'etc', memo: 'Averyveryverylongmerchantnamewithoutanyspaces_LLC_Korea_Branch #아주긴태그이름도있어요' }});
@@ -49,14 +49,17 @@ with sync_playwright() as p:
       d.saveCategory({{ name: '{'M' * 20}', emoji: '🧪', kind: 'income', order: 100 }});
       d.saveGoal({{ name: '{'가' * 30}', emoji: '🛟', target: 9999999999, saved: 123456789, order: 2 }});
       d.saveGoal({{ name: '{'W' * 30}', emoji: '✈️', target: 1000, saved: 999, order: 3 }});
-      d.saveRecurring({{ name: '{'가' * 30}', amount: 999999999, kind: 'expense', categoryId: 'telecom', dayOfMonth: 31, active: true, startYm: '2026-10', lastPosted: '2026-10' }});
+      d.saveRecurring({{ name: '{'가' * 30}', amount: 999999999, kind: 'expense', categoryId: 'telecom', dayOfMonth: 31, active: true, startYm: '2026-10' }});
       d.saveRule({{ match: '{'X' * 40}', categoryId: 'cafe' }}); d.saveRule({{ match: '{'긴' * 40}', categoryId: 'food' }});
       d.saveTx({{ date: t, amount: 5000, kind: 'expense', categoryId: 'etc', memo: '{'메' * 100} #{'태' * 20}' }});
       // QA 3차 N10·N12: 환불이 지출보다 많은 달·환불만 있는 달(6개월 전)
       const ym = (k) => {{ const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - k); return `${{x.getFullYear()}}-${{String(x.getMonth() + 1).padStart(2, '0')}}`; }};
       d.saveTx({{ date: ym(5) + '-02', amount: -9876543, kind: 'expense', categoryId: 'living', memo: '환불', importHash: '0123456789abcde3' }});
       d.saveTx({{ date: ym(8) + '-03', amount: -1234567, kind: 'expense', categoryId: 'fashion', memo: '환불', importHash: '0123456789abcde1' }});
-      d.saveTx({{ date: ym(8) + '-04', amount: -45000, kind: 'expense', categoryId: 'health', memo: '환불', importHash: '0123456789abcde2' }});
+      
+      // QA 4차 R1: lastPosted 없는 반복 → 자동 기록이 실제로 일어나게(overflow가 문제를 가리지 않게)
+      d.saveRecurring({{ name: '스모크월세', amount: 1000, kind: 'expense', categoryId: 'housing', dayOfMonth: 1, active: true, startYm: '2020-01' }});
+d.saveTx({{ date: ym(8) + '-04', amount: -45000, kind: 'expense', categoryId: 'health', memo: '환불', importHash: '0123456789abcde2' }});
     }})()""")
     pg.wait_for_timeout(1500)
     G = lambda v: pg.evaluate(f"window.__gagyebu.go('{v}')") or pg.wait_for_timeout(500)

@@ -89,11 +89,13 @@ export function homeView(m) {
     </section></div>`;
 }
 // 지출 칸: 환불이 더 많은 달은 '0원' + 아랫줄 '환불 +49,000원'(빼기 기호 겹침·말줄임 없음, QA N10)
+// 환불이 더 많은 달: 짧은 '+4.9만'으로 한 줄 유지 → 세 칸 높이 68px(360px, QA R4)
 const spendStat = (net) => {
   const { spent, refund } = spendParts(net);
   if (!refund) return stat('지출', minusWon(net, compactWon), formatWon(spent), 'text-expense');
-  return `<div class="glass p-3 min-w-0" role="group" aria-label="지출 0원, 환불 ${esc(formatWon(refund))}이 더 많아요"><p class="text-caption text-ink-sub" aria-hidden="true">지출</p><p class="stat-v tabular-nums" aria-hidden="true">0원</p>
-    <p class="text-micro font-semibold text-income tabular-nums break-keep" aria-hidden="true" title="환불 ${esc(formatWon(refund))}">환불 <span class="whitespace-nowrap">+${esc(compactWon(refund))}</span></p></div>`;
+  const short = '+' + shortWon(refund);
+  return `<div class="glass p-3 min-w-0" role="group" aria-label="지출 0원, 환불 ${esc(formatWon(refund))}이 더 많아요"><p class="text-caption text-ink-sub" aria-hidden="true">지출</p>
+    <p class="stat-v tabular-nums whitespace-nowrap" aria-hidden="true" title="환불 ${esc(formatWon(refund))}">0원 <span class="text-micro font-semibold text-income">${esc(short)}</span></p></div>`;
 };
 const stat = (k, v, full, cls) => `<div class="glass p-3 min-w-0" role="group" aria-label="${k} ${esc(full)}"><p class="text-caption text-ink-sub" aria-hidden="true">${k}</p><p class="stat-v tabular-nums ${cls}" title="${esc(full)}" aria-hidden="true">${esc(v)}</p></div>`;
 const skeleton = (n) => `<ul class="mt-2 space-y-2" aria-busy="true" aria-label="불러오는 중">${'<li class="skeleton h-12 rounded-md"></li>'.repeat(n)}</ul>`;
@@ -265,7 +267,7 @@ export function budgetView(m, ui) {
           <span class="tabular-nums text-caption ${e.over ? 'text-expense font-semibold' : 'text-ink-sub'}">${formatWon(e.used)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
           <div class="mt-1.5 h-2 rounded-full bg-line overflow-hidden"><div class="h-2 rounded-full ${e.over ? 'bg-expense' : e.near ? 'bg-chart-3' : 'bg-primary'}" style="width:${e.width}%"></div></div>
           ${e.over ? `<p class="mt-1 text-caption text-expense font-semibold">${formatWon(e.used - lim)} 넘쳤어요</p>` : e.near ? `<p class="mt-1 text-caption text-chart-3 font-semibold">한도의 ${e.pct}%예요</p>` : ''}
-          ${e.refund ? `<p class="mt-1 text-caption text-income font-semibold">환불 ${formatWon(e.refund)}이 더 많아 사용 0원으로 봐요</p>` : ''}</button></li>`;
+          ${e.refund ? `<p class="mt-1 text-caption text-income font-semibold">환불 +${formatWon(e.refund)}이 더 많아 사용 0원으로 봐요</p>` : ''}</button></li>`;
       }).join('')}</ul>` : ''}
     </section>
     ${goalsCard(m)}</div></div>`;
