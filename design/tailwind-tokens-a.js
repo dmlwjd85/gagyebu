@@ -34,7 +34,6 @@ export const colors = {
   fab: { 1: 'var(--fab-1)', 2: 'var(--fab-2)' }, // ＋버튼 그라데이션
   aurora: { 1: 'var(--aurora-1)', 2: 'var(--aurora-2)', 3: 'var(--aurora-3)' }, // 배경 오로라
   heat: { 1: 'var(--heat-1)', 2: 'var(--heat-2)', 3: 'var(--heat-3)', 4: 'var(--heat-4)' }, // 달력 히트맵
-  chart: { 1: 'var(--chart-1)', 2: 'var(--chart-2)', 3: 'var(--chart-3)', 4: 'var(--chart-4)', 5: 'var(--chart-5)', 6: 'var(--chart-6)', 7: 'var(--chart-7)' }, // 차트 색
   weather: { sunny: 'var(--weather-sunny)', cloudy: 'var(--weather-cloudy)', rainy: 'var(--weather-rainy)' }, // 돈 날씨 칩
 }
 
