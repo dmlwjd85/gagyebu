@@ -25,6 +25,7 @@ import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
 import { createUpdater } from './lib/pwa.js';
+import { isBusyNow } from './lib/busy.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
@@ -590,8 +591,9 @@ let raf = 0;
 const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!isSheetOpen() || ui.view) render(); }); };
 
 // 새 버전 적용(QA 3차 N3, src/lib/pwa.js). 입력 중인 내용이 있으면 바로 다시 불러오지 않고 안내만
-const isBusy = () => !!state?.user && (isSheetOpen() || !!document.querySelector('[role=alertdialog],[role=dialog]')
-  || (ui.view === 'import' && (ui.imp?.step ?? 1) > 1) || !!(document.activeElement?.matches?.('input,textarea') && document.activeElement.value));
+// 빈 시트(늘 DOM에 있음)는 '입력 중'이 아님(QA 4차 4-1). 판단은 src/lib/busy.js
+const isBusy = () => isBusyNow({ doc: document, signedIn: !!state?.user, sheetOpen: isSheetOpen(),
+  importing: ui.view === 'import' && (ui.imp?.step ?? 1) > 1 });
 const updater = createUpdater({ base: import.meta.env.BASE_URL, isBusy, canApplyAnytime: () => !state?.user,
   onReady: () => { ui.updateReady = true; render(); } });
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
