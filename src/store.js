@@ -1,11 +1,11 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, getDoc, getDocFromCache, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, getDoc, getDocFromCache, getDocFromServer, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
-import { dueOccurrences, recParts, addSkipped, dropSkipped, bumpLastPosted } from './lib/recurring.js';
+import { dueOccurrences, recParts, addSkipped, dropSkipped, bumpLastPosted, settledLastPosted, deniedOutcome } from './lib/recurring.js';
 import { safeRef, isRuleId, fixedRecId } from './lib/ids.js';
 import { restorePlans, keptList, keepTx, unkeep, keepIdOf, editTarget } from './lib/restore.js';
 
@@ -79,20 +79,53 @@ export function startUser() {
 // 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
 // 자동 기록은 '없을 때만 만들기'(QA D1): 사용자가 고친 같은 달 기록을 덮어쓰지 않음.
 //  - 이미 있으면(서버, 오프라인이면 이 기기 캐시) 건너뜀. 지운 달(skipped)도 건너뜀
-//  - 그래도 오프라인 대기열 등으로 겹치면 규칙이 막음(origin 'auto'·새 createdAt인 쓰기는 이미 있는 문서에 거부) → 조용히 넘어감
-//  - 회차마다 따로 쓰고 lastPosted는 따로 올림: 한 달이 막혀도 다음 달 기록·lastPosted가 막히지 않음
+//  - 그래도 오프라인 대기열 등으로 겹치면 규칙이 막음(origin 'auto'·새 createdAt인 쓰기는 이미 있는 문서에 거부)
+//  - 거부되면 서버에서 다시 읽어 '정말 있음'이나 '지운 달'일 때만 처리한 것으로 봄(QA 3차 N1).
+//    둘 다 아니면(예: 앱이 규칙보다 먼저 배포됨) 그 달은 처리 못 한 것 → lastPosted를 그 앞에서 멈추고 다음에 다시 시도
+//  - 회차마다 따로 쓰고, lastPosted는 모든 회차 결과를 본 뒤 앞에서부터 이어서 처리된 달까지만 올림
 // 규칙에 맞지 않는 예전 반복 id(숫자 13개 이상)는 늘 같은 새 id로 옮긴 뒤 기록(옮기기는 한 묶음).
 const recFields = (r) => clean({ name: r.name, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
   active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, skipped: r.skipped?.length ? r.skipped : undefined, createdAt: r.createdAt });
-async function autoCreate(ref, data) {
+// 결과: 'done'(만들었음·이미 있음·지운 달) | 'gone'(반복이 지워짐) | 'failed'(다음에 다시)
+async function autoCreate(ref, data, recRef, ym) {
   try {
     const s = await (globalThis.navigator?.onLine === false ? getDocFromCache(ref) : getDoc(ref));
-    if (s.exists()) return false;
+    if (s.exists()) return 'done';
   } catch { /* 캐시에 없음: 만들어 봄 */ }
-  try { await setDoc(ref, data); return true; } catch (e) {
-    if (e?.code === 'permission-denied') { console.info('[쓱 가계부] 이미 있는(또는 지운) 달이라 자동 기록을 건너뛰었어요:', ref.id); return false; }
-    throw e;
+  try { await setDoc(ref, data); return 'done'; } catch (e) {
+    if (e?.code !== 'permission-denied') throw e;
+    try {
+      const [t, r] = await Promise.all([getDocFromServer(ref), getDocFromServer(recRef)]);
+      const out = deniedOutcome({ txExists: t.exists(), recExists: r.exists(), skipped: r.data()?.skipped, ym });
+      if (out !== 'failed') console.info('[쓱 가계부] 이미 있는(또는 지운) 달이라 자동 기록을 건너뛰었어요:', ref.id);
+      return out;
+    } catch (e2) { console.error(e2); return 'failed'; } // 확인하지 못하면 처리 못 한 것으로(다음에 다시)
   }
+}
+let pendingNoticeShown = false;
+const posting = new Set(); // 같은 반복을 겹쳐 처리하지 않게(앱 시작·자정·반복 저장이 겹칠 때)
+async function postOne(r, rid, due) {
+  if (posting.has(rid)) return;
+  posting.add(rid);
+  try { await postOneNow(r, rid, due); } finally { posting.delete(rid); }
+}
+async function postOneNow(r, rid, due) {
+  const skipped = r.skipped || [];
+  const results = await Promise.all(due.map((o) => (skipped.includes(o.ym) ? 'done'
+    : autoCreate(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: rid,
+      origin: 'auto', createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), u('recurring', r.id), o.ym) // 예전 id면 옮기기 전 문서로 확인
+      .catch((e) => { console.error(e); writeErrorHandler?.(e); return 'failed'; }))));
+  const failed = results.filter((x) => x === 'failed').length;
+  if (failed && !pendingNoticeShown) { pendingNoticeShown = true; writeErrorHandler?.({ code: 'recurring-pending', count: failed }); }
+  if (results.includes('gone')) return; // 다른 기기에서 반복을 지움: 더 쓸 것 없음
+  const lastPosted = settledLastPosted(r.lastPosted, due, results);
+  if (rid === r.id) {
+    if (lastPosted !== r.lastPosted) fire(() => updateDoc(u('recurring', rid), { lastPosted, updatedAt: serverTimestamp() }), writeErrorHandler);
+    return;
+  }
+  const b = writeBatch(db);
+  b.set(u('recurring', rid), { ...recFields({ ...r, lastPosted }), updatedAt: serverTimestamp() }); b.delete(u('recurring', r.id));
+  fire(b.commit(), writeErrorHandler);
 }
 export function postRecurring(today) {
   let n = 0;
@@ -100,20 +133,8 @@ export function postRecurring(today) {
     const rid = isRuleId(r.id) ? r.id : fixedRecId(r.id);
     const due = dueOccurrences({ ...r, id: rid }, today);
     if (!due.length && rid === r.id) continue;
-    const skipped = r.skipped || [];
-    for (const o of due) {
-      if (skipped.includes(o.ym)) continue;
-      autoCreate(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: rid,
-        origin: 'auto', createdAt: serverTimestamp(), updatedAt: serverTimestamp() })).catch((e) => { console.error(e); writeErrorHandler?.(e); });
-      n++;
-    }
-    const lastPosted = due.length ? due[due.length - 1].ym : r.lastPosted;
-    if (rid === r.id) fire(() => updateDoc(u('recurring', rid), { lastPosted, updatedAt: serverTimestamp() }), writeErrorHandler);
-    else {
-      const b = writeBatch(db);
-      b.set(u('recurring', rid), { ...recFields({ ...r, lastPosted }), updatedAt: serverTimestamp() }); b.delete(u('recurring', r.id));
-      fire(b.commit(), writeErrorHandler);
-    }
+    n += due.filter((o) => !(r.skipped || []).includes(o.ym)).length;
+    postOne(r, rid, due).catch((e) => console.error(e));
   }
   return n;
 }

@@ -16,6 +16,34 @@ export const SKIP_MAX = 24;
 export const addSkipped = (list = [], ym) => [...new Set([...list, ym])].sort().slice(-SKIP_MAX);
 export const dropSkipped = (list = [], ym) => list.filter((x) => x !== ym);
 /**
+ * 자동 기록 결과로 올려도 되는 lastPosted(QA 3차 N1).
+ * 회차 순서대로 앞에서부터 이어서 처리된('done') 달까지만 올림. 처리 못 한 달('failed')이 있으면 그 앞에서 멈춰서
+ * 다음에 열 때 그 달부터 다시 시도(이미 만든 뒤쪽 달은 '있으면 건너뛰기'라 두 번 생기지 않음).
+ * @param {string|undefined} lastPosted 지금 값
+ * @param {{ym: string}[]} due 회차(오래된 순)
+ * @param {('done'|'failed')[]} results 회차별 결과
+ * @returns {string|undefined}
+ */
+export function settledLastPosted(lastPosted, due, results) {
+  let lp = lastPosted;
+  for (let i = 0; i < due.length; i++) {
+    if (results[i] !== 'done') break;
+    lp = due[i].ym;
+  }
+  return lp;
+}
+/**
+ * 자동 기록 쓰기가 규칙에 거부됐을 때, 서버에서 다시 읽은 사실로 그 달을 어떻게 볼지(QA 3차 N1).
+ * 거부를 곧바로 '이미 있음'으로 보면, 규칙이 다른 이유(예: 앱이 규칙보다 먼저 배포됨)로 막았을 때 그 달이 영구히 빠짐.
+ * @param {{txExists: boolean, recExists: boolean, skipped?: string[], ym: string}} f
+ * @returns {'done'|'gone'|'failed'} done = 정말 있거나 사용자가 지운 달, gone = 반복이 지워짐, failed = 다음에 다시
+ */
+export function deniedOutcome({ txExists, recExists, skipped = [], ym }) {
+  if (txExists) return 'done';
+  if (!recExists) return 'gone';
+  return skipped.includes(ym) ? 'done' : 'failed';
+}
+/**
  * 사용자가 그 달 자동 기록을 직접 고쳤을 때 lastPosted를 그 달로 올릴지(빈 달이 생기지 않을 때만).
  * @returns {string|null} 새 lastPosted(바꿀 필요 없으면 null)
  */

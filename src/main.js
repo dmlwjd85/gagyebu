@@ -591,6 +591,8 @@ if (isFirebaseConfigured) {
   initSheet({ getState: () => state, onSave, onDelete });
   data.onWriteError((e, retry) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
+    // 반복 자동 기록이 거부됐고, 서버에서 확인해 보니 정말 없는 달(QA 3차 N1): 그 달은 다음에 열 때 다시 시도
+    if (e?.code === 'recurring-pending') return toast(`반복 기록 ${e.count}건을 아직 못 남겼어요. 다음에 앱을 열면 다시 해 볼게요.`, { duration: 6000 });
     if (e?.code === 'kept-locally') return toast(e.message, { action: '설정 열기', onAction: () => go('settings'), duration: 8000 });
     if (e?.code === 'permission-denied') {
       // 로그인 만료와 규칙 거부를 구분(반복 id 거부 때 '다시 로그인'은 틀린 안내였음, QA R1)
