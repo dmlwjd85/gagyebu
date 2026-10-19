@@ -1,4 +1,11 @@
 @import '../design/tokens-a.css';
+/* 글꼴 자리(design-spec 1-4) — 지금은 셋 다 Pretendard. '쓱 제목체·쓱 본문체'가 오면 이 변수만 바꾸면 됨.
+   --font-num: 쓱 본문체에 같은 폭 숫자(tnum)가 없으면 Pretendard를 그대로 둘 것 */
+:root {
+  --font-title: "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
+  --font-body: "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
+  --font-num: "Pretendard Variable", Pretendard, -apple-system, "Noto Sans KR", sans-serif;
+}
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
@@ -15,6 +22,11 @@
 }
 
 @layer components {
+  /* 글꼴 자리 배정: 금액·날짜(tabular-nums)·키패드 = font-num, 제목·카드 제목·홈 카드 큰 금액·요약 금액 = font-title(같은 폭 숫자 유지).
+     템플릿마다 클래스를 붙이지 않고 기존 글자 크기 이름에 묶어 레이아웃 작업(zoom-layout)과 겹치지 않게 함 */
+  .tabular-nums, .key, .amount-display { font-family: var(--font-num); }
+  h1, h2, h3, .text-title, .text-head, .text-display, .stat-v { font-family: var(--font-title); }
+  .text-display, .stat-v, .amount-display { font-variant-numeric: tabular-nums; }
   .aurora { position: fixed; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg);
     background-image: radial-gradient(60% 50% at 10% 0%, var(--aurora-1) 0%, transparent 60%),
       radial-gradient(50% 45% at 100% 10%, var(--aurora-2) 0%, transparent 60%),
@@ -37,7 +49,7 @@
   .icon-btn:hover:not(:disabled) { background: var(--line); }
   .icon-btn:disabled { opacity: .35; }
   .month-btn { @apply min-h-[44px] px-2 rounded-xl text-title whitespace-nowrap; }
-  .link-btn { @apply min-h-[44px] px-2 text-caption font-semibold; color: var(--primary); }
+  .link-btn { @apply inline-flex items-center justify-center min-h-[44px] min-w-[44px] px-2 text-caption font-semibold; color: var(--primary); } /* '더 보기 ›' 등 터치 영역 44px */
   .chip { @apply inline-flex items-center gap-1 min-h-[44px] px-3 rounded-full text-caption font-semibold border; border-color: var(--line); background: var(--surface-solid); }
   .chip:disabled { opacity: .4; }
   .chip[aria-checked="true"] { border-color: var(--primary); color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }

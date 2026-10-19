@@ -168,7 +168,7 @@ export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
       }
     }
     if (!fromKeep) { keepTx(uid, tx); state.kept = keptList(uid); emit(); }
-    if (!quiet) writeErrorHandler?.({ code: 'kept-locally', message: '서버에 저장하지 못해 이 기기에 따로 보관해 두었어요. 설정 › 데이터에서 다시 저장하거나 CSV로 받을 수 있어요.' });
+    if (!quiet) writeErrorHandler?.({ code: 'kept-locally', message: '서버에 저장하지 못해서, 이 기기에 따로 담아 뒀어요. 설정 › 데이터에서 다시 저장하거나 CSV로 받아요.' });
     return false;
   };
   const p = run();

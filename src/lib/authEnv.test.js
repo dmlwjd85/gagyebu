@@ -37,8 +37,8 @@ describe('로그인 방식 고르기', () => {
   });
   it('상황에 맞는 안내 문구', () => {
     expect(loginErrorMessage('auth/internal-error', { iosHomeApp: true, sameOrigin: false })).toMatch('Safari');
-    expect(loginErrorMessage('auth/internal-error', { iosHomeApp: true, sameOrigin: true })).toBe('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    expect(loginErrorMessage('auth/internal-error', { iosHomeApp: true, sameOrigin: true })).toBe('로그인하지 못했어요. 잠시 후 다시 해 주세요.');
     expect(loginErrorMessage('auth/network-request-failed')).toMatch('인터넷');
-    expect(loginErrorMessage('x')).toBe('로그인하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    expect(loginErrorMessage('x')).toBe('로그인하지 못했어요. 잠시 후 다시 해 주세요.');
   });
 });

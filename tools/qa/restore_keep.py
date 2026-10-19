@@ -61,7 +61,7 @@ with sync_playwright() as p:
     R['page_errors'] = errs
     b.close()
 print(json.dumps(R, ensure_ascii=False, indent=1))
-ok = (R['restored'] is False and R['kept_ls'] == 1 and '보관' in R['toast'] and R['row'] and R['row_after_reload'] == 1 and R['csv_has_row']
+ok = (R['restored'] is False and R['kept_ls'] == 1 and '담아 뒀어요' in R['toast'] and R['row'] and R['row_after_reload'] == 1 and R['csv_has_row']
       and '아직 저장하지 못했어요' in R['retry_fail_toast'] and R['row_after_ok'] == 0 and R['server_has'] and R['kept_ls_after'] is None and not errs)
 print('결과:', '통과' if ok else '실패')
 sys.exit(0 if ok else 1)

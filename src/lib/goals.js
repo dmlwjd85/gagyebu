@@ -17,9 +17,9 @@ export function goalProgress(g, today) {
 }
 export function validateGoal(g) {
   const name = (g.name ?? '').trim();
-  if (!name) return '목표 이름을 입력해 주세요.';
+  if (!name) return '목표 이름을 적어 주세요.';
   if (name.length > 30) return '이름은 30자까지예요.';
-  if (!Number.isInteger(g.target) || g.target <= 0) return '목표 금액을 입력해 주세요.';
+  if (!Number.isInteger(g.target) || g.target <= 0) return '목표 금액을 적어 주세요.';
   if (g.target > 10_000_000_000) return '목표는 100억 원까지예요.';
   if (!Number.isInteger(g.saved ?? 0) || (g.saved ?? 0) < 0) return '모은 금액이 올바르지 않아요.';
   return null;

@@ -118,7 +118,7 @@ function render() {
 
 function setDigits(next) {
   next = next.replace(/^0+(?=\d)/, '');
-  if (next && parseInt(next, 10) > MAX_AMOUNT) { s.error = '한 번에 10억 원까지 입력할 수 있어요.'; s.shake = true; haptic(20); render(); return; }
+  if (next && parseInt(next, 10) > MAX_AMOUNT) { s.error = '한 번에 10억 원까지 적을 수 있어요.'; s.shake = true; haptic(20); render(); return; }
   s.digits = next === '0' ? '' : next; s.error = '';
   render();
 }
@@ -137,7 +137,7 @@ async function save() {
   if (err) { s.error = err; s.shake = true; haptic(20); render(); return; }
   if (!s.id) {
     const dup = ctx.getState().txs.find((t) => t.date === tx.date && t.categoryId === tx.categoryId && t.amount === tx.amount && t.kind === tx.kind);
-    if (dup && !(await confirmDialog({ title: '혹시 중복인가요?', body: '같은 날 같은 카테고리·금액 기록이 이미 있어요.', ok: '그래도 저장', cancel: '취소' }))) return;
+    if (dup && !(await confirmDialog({ title: '혹시 중복인가요?', body: '같은 날 같은 카테고리·금액 기록이 이미 있어요.', ok: '그래도 저장', cancel: '닫기' }))) return;
   }
   pushRecent(tx.categoryId);
   if (tx.accountId) localStorage.setItem('lastAccount', tx.accountId);

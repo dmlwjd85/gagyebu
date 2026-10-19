@@ -125,7 +125,7 @@ function renderTip() {
   if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
   slot.innerHTML = `<div class="tip ${tipCollapsed ? 'collapsed' : ''}" aria-live="polite">
     ${tipCollapsed ? `<button class="tip-mini" data-tip-open aria-label="팁 보기">💡</button>`
-      : `<span aria-hidden="true">💡</span><p class="flex-1">${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button>`}</div>`;
+      : `<p class="flex-1">${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button>`}</div>`;
 }
 
 // ── 동작 ───────────────────────────────────────────
@@ -154,8 +154,8 @@ function onSave(tx, { repeat = false } = {}) {
   }
   setTimeout(() => {
     const m = model();
-    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
-    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요.' : '기록!'}${extra}`, {
+    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` · 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
+    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요.' : '남겼어요'}${extra}`, {
       action: '되돌리기', onAction: () => (before ? data.restoreTx(before) : data.deleteTx(id)),
     });
   }, 50);
@@ -168,7 +168,7 @@ function onDelete(id) {
   const before = findTx(id);
   data.deleteTx(id);
   if (ui.searchAll) { ui.searchAll = ui.searchAll.filter((t) => t.id !== id); if (ui.view === 'search') schedule(); }
-  toast('삭제했어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
+  toast('지웠어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
 }
 function download(name, text, type = 'text/csv;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -200,7 +200,7 @@ async function editRecurring(r) {
       { name: 'dayOfMonth', label: '매달 며칠', type: 'select', value: r?.dayOfMonth ?? Number(t.slice(8)), options: Array.from({ length: 31 }, (_, i) => [i + 1, `${i + 1}일`]) },
       { name: 'accountId', label: '결제수단', type: 'select', value: r?.accountId ?? '', options: [['', '지정 안 함'], ...state.accounts.map((a) => [a.id, `${a.emoji || ''} ${a.name}`])] },
     ],
-    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 입력해 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
+    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 적어 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
   });
   if (!v) return;
   const c = state.categories.find((x) => x.id === v.categoryId);
@@ -418,12 +418,12 @@ app.addEventListener('click', async (e) => {
       return;
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
-    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
+    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 줄게요.');
     case 'kept-retry': {
       if (!navigator.onLine) return toast('인터넷이 연결되면 다시 눌러 주세요. 기록은 이 기기에 그대로 있어요.');
       const r = await data.retryKept();
       if (!r.left) return toast(r.saved > 1 ? `보관해 둔 기록 ${r.saved}건을 모두 저장했어요.` : '보관해 둔 기록을 저장했어요.');
-      return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두시면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
+      return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
     }
     case 'kept-csv': return download(`쓱가계부_보관기록_${m.today}.csv`, toCSV(state.kept, state));
     case 'csv-month': return download(`쓱가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
@@ -451,7 +451,7 @@ app.addEventListener('click', async (e) => {
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'delete-all':
-      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 지워지고 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
+      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 다 지워지고, 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
       try { const r = await data.deleteEverything(); toast(r === 'deleted' ? '모두 지웠어요.' : '기록을 지웠어요. 계정 삭제는 다시 로그인한 뒤 해 주세요.'); }
       catch { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
   }
@@ -468,7 +468,7 @@ app.addEventListener('change', (e) => {
   if (t.dataset.accName) {
     const a = state.accounts.find((x) => x.id === t.dataset.accName), name = t.value.trim();
     if (!name || name.length > 20) { toast('이름은 1~20자로 적어 주세요.'); t.value = a?.name ?? ''; return; }
-    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 저장하지 않아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
+    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 안 받아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
     if (a && a.name !== name) data.saveAccount({ ...a, name });
   }
   if (t.dataset.accType) { const a = state.accounts.find((x) => x.id === t.dataset.accType); if (a) data.saveAccount({ ...a, type: t.value }); }
@@ -540,7 +540,7 @@ const dayCheck = () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
 setInterval(dayCheck, 60_000);
 window.addEventListener('hashchange', () => { if (hashView() !== ui.view) go(hashView()); });
-window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
+window.addEventListener('offline', () => { render(); toast('인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 알아서 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
 
 // 거래 밀어서 지우기 (왼쪽으로 40% 이상 밀면 삭제 + 되돌리기). 키보드·스크린리더는 거래를 눌러 시트의 🗑️ 사용
@@ -591,10 +591,10 @@ if (isFirebaseConfigured) {
       // 앱 안에 문의 창구가 없으므로 사용자가 직접 할 수 있는 일을 안내(QA R8)
       const signedIn = !!data.state?.user;
       return signedIn
-        ? toast('이번 기록은 저장되지 않았어요. 새로 고친 뒤 한 번 더 해 주세요. 계속 안 되면 설정 › 데이터에서 백업을 받아 두시면 안심이에요.', { action: '새로 고침', onAction: () => location.reload(), duration: 8000 })
-        : toast('로그인이 만료됐어요. 다시 로그인해 주세요.');
+        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 한 번 더 해 주세요. 계속 안 되면 설정 › 데이터에서 전체 백업을 받아 두면 안심이에요.', { action: '새로 고침', onAction: () => location.reload(), duration: 8000 })
+        : toast('다시 로그인해 주세요. 이번 기록은 저장하지 못했어요.');
     }
-    return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    return toast('저장하지 못했어요. 잠시 후 다시 해 주세요.');
   });
   data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);

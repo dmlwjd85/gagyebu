@@ -18,13 +18,13 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
 }
 
 // 가벼운 확인 대화상자 (alert/confirm 대체)
-export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '' }) {
+export function confirmDialog({ title, body = '', ok = '확인', cancel = '닫기', danger = false, typeToConfirm = '' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
       <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
-      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
+      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>라고 적어 주세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
       <div class="mt-5 flex gap-2 justify-end">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
@@ -61,7 +61,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
         <input inputmode="numeric" autocomplete="off" aria-label="금액" class="w-full bg-transparent text-title tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
         <span class="text-head">원</span></label>
       <p class="mt-1 h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>닫기</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const input = wrap.querySelector('input'), err = wrap.querySelector('[role=alert]');
     const done = (v) => { wrap.remove(); resolve(v); };
     input.addEventListener('input', () => {
@@ -71,7 +71,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
     wrap.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const n = Number(input.value.replace(/[^0-9]/g, '') || 0);
-      if (n > 100_000_000_000) { err.textContent = '1,000억 원까지 입력할 수 있어요.'; return; }
+      if (n > 100_000_000_000) { err.textContent = '1,000억 원까지 적을 수 있어요.'; return; }
       done(n);
     });
     wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-cancel]')) done(null); });
@@ -104,7 +104,7 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       <h2 id="fd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
       <div class="mt-4 flex flex-col gap-3">${fields.map(field).join('')}</div>
       <p class="mt-2 min-h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>닫기</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const form = wrap.querySelector('form'), err = wrap.querySelector('[role=alert]');
     const app = document.getElementById('app'), back = document.activeElement;
     const done = (v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); };
