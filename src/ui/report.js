@@ -1,15 +1,20 @@
 // 월간 리포트 공유 이미지 카드(1080×1350, 인스타 세로 비율). 기기 안에서 그리고, 공유·저장만 함.
 import { esc } from './util.js';
-import { formatWon } from '../lib/money.js';
+import { formatWon, spendParts, spendText, rateNote } from '../lib/money.js';
 import { byCategory } from '../lib/stats.js';
 
 const W = 1080, H = 1350;
 const FONT = '"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
-// 글자가 maxW보다 넓으면 글자 크기를 줄임(최소 40%)
+// 글자가 maxW보다 넓으면 글자 크기를 줄임(최소 40%). 그래도 넓으면 뒤를 '…'로 줄인 글자를 돌려줌
 function fit(ctx, text, weight, size, maxW) {
   ctx.font = `${weight} ${size}px ${FONT}`;
   const w = ctx.measureText(text).width;
   if (w > maxW) ctx.font = `${weight} ${Math.max(Math.floor(size * 0.4), Math.floor((size * maxW) / w))}px ${FONT}`;
+  const t = String(text);
+  if (ctx.measureText(t).width <= maxW) return t;
+  const ch = [...t]; // 이모지가 반으로 잘리지 않게 글자 단위
+  while (ch.length > 1 && ctx.measureText(ch.join('') + '…').width > maxW) ch.pop();
+  return ch.join('') + '…';
 }
 
 /** 리포트에 넣을 숫자 모으기(화면 미리보기와 이미지가 같은 값을 씀) */
@@ -17,9 +22,12 @@ export function reportData(m) {
   const top = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3)
     .map(({ categoryId, amount }) => ({ ...(m.catMap.get(categoryId) ?? { emoji: '🧾', name: '기타' }), amount }));
   const prev = m.trend[m.trend.length - 2];
-  const diff = prev && prev.expense ? Math.round(((m.tot.expense - prev.expense) / prev.expense) * 100) : null;
+  // 지출 비교는 '쓴 돈'(0원 밑으로 안 내려감)끼리. 지난달 쓴 돈이 0원이면 비교 안 함
+  const cur = spendParts(m.tot.expense).spent, before = prev ? spendParts(prev.expense).spent : 0;
+  const diff = before ? Math.round(((cur - before) / before) * 100) : null;
   const rate = m.tot.income ? Math.round((m.tot.saved / m.tot.income) * 100) : null;
-  return { ym: m.viewYm, month: Number(m.viewYm.slice(5)), ...m.tot, top, diff, rate, noSpend: m.noSpend, streak: m.streak, count: m.periodTxs.length };
+  const { spent, refund } = spendParts(m.tot.expense);
+  return { ym: m.viewYm, month: Number(m.viewYm.slice(5)), ...m.tot, spent, refund, top, diff, rate, note: rateNote(m.tot), noSpend: m.noSpend, streak: m.streak, count: m.periodTxs.length };
 }
 
 function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); }
@@ -47,17 +55,17 @@ export async function drawReport(d, { dark = false } = {}) {
   roundRect(ctx, 80, 190, W - 160, 450, 56); ctx.fillStyle = g; ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = `600 40px ${FONT}`; ctx.fillText(`${d.month}월에 남긴 돈`, 140, 290);
   // 큰 금액(수십억)도 카드 밖으로 넘치지 않게 글자 크기를 폭에 맞춤(QA L1)
-  fit(ctx, formatWon(d.saved), 800, 120, W - 280); ctx.fillText(formatWon(d.saved), 140, 430);
+  ctx.fillText(fit(ctx, formatWon(d.saved), 800, 120, W - 280), 140, 430);
   ctx.font = `600 36px ${FONT}`;
-  const rateText = d.rate != null ? `저축률 ${d.rate < 0 ? '−' : ''}${Math.abs(d.rate)}%` : '수입 기록 없음';
+  // 100% 넘는 저축률은 환불 때문이라고 짧게 붙임(자세한 설명은 미리보기 아래 문구)
+  const rateText = d.rate != null ? `저축률 ${d.rate < 0 ? '−' : ''}${Math.abs(d.rate)}%${d.rate > 100 ? ' · 환불 덕분' : ''}` : '수입 기록 없음';
   ctx.fillText(rateText, 140, 520);
   if (d.diff != null) {
     const dt = `지출 지난달보다 ${d.diff > 0 ? `${d.diff}% ↑` : d.diff < 0 ? `${-d.diff}% ↓` : '같음'}`;
-    fit(ctx, dt, 600, 36, W - 280 - ctx.measureText(rateText).width - 40);
-    ctx.textAlign = 'right'; ctx.fillText(dt, W - 140, 520); ctx.textAlign = 'left';
+    const dtFit = fit(ctx, dt, 600, 36, W - 280 - ctx.measureText(rateText).width - 40);
+    ctx.textAlign = 'right'; ctx.fillText(dtFit, W - 140, 520); ctx.textAlign = 'left';
   }
-  const sum = `수입 ${formatWon(d.income)} · 지출 ${formatWon(d.expense)}`;
-  fit(ctx, sum, 500, 32, W - 280); ctx.fillText(sum, 140, 590);
+  const sum = fit(ctx, `수입 ${formatWon(d.income)} · 지출 ${spendText(d.expense)}`, 500, 32, W - 280); ctx.fillText(sum, 140, 590);
   // 많이 쓴 곳 TOP 3
   roundRect(ctx, 80, 680, W - 160, 400, 48); ctx.fillStyle = card; ctx.fill();
   ctx.fillStyle = ink; ctx.font = `700 40px ${FONT}`; ctx.fillText('많이 쓴 곳 TOP 3', 140, 760);
@@ -65,11 +73,12 @@ export async function drawReport(d, { dark = false } = {}) {
   d.top.forEach((t, i) => {
     const y = 840 + i * 80;
     ctx.font = `48px ${FONT}`; ctx.fillText(t.emoji, 140, y + 14);
-    ctx.font = `600 36px ${FONT}`; ctx.fillStyle = ink; ctx.fillText(t.name, 210, y + 8);
-    ctx.textAlign = 'right'; fit(ctx, formatWon(t.amount), 700, 36, 360); ctx.fillText(formatWon(t.amount), W - 140, y + 8); ctx.textAlign = 'left';
+    // 긴 카테고리 이름(공백 없는 20자)이 금액과 겹치지 않게 이름 칸 폭을 정함
+    ctx.fillStyle = ink; ctx.textAlign = 'right'; const amt = fit(ctx, formatWon(t.amount), 700, 36, 360); const aw = ctx.measureText(amt).width; ctx.fillText(amt, W - 140, y + 8); ctx.textAlign = 'left';
+    ctx.fillText(fit(ctx, t.name, 600, 36, W - 140 - aw - 40 - 210), 210, y + 8);
     roundRect(ctx, 210, y + 24, (W - 350) * (t.amount / max), 12, 6); ctx.fillStyle = ['#6D4AFF', '#D63F73', '#C4621A'][i]; ctx.fill(); ctx.fillStyle = ink;
   });
-  if (!d.top.length) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText('이 달에는 지출 기록이 없어요.', 140, 860); }
+  if (!d.top.length) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText(d.refund ? `이 달에는 환불만 있었어요(+${formatWon(d.refund)}).` : '이 달에는 지출 기록이 없어요.', 140, 860); }
   // 스티커: 무지출·연속 기록·기록 수
   const chips = [`🌱 무지출 ${d.noSpend}일`, `🔥 ${d.streak}일 연속 기록`, `🧾 기록 ${d.count}건`];
   ctx.font = `700 34px ${FONT}`;
@@ -96,7 +105,8 @@ export async function openReport(m, { toast }) {
   wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/50 p-4 fade-in overflow-y-auto';
   wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="rp-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-4 shadow-glass my-auto">
     <h2 id="rp-t" class="text-head">${d.month}월 리포트 카드</h2>
-    <img src="${url}" alt="${esc(`${d.month}월 리포트: 남긴 돈 ${formatWon(d.saved)}, 수입 ${formatWon(d.income)}, 지출 ${formatWon(d.expense)}${d.top.length ? `, 많이 쓴 곳 ${d.top.map((t) => t.name).join(', ')}` : ''}`)}" class="mt-3 w-full rounded-2xl" width="1080" height="1350" />
+    <img src="${url}" alt="${esc(`${d.month}월 리포트: 남긴 돈 ${formatWon(d.saved)}, 수입 ${formatWon(d.income)}, 지출 ${spendText(d.expense)}${d.top.length ? `, 많이 쓴 곳 ${d.top.map((t) => t.name).join(', ')}` : ''}`)}" class="mt-3 w-full rounded-2xl" width="1080" height="1350" />
+    ${d.note ? `<p class="mt-2 text-caption">💡 ${esc(d.note)}</p>` : ''}
     <p class="mt-2 text-caption text-ink-sub">이 기기에서 만든 이미지예요. 공유하기 전에 숫자를 한 번 확인해 주세요.</p>
     <div class="mt-3 flex gap-2 justify-end"><button class="btn-ghost" data-rp="close">닫기</button>
       ${canShare ? '<button class="btn-ghost" data-rp="save">저장</button><button class="btn-primary" data-rp="share">공유하기</button>' : '<button class="btn-primary" data-rp="save">이미지 저장</button>'}</div></div>`;

@@ -19,14 +19,16 @@ service cloud.firestore {
     }
     function ym(v) { return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])$'); }
     // id 형식: Firestore 자동 id(영문·숫자 20자)·짧은 영문 id('food'), 또는 소문자 낱말을 하이픈으로 이은 기본 id('etc-in').
-    // 숫자 13자리 이상 연속·숫자 들어간 하이픈 묶음은 거부 → 카드번호 모양 글자가 id 칸에 들어갈 수 없음
+    // 쓸 수 있는 구분자는 밑줄(_)과 하이픈(-)뿐이고, 하이픈 묶음은 소문자만이라 숫자가 못 들어감.
+    // 숫자 13개 이상이 바로 붙거나 밑줄로만 이어지면 거부('1234567890123456', '1234_5678_9012_3456', '1_2_..._3')
+    // → 공백·점·하이픈·쉼표·슬래시 등 다른 구분자는 형식에서 이미 거부되므로 카드번호 모양 글자가 id 칸에 들어갈 수 없음
     function id(v) {
-      return v is string && ((v.matches('^[A-Za-z0-9_]{1,64}$') && !v.matches('.*[0-9]{13}.*')) || v.matches('^[a-z]{1,20}(-[a-z]{1,20}){1,3}$'));
+      return v is string && ((v.matches('^[A-Za-z0-9_]{1,64}$') && !v.matches('.*([0-9]_*){12}[0-9].*')) || v.matches('^[a-z]{1,20}(-[a-z]{1,20}){1,3}$'));
     }
     // 태그 20개·각 1~20자 문자열. join 한 번으로 전체 검사(숫자 원소는 칸별로 거부, 줄바꿈 금지)
     function tagsOk(t) {
       return t is list && t.size() <= 20
-        && (t.size() == 0 || t.join('\n').matches('^[^\n]{1,20}(\n[^\n]{1,20})*$'))
+        && (t.size() == 0 || (t.join('\n').matches('^[^\n]{1,20}(\n[^\n]{1,20})*$') && t.join('\n').split('\n').size() == t.size()))
         && tagStr(t, t.size());
     }
     function tagStr(t, n) {
@@ -36,11 +38,13 @@ service cloud.firestore {
         && (n <= 15 || t[15] is string) && (n <= 16 || t[16] is string) && (n <= 17 || t[17] is string) && (n <= 18 || t[18] is string) && (n <= 19 || t[19] is string);
     }
     // 카테고리별 예산: 카테고리 30개까지(규칙 식 1000개 한도), 키는 id 형식(join 한 번으로 검사), 값은 0원 ~ 100억 원 정수.
+    // 키 안에 쉼표가 있으면 join 뒤 조각 수가 키 수보다 많아짐 → 거부('1234,5678,9012,3456' 한 키가 네 키처럼 통과하던 틈)
     // 규칙 언어에 반복문이 없어 칸 번호로 하나씩 검사
     function limitsOk(m) {
       return m is map && m.size() <= 30
         && (m.size() == 0 || (m.keys().join(',').matches('^([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3})(,([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3}))*$')
-            && !m.keys().join(',').matches('.*[0-9]{13}.*')))
+            && m.keys().join(',').split(',').size() == m.size()
+            && !m.keys().join(',').matches('.*([0-9]_*){12}[0-9].*')))
         && limVals(m.values(), m.size());
     }
     function limVals(v, n) {
@@ -69,9 +73,10 @@ service cloud.firestore {
         && optBool('seeded') && optTs('createdAt') && optTs('updatedAt');
 
       // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
-      match /transactions/{id} {
+      match /transactions/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
+          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
                                  'importHash', 'importBatch', 'recurringId', 'card4'])
@@ -91,9 +96,10 @@ service cloud.firestore {
       }
 
       // 카테고리
-      match /categories/{id} {
+      match /categories/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
+          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'emoji', 'kind'])
           && d().keys().hasOnly(['name', 'emoji', 'kind', 'order', 'archived', 'budget'])
           && str(d().name, 1, 20) && str(d().emoji, 1, 16)
@@ -102,9 +108,10 @@ service cloud.firestore {
       }
 
       // 결제수단 (카드·계좌번호 저장 금지: 이름 20자 제한)
-      match /accounts/{id} {
+      match /accounts/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
+          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'type'])
           && d().keys().hasOnly(['name', 'type', 'emoji', 'archived', 'order'])
           && str(d().name, 1, 20) && d().type in ['cash', 'card', 'bank']
@@ -124,9 +131,10 @@ service cloud.firestore {
       }
 
       // 자동 분류 규칙: 가맹점 글자 → 카테고리
-      match /rules/{id} {
+      match /rules/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
+          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['match', 'categoryId'])
           && d().keys().hasOnly(['match', 'field', 'categoryId', 'createdAt', 'updatedAt'])
           && str(d().match, 1, 40) && id(d().categoryId)
@@ -135,9 +143,10 @@ service cloud.firestore {
       }
 
       // 반복 거래(월세·구독): 매달 dayOfMonth일에 자동 기록
-      match /recurring/{id} {
+      match /recurring/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
+          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
           && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
@@ -151,9 +160,10 @@ service cloud.firestore {
       }
 
       // 저축 목표: 목표 금액(1원~100억)·모은 금액(0 이상 정수)
-      match /goals/{id} {
+      match /goals/{docId} {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
+          && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'target', 'saved'])
           && d().keys().hasOnly(['name', 'emoji', 'target', 'saved', 'due', 'order', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30) && optStr('emoji', 16)

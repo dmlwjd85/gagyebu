@@ -195,9 +195,9 @@ function step2(m, imp) {
     </section>
     <section class="card-solid p-4 flex flex-col gap-1" aria-label="가져오기 옵션">
       ${split ? '<p class="text-caption text-ink-sub min-h-[44px] flex items-center">입금·출금 열이 따로 있어요: 출금은 지출, 입금은 수입으로 넣어요.</p>'
-        : `<label class="flex items-center justify-between gap-2 text-body min-h-[44px]">금액 부호<select class="select" data-imp-opt="sign">${[['expense', '양수 = 지출(카드)'], ['income', '양수 = 수입'], ['flip', '부호 뒤집기']].map(([v, l]) => `<option value="${v}" ${imp.opts.sign === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
+        : `<label class="opt-row"><span class="opt-k">금액 부호</span><select class="select" data-imp-opt="sign">${[['expense', '양수 = 지출(카드)'], ['income', '양수 = 수입'], ['flip', '부호 뒤집기']].map(([v, l]) => `<option value="${v}" ${imp.opts.sign === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
       <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">'취소'된 결제는 빼기<span class="switch"><input type="checkbox" data-imp-opt="excludeCancelled" ${imp.opts.excludeCancelled ? 'checked' : ''} /><span></span></span></label>
-      <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">결제수단<select class="select" data-imp-opt="accountId"><option value="">지정 안 함</option>${m.accounts.map((a) => `<option value="${esc(a.id)}" ${imp.opts.accountId === a.id ? 'selected' : ''}>${esc(a.emoji || '')} ${esc(a.name)}</option>`).join('')}</select></label>
+      <label class="opt-row"><span class="opt-k">결제수단</span><select class="select" data-imp-opt="accountId"><option value="">지정 안 함</option>${m.accounts.map((a) => `<option value="${esc(a.id)}" ${imp.opts.accountId === a.id ? 'selected' : ''}>${esc(a.emoji || '')} ${esc(a.name)}</option>`).join('')}</select></label>
       <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">이 맞춤 기억하기<span class="switch"><input type="checkbox" data-imp-opt="remember" ${imp.opts.remember ? 'checked' : ''} /><span></span></span></label>
     </section>
     <section class="card-solid p-4" aria-labelledby="pv-h">
@@ -251,7 +251,7 @@ function step4(m, imp) {
   const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-semibold tabular-nums text-right">${v}</dd></div>`;
   return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 확인해요</h2>
       <dl class="mt-2">${row('파일', esc(imp.fileName))}${s.count ? row('기간', `${dot(s.from)} ~ ${dot(s.to)}`) : ''}${row('가져올 거래', `${s.count}건`)}
-        ${row('지출 합계', `<span class="text-expense">${s.expense < 0 ? '+' : '−'}${formatWon(Math.abs(s.expense))}</span>`)}
+        ${row('지출 합계', s.expense < 0 ? `0원 <span class="block text-caption text-income">환불이 ${formatWon(-s.expense)} 더 많아요</span>` : `<span class="text-expense">${s.expense ? '−' : ''}${formatWon(s.expense)}</span>`)}
         ${s.refund ? row('환불·취소 차감', `<span class="text-income">+${formatWon(s.refund)}</span> <span class="text-caption text-ink-sub font-normal">(지출 합계에 반영)</span>`) : ''}
         ${row('수입', `<span class="text-income">+${formatWon(s.income)}</span>`)}
         ${row('건너뛰는 거래', `중복 ${skipped + d.sure.length} · 취소 ${d.cancelled}${d.offset ? ` · 상계 ${d.offset}` : ''}`)}</dl></section>

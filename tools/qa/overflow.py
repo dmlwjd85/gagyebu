@@ -43,6 +43,20 @@ with sync_playwright() as p:
       d.saveAccount({{ name: '아주아주긴결제수단이름스무자까지요', emoji: '💳', type: 'card', order: 9 }});
       d.saveTx({{ date: t, amount: 123456789, kind: 'expense', categoryId: 'etc', memo: 'Averyveryverylongmerchantnamewithoutanyspaces_LLC_Korea_Branch #아주긴태그이름도있어요' }});
       d.saveTx({{ date: t, amount: -40000, kind: 'expense', categoryId: 'fashion', memo: '무신사 반품', importHash: '0123456789abcdef' }});
+      // QA 3차 N13: 공백 없는 최대 길이 이름(결제수단·카테고리 20자, 목표·반복 30자, 규칙 40자, 메모 100자+태그 20자)
+      d.saveAccount({{ name: '{'결' * 20}', emoji: '💳', type: 'card', order: 10 }});
+      d.saveCategory({{ name: '{'카' * 20}', emoji: '🧪', kind: 'expense', order: 100 }});
+      d.saveCategory({{ name: '{'M' * 20}', emoji: '🧪', kind: 'income', order: 100 }});
+      d.saveGoal({{ name: '{'가' * 30}', emoji: '🛟', target: 9999999999, saved: 123456789, order: 2 }});
+      d.saveGoal({{ name: '{'W' * 30}', emoji: '✈️', target: 1000, saved: 999, order: 3 }});
+      d.saveRecurring({{ name: '{'가' * 30}', amount: 999999999, kind: 'expense', categoryId: 'telecom', dayOfMonth: 31, active: true, startYm: '2026-10', lastPosted: '2026-10' }});
+      d.saveRule({{ match: '{'X' * 40}', categoryId: 'cafe' }}); d.saveRule({{ match: '{'긴' * 40}', categoryId: 'food' }});
+      d.saveTx({{ date: t, amount: 5000, kind: 'expense', categoryId: 'etc', memo: '{'메' * 100} #{'태' * 20}' }});
+      // QA 3차 N10·N12: 환불이 지출보다 많은 달·환불만 있는 달(6개월 전)
+      const ym = (k) => {{ const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - k); return `${{x.getFullYear()}}-${{String(x.getMonth() + 1).padStart(2, '0')}}`; }};
+      d.saveTx({{ date: ym(5) + '-02', amount: -9876543, kind: 'expense', categoryId: 'living', memo: '환불', importHash: '0123456789abcde3' }});
+      d.saveTx({{ date: ym(8) + '-03', amount: -1234567, kind: 'expense', categoryId: 'fashion', memo: '환불', importHash: '0123456789abcde1' }});
+      d.saveTx({{ date: ym(8) + '-04', amount: -45000, kind: 'expense', categoryId: 'health', memo: '환불', importHash: '0123456789abcde2' }});
     }})()""")
     pg.wait_for_timeout(1500)
     G = lambda v: pg.evaluate(f"window.__gagyebu.go('{v}')") or pg.wait_for_timeout(500)
@@ -64,6 +78,15 @@ with sync_playwright() as p:
             pg.set_input_files('[data-imp-file]', SAMPLE); pg.wait_for_timeout(1500); checks.append(('import2', pg.evaluate(MEASURE)))
             pg.click('[data-imp-next]'); pg.wait_for_timeout(1200); checks.append(('import3', pg.evaluate(MEASURE)))
             pg.click('[data-imp-next]'); pg.wait_for_timeout(400); checks.append(('import4', pg.evaluate(MEASURE)))
+            # 환불이 지출보다 많은 달(5달 전)·환불만 있는 달(8달 전): 홈·차트(지출·남긴 돈)·예산·달력
+            for k, tag in ((5, 'refundover'), (8, 'refundonly')):
+                pg.evaluate(f"(() => {{ const x = new Date(); x.setDate(1); x.setMonth(x.getMonth() - {k}); window.__gagyebu.ui.viewYm = `${{x.getFullYear()}}-${{String(x.getMonth() + 1).padStart(2, '0')}}`; window.__gagyebu.render(); }})()"); pg.wait_for_timeout(1500)
+                for v in ['home', 'chart', 'budget', 'calendar']:
+                    G(v); checks.append((f'{tag}-{v}', pg.evaluate(MEASURE)))
+                    if SHOT and v in ('home', 'chart') and w == 360: pg.screenshot(path=f'{SHOT}{tag}-{v}-{w}-{theme}.png', full_page=True)
+                pg.evaluate("window.__gagyebu.ui.chartKind = 'saved'"); G('chart'); checks.append((f'{tag}-saved', pg.evaluate(MEASURE)))
+                pg.evaluate("window.__gagyebu.ui.chartKind = 'expense'")
+            pg.evaluate("window.__gagyebu.ui.chartKind = 'expense'; window.__gagyebu.ui.viewYm = null"); G('home')
             G('home'); pg.evaluate("window.__gagyebu.openSheet(window.__gagyebu.state.txs.find(t => t.amount === 123456789))"); pg.wait_for_timeout(500)
             checks.append(('sheet', pg.evaluate(MEASURE))); pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
             for name, r in checks:

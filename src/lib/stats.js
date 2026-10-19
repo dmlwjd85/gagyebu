@@ -32,8 +32,9 @@ export function envelope(spent, limit) {
 export function byDay(txs) {
   const map = {};
   for (const t of txs) {
-    const d = (map[t.date] ||= { expense: 0, income: 0, count: 0 });
+    const d = (map[t.date] ||= { expense: 0, income: 0, count: 0, spent: false });
     d[t.kind === 'income' ? 'income' : 'expense'] += t.amount;
+    if (t.kind === 'expense' && t.amount > 0) d.spent = true; // 무지출 판정은 noSpendDays와 같게(환불만 있는 날 = 무지출)
     d.count++;
   }
   return map;
@@ -41,7 +42,7 @@ export function byDay(txs) {
 
 // 0(없음) ~ 4(가장 많음). 그 달 최댓값 대비 비율로 4단계.
 export function heatLevel(amount, max) {
-  if (!amount || !max) return 0;
+  if (!(amount > 0) || !(max > 0)) return 0; // 환불이 더 많은 날(음수)은 색 없음
   const r = amount / max;
   return r > 0.75 ? 4 : r > 0.5 ? 3 : r > 0.25 ? 2 : 1;
 }
@@ -58,6 +59,9 @@ export function moneyWeather({ budget, periodTxs, p, today }) {
   if (!budget || budget <= 0) return { hasBudget: false };
   let spentBefore = 0, spentToday = 0;
   for (const t of periodTxs) if (t.kind === 'expense') (t.date === today ? (spentToday += t.amount) : t.date < today && (spentBefore += t.amount));
+  // 환불이 더 많아도 '쓴 돈'은 0원 밑으로 내려가지 않음(QA N10). 오늘 들어온 환불은 이전 지출에서 뺌
+  if (spentToday < 0) { spentBefore += spentToday; spentToday = 0; }
+  spentBefore = Math.max(0, spentBefore);
   const daysLeft = Math.max(1, daysLeftInclusive(p, today));
   const remaining = budget - spentBefore - spentToday;
   const base = Math.max(0, Math.floor((budget - spentBefore) / daysLeft));

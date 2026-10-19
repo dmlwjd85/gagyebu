@@ -1,5 +1,5 @@
 import { esc } from './util.js';
-import { formatWon, shortWon } from '../lib/money.js';
+import { formatWon, shortWon, spendText } from '../lib/money.js';
 
 // 카테고리 도넛 색 (시안 A 계열, 인접 조각 구분용 — 글자 아님)
 // 차트 색 7개 (스펙 14절, 그래픽 대비 3:1 이상). 7번은 '그 밖의'
@@ -50,7 +50,7 @@ export function trendBars(rows, { currentYm, selectedYm } = {}) {
   for (let v = 0; v <= top + 1; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${v ? 'stroke-dasharray="3 3"' : ''}/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end" fill="currentColor" class="text-ink-sub" style="font-size:10px">${v ? shortWon(v) : 0}</text>`;
   const bars = rows.map((r, i) => {
     const x = L + i * col + col / 2, cur = r.ym === currentYm, sel = r.ym === selectedYm;
-    return `<g class="bar-g" data-bar="${r.ym}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${Number(r.ym.slice(5))}월 지출 ${formatWon(r.expense)}, 남긴 돈 ${formatWon(r.saved)}">
+    return `<g class="bar-g" data-bar="${r.ym}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${Number(r.ym.slice(5))}월 지출 ${spendText(r.expense)}, 남긴 돈 ${formatWon(r.saved)}">
       <rect x="${x - col / 2}" y="${T}" width="${col}" height="${H - T - 2}" rx="8" fill="${sel ? 'var(--heat-1)' : 'transparent'}" ${cur ? 'stroke="var(--primary)" stroke-width="1.5"' : ''}/>
       <rect class="bar" style="animation-delay:${i * 40}ms" x="${x - bw - 1}" y="${y(r.expense)}" width="${bw}" height="${y(0) - y(r.expense)}" rx="4" fill="var(--chart-1)"/>
       <rect class="bar" style="animation-delay:${i * 40 + 20}ms" x="${x + 1}" y="${y(r.saved)}" width="${bw}" height="${y(0) - y(r.saved)}" rx="4" fill="var(--income)"/>
@@ -63,5 +63,5 @@ export function ring(pct, { size = 132, stroke = 12, color = 'var(--primary)' } 
   const r = (size - stroke) / 2, c = 2 * Math.PI * r, p = Math.min(1, Math.max(0, pct));
   return `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" class="-rotate-90" aria-hidden="true">
     <circle r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none" stroke="var(--line)" stroke-width="${stroke}"/>
-    <circle class="ring-fill" r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${p * c} ${c}"/></svg>`;
+    ${p > 0 ? `<circle class="ring-fill" r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none" stroke="${color}" stroke-width="${stroke}" stroke-linecap="round" stroke-dasharray="${p * c} ${c}"/>` : ''}</svg>`; // 0%는 둥근 끝 점도 안 그림
 }

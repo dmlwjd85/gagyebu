@@ -363,3 +363,45 @@ describe('N8 id 형식', () => {
     await assertSucceeds(tx({ importHash: '0123456789abcdef', importBatch: `imp-${Date.now().toString(36)}` }));
   });
 });
+
+// ── QA 3차 N8 잔여: 밑줄 등 모든 구분자로 이은 카드번호 모양 거부(필드 값·예산 키·문서 id·태그) ──
+describe('N8 잔여 구분자 전수', () => {
+  const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/n8b'), { ...TX, ...data });
+  const CARD = ['1234_5678_9012_3456', '1234__5678__9012__3456', '1_2_3_4_5_6_7_8_9_0_1_2_3', 'a1234_5678_9012_3', '1234-5678-9012-3456', '1234 5678 9012 3456',
+    '1234.5678.9012.3456', '1234/5678/9012/3456', '1234,5678,9012,3456', '1234:5678:9012:3456', '1234|5678|9012|3456', '1234＿5678＿9012＿3456', '1234\n5678\n9012\n3456', '4049470006627012'];
+  test('필드 값(categoryId·accountId·recurringId)에 모든 구분자 거부', async () => {
+    for (const v of CARD) {
+      await assertFails(tx({ categoryId: v }));
+      await assertFails(tx({ accountId: v }));
+      await assertFails(tx({ recurringId: v }));
+    }
+  });
+  test('예산 키: 밑줄·쉼표로 이은 카드번호 거부(쉼표 키가 여러 키처럼 통과하던 틈 포함)', async () => {
+    const b = (byCategory) => setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory });
+    for (const v of CARD) await assertFails(b({ food: 1, [v]: 1 }));
+    await assertFails(b({ 'food,cafe': 1 }));
+    await assertSucceeds(b({ food: 1, cafe: 2, 'etc-in': 3, a_b: 4, Xk3J9aZ0qLm2nB7cD4eF: 5, n1234567890: 6 }));
+  });
+  test('문서 id(경로)도 같은 형식: 카드번호 모양 문서 거부, 정상 id 허용', async () => {
+    for (const v of CARD.filter((x) => !/[/\n]/.test(x))) {
+      await assertFails(setDoc(doc(alice(), `users/alice/transactions/${v}`), TX));
+      await assertFails(setDoc(doc(alice(), `users/alice/categories/${v}`), { name: '카드', emoji: '💳', kind: 'expense' }));
+      await assertFails(setDoc(doc(alice(), `users/alice/accounts/${v}`), { name: '카드', type: 'card' }));
+      await assertFails(setDoc(doc(alice(), `users/alice/goals/${v}`), { name: '여행', target: 1000, saved: 0 }));
+    }
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/Xk3J9aZ0qLm2nB7cD4eF'), TX));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/categories/etc-in'), { name: '기타', emoji: '🧾', kind: 'income' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/accounts/card'), { name: '카드', type: 'card' }));
+    // 예전 형식 문서는 읽기·삭제 가능(쓰기만 검사)
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'users/alice/transactions/1234_5678_9012_3456'), TX));
+    await assertSucceeds(getDoc(doc(alice(), 'users/alice/transactions/1234_5678_9012_3456')));
+    await assertSucceeds(deleteDoc(doc(alice(), 'users/alice/transactions/1234_5678_9012_3456')));
+  });
+  test('태그 안 줄바꿈(한 태그가 여러 태그처럼 통과하던 틈) 거부', async () => {
+    await assertFails(tx({ tags: ['ab\ncd'] }));
+    await assertSucceeds(tx({ tags: ['여행', '제주'] }));
+  });
+  test('카드 끝 4자리·자동 id·하이픈 기본 id는 그대로 허용', async () => {
+    await assertSucceeds(tx({ importHash: '0123456789abcdef', card4: '7012', categoryId: 'etc-in', accountId: 'Xk3J9aZ0qLm2nB7cD4eF', recurringId: 'r1_2' }));
+  });
+});
