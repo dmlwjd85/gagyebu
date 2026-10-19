@@ -4,8 +4,10 @@
  - 데모 데이터 + 아주 긴 이름(목표·반복·카테고리·결제수단·메모)을 넣고
    360·1280px × 라이트·다크로 모든 화면(+가져오기 단계·입력 시트)을 열어
    document 가로 스크롤(scrollWidth - clientWidth)과 화면 밖으로 나간 요소를 잼. 하나라도 있으면 종료 코드 1
+ - 본문(#main)은 세로 스크롤 상자(overflow-x: hidden)라서, 그 안에서 넘친 요소는 '잘린 것'으로 보고 넘침으로 셈
+ - 환경변수 QA_SCALE=1.6 → 설정의 '본문 글자 크기'를 바꿔서 검사, QA_WIDTHS=320,360,1280 → 검사할 폭
 """
-import sys, json, urllib.request as U
+import sys, os, json, urllib.request as U
 from playwright.sync_api import sync_playwright
 URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
 SHOT = sys.argv[2] if len(sys.argv) > 2 else None
@@ -14,17 +16,17 @@ for u in ['http://127.0.0.1:8080/emulator/v1/projects/demo-gagyebu/databases/(de
     U.urlopen(U.Request(u, method='DELETE'))
 LONG = '비상금 모으기 프로젝트 이름이 아주 긴 경우 삼십자'
 MEASURE = """() => {
-  const de = document.documentElement, W = de.clientWidth;
+  const de = document.documentElement, W = de.clientWidth, main = document.getElementById('main');
   const bad = [];
   for (const el of document.querySelectorAll('body *')) {
     const r = el.getBoundingClientRect();
     if (!r.width || r.right <= W + 0.5) continue;
     // 가로 스크롤 상자(표 등) 안에 있으면 그 상자 안에서 넘는 것이라 괜찮음
     let p = el.parentElement, clipped = false;
-    while (p && p !== document.body) { const s = getComputedStyle(p); if (/(auto|scroll|hidden|clip)/.test(s.overflowX) && p.getBoundingClientRect().right <= W + 0.5) { clipped = true; break; } p = p.parentElement; }
+    while (p && p !== document.body) { const s = getComputedStyle(p); if (p !== main && /(auto|scroll|hidden|clip)/.test(s.overflowX) && p.getBoundingClientRect().right <= W + 0.5) { clipped = true; break; } p = p.parentElement; }
     if (!clipped) bad.push((el.className && typeof el.className === 'string' ? el.className.slice(0, 40) : el.tagName) + ' right=' + Math.round(r.right));
   }
-  return { over: de.scrollWidth - de.clientWidth, bad: bad.slice(0, 5) };
+  return { over: Math.max(de.scrollWidth - de.clientWidth, main ? main.scrollWidth - main.clientWidth : 0), bad: bad.slice(0, 5) };
 }"""
 fails = []
 with sync_playwright() as p:
@@ -63,7 +65,9 @@ d.saveTx({{ date: ym(8) + '-04', amount: -45000, kind: 'expense', categoryId: 'h
     }})()""")
     pg.wait_for_timeout(1500)
     G = lambda v: pg.evaluate(f"window.__gagyebu.go('{v}')") or pg.wait_for_timeout(500)
-    for w in (360, 1280):
+    SCALE = os.environ.get('QA_SCALE')
+    if SCALE: pg.evaluate(f"localStorage.setItem('contentScale', '{SCALE}'); document.documentElement.style.setProperty('--content-scale', '{SCALE}')")
+    for w in [int(x) for x in os.environ.get('QA_WIDTHS', '360,1280').split(',')]:
         pg.set_viewport_size({'width': w, 'height': 800})
         for theme in ('light', 'dark'):
             pg.evaluate(f"localStorage.setItem('theme','{theme}'); document.documentElement.classList.toggle('dark', {str(theme == 'dark').lower()})")

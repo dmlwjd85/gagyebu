@@ -205,8 +205,10 @@ describe('추가로 찾은 것', () => {
   });
   test('지난 달 화면 위 막대: 360px에서는 "이번 달로" 대신 ↩ 아이콘(가로 30px 넘침)', () => {
     const html = topBar(model('2026-08'));
-    expect(html).toContain('max-[379px]:hidden">이번 달로');
-    expect(html).toContain('min-[380px]:hidden">↩');
+    // 줌 대응(위 메뉴 고정): 오프라인 표시가 있어도 430px 폰까지 한 줄에 들어가도록 기준을 480px로 올림
+    expect(html).toContain('max-[479px]:hidden">이번 달로');
+    expect(html).toContain('min-[480px]:hidden">↩');
+    expect(html).toContain('is-past'); // 좁은 폰에서는 심볼을 숨겨 자리 확보
     expect(html).toMatch(/aria-label="[^"]+, 이번 달로 이동"/); // 화면 읽기 프로그램에는 그대로 안내
     expect(topBar(model('2026-10'))).not.toContain('↩');
   });

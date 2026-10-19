@@ -3,6 +3,7 @@ import './style.css';
 import('./fonts.css');
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
+import { readScale, saveScale, applyScale, stepScale, scaleKeyAction, scalePct, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
 let data = null;
 let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [] };
@@ -26,6 +27,8 @@ import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
+// 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
+let contentScale = applyScale(readScale());
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
 const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring'];
@@ -53,7 +56,7 @@ function model() {
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine,
+    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine, contentScale,
   };
 }
 
@@ -61,6 +64,7 @@ function model() {
 let lastHero = null, lastView = null;
 // 로그인·설정 안내: 첫 화면(index.html)의 브랜드 카드는 그대로 두고 아래 카드만 바꿈 → 화면 깜빡임·LCP 지연 없음
 function gateView({ caption, card }) {
+  document.body.classList.remove('has-frame');
   const hero = $('#boot-hero');
   if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
     <h1 class="flex justify-center" id="boot-logo">${logo({ cls: 'boot-logo' })}</h1>
@@ -77,26 +81,31 @@ function render() {
   const m = model();
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
-  const scrollY = window.scrollY;
+  const scrollY = $('#main')?.scrollTop ?? 0;
+  const mainFocused = document.activeElement?.id === 'main'; // 다시 그려도 본문 포커스 유지(PageDown·스페이스 스크롤)
   if (ui.view === 'import' && !IMP) loadImp().then(render);
   if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
   const body = ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
     : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView }[ui.view](m, ui);
   const nav = !NO_NAV.has(ui.view);
+  // 위 메뉴 / 본문(여기만 스크롤, 글자 배율 적용) / 아래 메뉴 3줄 틀 — style.css '.app-frame'
+  document.body.classList.add('has-frame');
   app.innerHTML = `
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
-    <div class="app-shell ${nav ? 'has-nav' : ''}">
-      ${topBar(m, { month: !NO_NAV.has(ui.view) })}
-      <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
+    <div class="app-frame ${nav ? 'has-nav' : ''}">
+      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
+      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
+      ${nav ? tabBar() : ''}
     </div>
-    ${nav ? tabBar() : ''}
     <div id="tip-slot"></div>`;
   // 홈 숫자 롤링
   const hero = $('#hero-num');
   if (hero) { const to = Number(hero.dataset.target); rollNumber(hero, to, formatWon, lastHero ?? 0); lastHero = to; }
   if (focusKey) { const el = app.querySelector(`[data-${focusKey[0].replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}="${CSS.escape(focusKey[1])}"]`); el?.focus({ preventScroll: true }); }
-  window.scrollTo(0, scrollY);
+  const mainEl = $('#main');
+  if (mainEl) mainEl.scrollTop = ui.view === lastView ? scrollY : 0;
+  if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
   renderTip();
 }
@@ -183,8 +192,9 @@ function go(view, extra = {}) {
   history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
   render();
   $('#main')?.focus({ preventScroll: true });
-  window.scrollTo(0, 0);
+  scrollMainTop();
 }
+const scrollMainTop = () => { const el = $('#main'); if (el) el.scrollTop = 0; };
 
 // ── M2: 반복 거래·저축 목표·규칙 입력 대화상자 ─────────────
 const catOptions = () => state.categories.filter((c) => !c.archived).map((c) => [c.id, `${c.kind === 'income' ? '수입' : '지출'} · ${c.emoji} ${c.name}`]);
@@ -260,7 +270,7 @@ async function impFile(file) {
 async function onImportClick(d) {
   const imp = ui.imp;
   if (!imp) return;
-  if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); window.scrollTo(0, 0); return $('#main')?.focus({ preventScroll: true }); }
+  if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); scrollMainTop(); return $('#main')?.focus({ preventScroll: true }); }
   if (d.impBack !== undefined) {
     if (imp.step === 2) { ui.imp = IMP.newImport(); return render(); }
     if (imp.step === 3 || imp.step === 4) { imp.step--; imp.error = ''; return render(); }
@@ -286,7 +296,7 @@ async function onImportClick(d) {
     if (imp.step === 2) { imp.busy = true; render(); await IMP.checkDuplicates(imp, impCtx()); }
     else if (imp.step === 3) imp.step = 4;
     else if (imp.step === 4) { imp.busy = true; render(); await IMP.commit(imp, impCtx()); if (imp.step === 5) haptic(20); }
-    render(); window.scrollTo(0, 0); $('#main')?.focus({ preventScroll: true });
+    render(); scrollMainTop(); $('#main')?.focus({ preventScroll: true });
   }
 }
 
@@ -304,6 +314,8 @@ app.addEventListener('click', async (e) => {
   const t = e.target.closest('button, [data-tx]');
   if (!t || t.disabled) return;
   const d = t.dataset;
+  if (d.scaleStep !== undefined) return setScale(stepScale(contentScale, Number(d.scaleStep)));
+  if (d.scaleReset !== undefined) return setScale(1);
   const m = state.user ? model() : null;
   if (d.nav) {
     // '목록에서 보기'(가져오기 완료): 가져온 거래가 있는 달로 이동
@@ -494,6 +506,7 @@ app.addEventListener('change', (e) => {
 });
 let searchTimer;
 app.addEventListener('input', (e) => {
+  if (e.target.dataset?.contentScale !== undefined) return setScale(Number(e.target.value) / 100);
   if (e.target.dataset?.searchQ === undefined) return;
   ui.search.q = e.target.value;
   clearTimeout(searchTimer);
@@ -520,6 +533,50 @@ document.addEventListener('keydown', (e) => {
   if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
   if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
 });
+
+
+// ── 본문 글자 배율(위·아래 메뉴는 그대로, 가운데 본문만) ─────────────
+// 설정 슬라이더·Ctrl(⌘)+휠·Ctrl(⌘)+/−/0. 손가락 핀치 줌은 막지 않음(접근성: 브라우저 확대는 늘 가능).
+// 끝(85%·160%)에 닿은 뒤 더 누르면 가로채지 않고 브라우저 줌에 맡김 → 160%보다 더 크게 보고 싶은 분도 확대 가능.
+function setScale(v, { announce = false } = {}) {
+  const prev = contentScale;
+  const main = $('#main');
+  const room = main ? main.scrollHeight - main.clientHeight : 0;
+  const ratio = main && room > 0 ? main.scrollTop / room : 0;
+  contentScale = applyScale(saveScale(v));
+  if (main && room > 0) main.scrollTop = ratio * (main.scrollHeight - main.clientHeight); // 읽던 자리 유지
+  syncScaleUi();
+  if (announce && contentScale !== prev) {
+    toast(`본문 글자 크기 ${scalePct(contentScale)}`, contentScale === 1 ? {} : { action: '기본 크기로', onAction: () => setScale(1, { announce: true }) });
+  }
+}
+function syncScaleUi() {
+  const pct = Math.round(contentScale * 100);
+  const r = $('[data-content-scale]');
+  if (r) { if (Number(r.value) !== pct) r.value = String(pct); r.setAttribute('aria-valuetext', `${pct}%`); }
+  const o = $('[data-scale-out]'); if (o) o.textContent = `${pct}%`;
+  // disabled 대신 aria-disabled: 누르던 버튼에서 키보드 포커스가 사라지지 않게
+  $('[data-scale-step="-1"]')?.setAttribute('aria-disabled', String(contentScale <= SCALE_MIN));
+  $('[data-scale-step="1"]')?.setAttribute('aria-disabled', String(contentScale >= SCALE_MAX));
+}
+const scaleBlocked = () => !state.user || !$('#main') || isSheetOpen() || !!document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)');
+document.addEventListener('keydown', (e) => {
+  const a = scaleKeyAction(e);
+  if (!a || scaleBlocked()) return;
+  const next = a === 'reset' ? 1 : stepScale(contentScale, a === 'in' ? 1 : -1);
+  if (next === contentScale) return; // 끝이거나 이미 기본 → 브라우저 기본 동작
+  e.preventDefault();
+  setScale(next, { announce: true });
+});
+let wheelAcc = 0;
+window.addEventListener('wheel', (e) => {
+  if (!e.ctrlKey || scaleBlocked()) return; // 맥 트랙패드 핀치도 ctrlKey 휠로 들어옴
+  const next = stepScale(contentScale, e.deltaY < 0 ? 1 : -1);
+  if (next === contentScale) { wheelAcc = 0; return; }
+  e.preventDefault();
+  wheelAcc += e.deltaY;
+  if (Math.abs(wheelAcc) >= 50) { wheelAcc = 0; setScale(next, { announce: true }); }
+}, { passive: false });
 
 window.addEventListener('online', render);
 // 앱을 켜 둔 채 날짜가 바뀌면(자정) 반복 거래 기록·오늘 기준 화면 새로 고침(QA L10)

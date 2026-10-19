@@ -29,15 +29,15 @@ const empty = (icon, text, extra = '') => `<div class="py-8 text-center"><p clas
 
 // month: 달 이동 막대(가져오기·검색·반복·설정처럼 달과 상관없는 화면에서는 숨김)
 export function topBar(m, { month = true } = {}) {
-  return `<header class="flex items-center justify-between gap-2 pt-[max(12px,env(safe-area-inset-top))]">
-    <div class="flex items-center gap-1">
+  return `<header class="flex flex-wrap items-center justify-between gap-x-2 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
+    <div class="flex items-center gap-1 max-[419px]:gap-0 min-w-0">
       ${symbol('S', { cls: 'hsym mr-0.5', label: '쓱 가계부' })}
       ${month ? `<button class="icon-btn" data-month="-1" aria-label="이전 달">‹</button>
-      <button class="month-btn" data-month="0" aria-label="${esc(monthLabel(m.viewYm, m.sd))}, 이번 달로 이동">${esc(monthLabel(m.viewYm, m.sd))}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary" aria-hidden="true"><span class="max-[379px]:hidden">이번 달로</span><span class="min-[380px]:hidden">↩</span></span>' : ''}</button>
+      <button class="month-btn" data-month="0" aria-label="${esc(monthLabel(m.viewYm, m.sd))}, 이번 달로 이동">${esc(monthLabel(m.viewYm, m.sd))}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary" aria-hidden="true"><span class="max-[479px]:hidden">이번 달로</span><span class="min-[480px]:hidden">↩</span></span>' : ''}</button>
       <button class="icon-btn" data-month="1" aria-label="다음 달" ${m.viewYm >= m.curYm ? 'disabled' : ''}>›</button>` : ''}
     </div>
-    <div class="flex items-center gap-1">
-      ${m.offline ? '<span class="icon-btn text-base" role="status" title="오프라인: 연결되면 자동으로 올릴게요"><span aria-hidden="true">☁️</span><span class="sr-only">오프라인. 기록은 저장해 두고 연결되면 자동으로 올릴게요.</span></span>' : ''}
+    <div class="flex items-center gap-1 max-[419px]:gap-0 ml-auto">
+      ${m.offline ? '<span class="inline-grid place-items-center w-7 h-11 text-base" role="status" title="오프라인: 연결되면 자동으로 올릴게요"><span aria-hidden="true">☁️</span><span class="sr-only">오프라인. 기록은 저장해 두고 연결되면 자동으로 올릴게요.</span></span>' : ''}
       <button class="icon-btn" data-nav="search" aria-label="검색">🔍</button>
       <button class="icon-btn" data-action="theme" aria-label="${m.dark ? '라이트 모드로 전환' : '다크 모드로 전환'}">${m.dark ? '☀️' : '🌙'}</button>
       <button class="icon-btn" data-nav="settings" aria-label="설정">⚙️</button>
@@ -72,7 +72,7 @@ export function homeView(m) {
   return `<h1 class="sr-only">홈</h1><div class="view-grid">
     <div class="flex flex-col gap-3">
       <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
-      <section class="grid grid-cols-3 gap-2" aria-label="이번 달 통계">
+      <section class="stat-grid" aria-label="이번 달 통계">
         ${spendStat(m.tot.expense)}
         ${stat('수입', (m.tot.income ? '+' : '') + compactWon(m.tot.income), formatWon(m.tot.income), 'text-income')}
         ${stat('남긴 돈', compactWon(m.tot.saved), formatWon(m.tot.saved), m.tot.saved < 0 ? 'text-expense' : '')}
@@ -273,6 +273,21 @@ export function budgetView(m, ui) {
     ${goalsCard(m)}</div></div>`;
 }
 
+// 본문 글자 크기: 위·아래 메뉴는 그대로 두고 가운데 내용만(설정값은 이 기기에만 저장)
+const scaleControl = (v) => {
+  const pct = Math.round(v * 100);
+  return `<div class="flex flex-col gap-1" role="group" aria-labelledby="s-scale">
+      <div class="flex items-center justify-between gap-2 text-body"><label id="s-scale" for="content-scale">본문 글자 크기</label><output for="content-scale" class="text-caption font-semibold text-primary tabular-nums" data-scale-out>${pct}%</output></div>
+      <div class="flex items-center gap-2">
+        <button class="scale-btn text-caption" data-scale-step="-1" aria-label="본문 글자 작게" aria-disabled="${v <= 0.85}">가−</button>
+        <input id="content-scale" class="range flex-1" type="range" min="85" max="160" step="5" value="${pct}" aria-valuetext="${pct}%" data-content-scale />
+        <button class="scale-btn text-body" data-scale-step="1" aria-label="본문 글자 크게" aria-disabled="${v >= 1.6}">가+</button>
+      </div>
+      <p class="text-caption text-ink-sub">위·아래 메뉴는 그대로 두고 가운데 내용만 커지거나 작아져요. PC에서는 Ctrl(맥은 ⌘)을 누른 채 휠을 돌리거나 +/− 키로도 바꿀 수 있어요. Ctrl + 0을 누르면 기본 크기로 돌아와요.</p>
+      <button class="btn-ghost self-start" data-scale-reset>기본 크기로</button>
+    </div>`;
+};
+
 export function settingsView(m, ui) {
   const kind = ui.catKind ?? 'expense';
   const list = m.categories.filter((c) => c.kind === kind);
@@ -289,6 +304,7 @@ export function settingsView(m, ui) {
       <label class="opt-row"><span class="opt-k">한 달 시작일 (월급날)</span>
         <select class="select" data-start-day aria-label="한 달 시작일">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${m.sd === i + 1 ? 'selected' : ''}>${i + 1}일</option>`).join('')}</select></label>
       <label class="flex items-center justify-between gap-2 text-body">진동 피드백<label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동 피드백"><span></span></label></label>
+      ${scaleControl(m.contentScale ?? 1)}
       <button class="btn-ghost self-start" data-action="tips-reset">팁 다시 보기</button></section>
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-data"><h2 id="s-data" class="text-head">데이터</h2>
       <button class="set-link" data-nav="import"><span aria-hidden="true">📥</span><span class="flex-1 text-left">카드사·은행 파일 가져오기<span class="block text-caption text-ink-sub">엑셀·CSV · 중복은 알아서 걸러요</span></span><span aria-hidden="true">›</span></button>
