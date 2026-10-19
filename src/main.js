@@ -24,6 +24,7 @@ import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
+import { createUpdater } from './lib/pwa.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
@@ -89,7 +90,7 @@ function render() {
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-shell ${nav ? 'has-nav' : ''}">
       ${topBar(m, { month: !NO_NAV.has(ui.view) })}
-      <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
+      <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${ui.updateReady ? updateBar() : ''}${body}</main>
     </div>
     ${nav ? tabBar() : ''}
     <div id="tip-slot"></div>`;
@@ -101,6 +102,8 @@ function render() {
   lastView = ui.view;
   renderTip();
 }
+// 새 버전 안내(QA 3차 N3): 입력 중이라 바로 다시 불러오지 못할 때만 보임
+const updateBar = () => `<div class="update-bar" role="status"><span>새 버전이 있어요.</span><button class="btn-primary update-btn" data-action="apply-update">지금 적용</button></div>`;
 const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
   <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쓱 가계부' })}</div>
   ${TABS.slice(0, 2).map(tabBtn).join('')}
@@ -314,6 +317,7 @@ app.addEventListener('click', async (e) => {
     return go(d.nav, { ...(d.mode ? { mode: d.mode, catFilter: null } : {}), ...(ym ? { viewYm: m && ym >= m.curYm ? null : ym, selDate: null } : {}) });
   }
   if (d.tx) { const tx = findTx(d.tx); return tx && openSheet(tx); }
+  if (d.action === 'apply-update') return updater.apply();
   if (Object.keys(d).some((k) => k.startsWith('imp'))) return onImportClick(d);
   // 검색
   if (d.searchKind !== undefined) { ui.search.kind = d.searchKind; if (ui.search.categoryId && m.catMap.get(ui.search.categoryId)?.kind !== d.searchKind && d.searchKind) ui.search.categoryId = ''; return render(); }
@@ -585,6 +589,23 @@ app.addEventListener('click', (e) => { if (Date.now() - swipedAt < 300 && e.targ
 let raf = 0;
 const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!isSheetOpen() || ui.view) render(); }); };
 
+// 새 버전 적용(QA 3차 N3, src/lib/pwa.js). 입력 중인 내용이 있으면 바로 다시 불러오지 않고 안내만
+const isBusy = () => !!state?.user && (isSheetOpen() || !!document.querySelector('[role=alertdialog],[role=dialog]')
+  || (ui.view === 'import' && (ui.imp?.step ?? 1) > 1) || !!(document.activeElement?.matches?.('input,textarea') && document.activeElement.value));
+const updater = createUpdater({ base: import.meta.env.BASE_URL, isBusy, canApplyAnytime: () => !state?.user,
+  onReady: () => { ui.updateReady = true; render(); } });
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => updater.register().catch((e) => console.error(e)));
+}
+// 빌드 표시(검사·문의 때 어느 빌드인지 확인용, 값이 있을 때만)
+if (import.meta.env.VITE_BUILD_TAG) document.documentElement.dataset.build = import.meta.env.VITE_BUILD_TAG;
+// 배포로 예전 조각 파일이 사라졌을 때(이전 버전 화면에서 늦게 불러오는 조각): 입력 중이 아니면 한 번만 다시 불러오고, 아니면 안내
+window.addEventListener('vite:preloadError', (e) => {
+  const k = 'preloadReloadAt', last = Number(sessionStorage.getItem(k) || 0);
+  if (!isBusy() && Date.now() - last > 60_000) { e.preventDefault(); sessionStorage.setItem(k, String(Date.now())); return location.reload(); }
+  ui.updateReady = true; render();
+});
+
 if (isFirebaseConfigured) {
   data = await import('./data.js');
   state = data.state;
@@ -599,7 +620,7 @@ if (isFirebaseConfigured) {
       // 앱 안에 문의 창구가 없으므로 사용자가 직접 할 수 있는 일을 안내(QA R8)
       const signedIn = !!data.state?.user;
       return signedIn
-        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 다시 해 주세요.', { action: '새로 고침', onAction: () => location.reload(), duration: 8000 })
+        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 다시 해 주세요.', { action: '새로 고침', onAction: () => updater.refresh(), duration: 8000 })
         : toast('다시 로그인해 주세요. 이번 기록은 저장하지 못했어요.');
     }
     // 스펙 8절: [다시 하기] — 같은 쓰기를 한 번 더(묶음 쓰기처럼 다시 할 수 없는 건 버튼 없이)

@@ -103,3 +103,54 @@ describe('N4 다른 기기에서 반복을 지운 사이 오프라인에서 지�
     expect(body).toMatch(/if \(!r\.exists\(\)\) return deleteDoc\(u\('transactions', id\)\)/);
   });
 });
+
+describe('N3 새 버전 적용(서비스 워커)', async () => {
+  const { createUpdater, AUTO_WINDOW_MS } = await import('./pwa.js');
+  const fake = ({ controller = true, busy = false, anytime = false } = {}) => {
+    const h = {}, dh = {};
+    let t = 1000;
+    const reg = { update: async () => {}, installing: null, waiting: null };
+    const sw = { controller: controller ? {} : null, addEventListener: (k, f) => { (h[k] ||= []).push(f); }, register: async () => reg, getRegistration: async () => reg };
+    const doc = { hidden: false, addEventListener: (k, f) => { (dh[k] ||= []).push(f); } };
+    const out = { reloads: 0, ready: 0, busy, anytime };
+    const up = createUpdater({ sw, base: '/gagyebu/', isBusy: () => out.busy, canApplyAnytime: () => out.anytime, onReady: () => out.ready++,
+      reload: () => out.reloads++, now: () => t, doc, timers: { setInterval: () => 0, setTimeout: (f) => f() } });
+    return { up, out, fire: (k) => (h[k] || []).forEach((f) => f()), vis: (hidden) => { doc.hidden = hidden; (dh.visibilitychange || []).forEach((f) => f()); }, tick: (ms) => { t += ms; }, reg };
+  };
+  it('새로 고친 직후 새 버전이 자리를 잡으면 바로 다시 불러옴(새로 고침 한 번으로 새 버전)', () => {
+    const f = fake(); f.fire('controllerchange');
+    expect(f.out.reloads).toBe(1); expect(f.out.ready).toBe(0);
+  });
+  it('첫 설치(전에 서비스 워커가 없던 화면)는 다시 불러오지 않음', () => {
+    const f = fake({ controller: false }); f.fire('controllerchange');
+    expect(f.out.reloads).toBe(0);
+  });
+  it('입력 중이면 바로 다시 불러오지 않고 안내만, 앱을 뒤로 보냈을 때 입력 중이 아니면 적용', () => {
+    const f = fake({ busy: true }); f.fire('controllerchange');
+    expect(f.out.reloads).toBe(0); expect(f.out.ready).toBe(1);
+    f.vis(true); expect(f.out.reloads).toBe(0); // 아직 입력 중
+    f.out.busy = false; f.vis(false); f.vis(true); expect(f.out.reloads).toBe(1);
+  });
+  it('켜 둔 지 오래된 화면은 안내([지금 적용])만, 버튼을 누르면 적용', () => {
+    const f = fake(); f.tick(AUTO_WINDOW_MS + 1); f.fire('controllerchange');
+    expect(f.out.reloads).toBe(0); expect(f.out.ready).toBe(1);
+    f.up.apply(); expect(f.out.reloads).toBe(1);
+  });
+  it('로그인 전 화면은 언제든 바로 적용', () => {
+    const f = fake({ anytime: true }); f.tick(AUTO_WINDOW_MS + 1); f.fire('controllerchange');
+    expect(f.out.reloads).toBe(1);
+  });
+  it('[새로 고침](권한 토스트): 새 버전을 먼저 받아 자리 잡게 한 뒤 다시 불러옴', async () => {
+    const f = fake(); let posted = null;
+    f.reg.update = async () => { f.reg.waiting = { postMessage: (m) => { posted = m; } }; };
+    await f.up.refresh();
+    expect(posted).toEqual({ type: 'SKIP_WAITING' }); expect(f.out.reloads).toBe(1);
+  });
+  it('vite.config: 새 서비스 워커가 기다리지 않음(skipWaiting·clientsClaim), 플러그인 등록 스크립트 대신 직접 등록', () => {
+    const v = read('vite.config.js');
+    expect(v).toMatch(/skipWaiting: true/); expect(v).toMatch(/clientsClaim: true/); expect(v).toMatch(/injectRegister: false/);
+    const m = read('src/main.js');
+    expect(m).toMatch(/onAction: \(\) => updater\.refresh\(\)/);
+    expect(m).not.toMatch(/onAction: \(\) => location\.reload\(\)/);
+  });
+});

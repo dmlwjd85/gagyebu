@@ -123,6 +123,10 @@
   .tip-mini { @apply grid place-items-center w-11 h-11 rounded-full text-lg shadow-glass; background: var(--surface-solid); }
   @media (min-width: 1024px) { .tip { right: calc(50% - 30rem); } }
 
+  /* 새 버전 안내(QA 3차 N3): 본문 맨 위 한 줄 */
+  .update-bar { @apply flex items-center justify-between gap-3 mb-3 pl-4 pr-2 py-2 rounded-2xl text-body font-semibold max-w-[560px] mx-auto;
+    background: var(--surface-solid); border: 1px solid var(--primary); }
+  .update-btn { @apply min-h-[44px] px-4 shrink-0 whitespace-nowrap; }
   .toast { @apply fixed left-1/2 z-[60] flex items-center gap-3 w-max max-w-[min(92vw,440px)] px-4 py-3 rounded-2xl text-caption font-semibold shadow-glass pointer-events-none opacity-0;
     bottom: calc(100px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px); transition: opacity .22s ease-out, transform .22s ease-out;
     background: #1E1B3A; color: #F3F1FF; }
