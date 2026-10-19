@@ -74,12 +74,12 @@ export function recurringView(m) {
           <button class="icon-btn" data-rec-del="${esc(r.id)}" aria-label="${esc(r.name)} 삭제">🗑️</button></li>`;
       }).join('')}</ul>` : '<div class="py-6 text-center"><p class="text-4xl" aria-hidden="true">🔁</p><p class="mt-2 text-body text-ink-sub">아직 반복 거래가 없어요.</p></div>'}
       <button class="btn-ghost mt-3" data-action="add-rec">＋ 반복 거래 추가</button>
-      <p class="mt-2 text-caption text-ink-sub">입력 시트에서 '매달 반복'을 켜거나 저장 버튼을 길게 눌러도 만들 수 있어요.</p>
+      <p class="mt-2 text-caption text-ink-sub">기록할 때 '매달 반복'을 켜거나 저장 버튼을 길게 눌러도 만들 수 있어요.</p>
     </section>
     ${subs.length ? `<section class="card-solid p-4" aria-labelledby="sub-h"><h2 id="sub-h" class="text-head">구독 같아요</h2>
-      <p class="mt-1 text-caption text-ink-sub">같은 곳에 같은 금액이 매달 비슷한 날에 나갔어요. 반복으로 등록할까요?</p>
-      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex items-center gap-3 min-h-[52px]"><span class="flex-1 min-w-0 text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · 매달 ${s.day}일쯤 · ${formatWon(s.amount)}</span></span>
-        <button class="chip" data-rec-from="${esc(s.name)}" data-amount="${s.amount}" data-day="${s.day}" data-cat="${esc(s.categoryId ?? '')}" aria-label="${esc(s.name)} 반복으로 등록">등록</button></li>`).join('')}</ul></section>` : ''}
+      <p class="mt-1 text-caption text-ink-sub">같은 곳에 같은 금액이 매달 비슷한 날에 나갔어요. 반복으로 남길까요?</p>
+      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex items-center gap-3 min-h-[52px]"><span class="flex-1 min-w-0 text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub tabular-nums">${s.months}달 · 매달 ${s.day}일쯤 · ${formatWon(s.amount)}</span></span>
+        <button class="chip" data-rec-from="${esc(s.name)}" data-amount="${s.amount}" data-day="${s.day}" data-cat="${esc(s.categoryId ?? '')}" aria-label="${esc(s.name)} 반복으로 남기기">반복으로 남기기</button></li>`).join('')}</ul></section>` : ''}
   </div>`;
 }
 

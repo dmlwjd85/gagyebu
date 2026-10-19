@@ -1,11 +1,11 @@
 import { readFileSync } from 'node:fs';
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch } from 'firebase/firestore';
 import { recTxId } from '../../src/lib/recurring.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../../src/lib/defaults.js';
 import { safeRef, fixedRecId, looksLikeCard } from '../../src/lib/ids.js';
-import { restorePlans } from '../../src/lib/restore.js';
+import { restorePlans, editTarget, keepTx, keptList, keepIdOf } from '../../src/lib/restore.js';
 
 let env;
 beforeAll(async () => {
@@ -550,12 +550,35 @@ describe('R5 형식 밖 반복 id: 새 id 만들기·옮기기·되돌리기', (
     await assertSucceeds(deleteDoc(doc(alice(), `users/alice/recurring/${BAD}`)));
     await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${recTxId(nid, '2026-11')}`), { ...TX, date: '2026-11-01', categoryId: 'housing', recurringId: nid, memo: '월세' }));
   });
-  test('되돌리기 시도 순서: 같은 id·새 id는 거부, 마지막(반복 id 뺌)은 새 id로 허용', async () => {
+  test('되돌리기 시도 순서: 같은 id는 거부, 2단계(옮긴 반복 id로 연결, 고정 새 id)는 허용, 3단계(반복 id 뺌)도 허용', async () => {
     const tx = { id: `rec-${BAD}-2026-10`, date: '2026-10-01', amount: 550000, kind: 'expense', categoryId: 'housing', memo: '월세', recurringId: BAD };
     const plans = restorePlans(tx);
     expect(plans).toHaveLength(3);
+    const ts = { createdAt: serverTimestamp(), updatedAt: serverTimestamp() };
     await assertFails(setDoc(doc(alice(), `users/alice/transactions/${tx.id}`), plans[0].data));
-    await assertFails(setDoc(doc(collection(alice(), 'users/alice/transactions')), plans[1].data));
-    await assertSucceeds(setDoc(doc(collection(alice(), 'users/alice/transactions')), { ...plans[2].data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${editTarget(tx).id}`), { ...plans[1].data, ...ts }));
+    await assertSucceeds(setDoc(doc(collection(alice(), 'users/alice/transactions')), { ...plans[2].data, ...ts }));
+  });
+  test('N6 예전 형식 문서 고치기: 고정 새 id에 쓰기 + 예전 문서 지우기를 한 묶음으로 허용', async () => {
+    await env.withSecurityRulesDisabled(async (c) => {
+      await setDoc(doc(c.firestore(), `users/alice/transactions/rec-${BAD}-2026-10`), { date: '2026-10-01', amount: 120000, kind: 'expense', categoryId: 'housing', memo: '관리비', recurringId: BAD });
+      await setDoc(doc(c.firestore(), 'users/alice/transactions/legacyTx1234567890123'), { date: '2026-10-05', amount: 3000, kind: 'expense', categoryId: 'food' });
+    });
+    const db = alice();
+    for (const old of [{ id: `rec-${BAD}-2026-10`, recurringId: BAD, memo: '관리비 10월', amount: 120000 }, { id: 'legacyTx1234567890123', memo: '편의점 우유', amount: 3000 }]) {
+      const t = editTarget(old);
+      // 예전 id 그대로 고치기는 거부(지금까지의 '새로 고친 뒤 한 번 더' 원인)
+      await assertFails(setDoc(doc(db, `users/alice/transactions/${old.id}`), { date: '2026-10-01', amount: old.amount, kind: 'expense', categoryId: 'housing', memo: old.memo }));
+      const b = writeBatch(db);
+      b.set(doc(db, `users/alice/transactions/${t.id}`), { date: '2026-10-01', amount: old.amount, kind: 'expense', categoryId: 'housing', memo: old.memo, ...(t.recurringId ? { recurringId: t.recurringId } : {}), updatedAt: serverTimestamp(), createdAt: serverTimestamp() });
+      b.delete(doc(db, `users/alice/transactions/${old.id}`));
+      await assertSucceeds(b.commit());
+    }
+  });
+  test('N1 보관함 고정 id(kp + 영문 18자)는 규칙이 받음', async () => {
+    const ls = new Map(); const mem = { getItem: (k) => ls.get(k) ?? null, setItem: (k, v) => ls.set(k, v), removeItem: (k) => ls.delete(k) };
+    keepTx('alice', { id: 'k1234567890123x', date: '2026-02-28', amount: 4500, kind: 'expense', categoryId: 'food' }, mem, 1);
+    const it = keptList('alice', mem)[0];
+    await assertSucceeds(setDoc(doc(alice(), `users/alice/transactions/${keepIdOf('alice', it)}`), { date: it.date, amount: it.amount, kind: it.kind, categoryId: it.categoryId, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
   });
 });

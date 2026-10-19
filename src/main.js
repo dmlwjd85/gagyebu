@@ -10,6 +10,7 @@ import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
+import { editTarget } from './lib/restore.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic } from './ui/util.js';
@@ -45,7 +46,7 @@ function model() {
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
     sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
-    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, kept: state.kept, txs: state.txs,
+    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, kept: state.kept, keptBusy: !!ui.keptBusy, txs: state.txs,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
@@ -114,7 +115,7 @@ let currentTip = null, tipCollapsed = false, tipTimer;
 function pickTip() {
   const r = nextTip(tipState(), today());
   saveTipState(r.state);
-  currentTip = r.tip ? { text: r.tip, index: r.index } : null;
+  currentTip = r.tip ? { text: r.tip, key: r.key } : null;
   tipCollapsed = false;
   clearTimeout(tipTimer);
   tipTimer = setTimeout(() => { tipCollapsed = true; renderTip(); }, 8000);
@@ -131,8 +132,10 @@ function renderTip() {
 // ── 동작 ───────────────────────────────────────────
 function onSave(tx, { repeat = false } = {}) {
   const isEdit = !!tx.id;
-  const before = isEdit ? findTx(tx.id) : null;
+  const old = isEdit ? findTx(tx.id) : null;
   const id = data.saveTx(tx);
+  // 예전 형식 id라 새 id로 옮겨 고쳤으면, 되돌리기도 옮긴 문서에(QA N6)
+  const before = old && id !== old.id ? { ...old, id, recurringId: editTarget(old).recurringId } : old;
   const c = state.categories.find((x) => x.id === tx.categoryId);
   if (ui.view === 'search') refreshSearch();
   if (repeat && tx.amount > 0) {
@@ -155,7 +158,7 @@ function onSave(tx, { repeat = false } = {}) {
   setTimeout(() => {
     const m = model();
     const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` · 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
-    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요.' : '남겼어요'}${extra}`, {
+    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요' : '남겼어요'}${extra}`, {
       action: '되돌리기', onAction: () => (before ? data.restoreTx(before) : data.deleteTx(id)),
     });
   }, 50);
@@ -200,7 +203,7 @@ async function editRecurring(r) {
       { name: 'dayOfMonth', label: '매달 며칠', type: 'select', value: r?.dayOfMonth ?? Number(t.slice(8)), options: Array.from({ length: 31 }, (_, i) => [i + 1, `${i + 1}일`]) },
       { name: 'accountId', label: '결제수단', type: 'select', value: r?.accountId ?? '', options: [['', '지정 안 함'], ...state.accounts.map((a) => [a.id, `${a.emoji || ''} ${a.name}`])] },
     ],
-    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 적어 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
+    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 먼저 적어 주세요.' : x.amount > 1_000_000_000 ? '한 번에 10억 원까지 적을 수 있어요.' : null),
   });
   if (!v) return;
   const c = state.categories.find((x) => x.id === v.categoryId);
@@ -291,7 +294,7 @@ async function onImportClick(d) {
 }
 
 async function editBudget(m) {
-  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 끕니다.', value: m.budget?.total ?? 0 });
+  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 꺼요.', value: m.budget?.total ?? 0 });
   if (v == null) return;
   const pr = state.budget?.byCategory ? pruneLimits(state.budget.byCategory, state.categories).by : undefined;
   data.setBudget(m.viewYm, v, pr && Object.keys(pr).length ? pr : undefined);
@@ -390,7 +393,7 @@ app.addEventListener('click', async (e) => {
   if (d.env) {
     const c = state.categories.find((x) => x.id === d.env);
     const cur = state.budget?.byCategory?.[d.env] ?? 0;
-    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없앱니다.', value: cur });
+    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없애요.', value: cur });
     if (v == null) return;
     const by = { ...(state.budget?.byCategory ?? {}) };
     v ? (by[d.env] = v) : delete by[d.env];
@@ -400,7 +403,7 @@ app.addEventListener('click', async (e) => {
     if (!pr.ok) return toast('카테고리 한도는 30개까지 정할 수 있어요. 안 쓰는 카테고리 한도를 눌러 0원으로 지운 뒤 다시 해 주세요.', { duration: 6000 });
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
-  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
+  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.key, today())); currentTip = null; return renderTip(); }
   if (d.tipOpen !== undefined) { tipCollapsed = false; return renderTip(); }
   switch (d.action) {
     case 'add': haptic(); return openSheet();
@@ -420,8 +423,11 @@ app.addEventListener('click', async (e) => {
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
     case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 줄게요.');
     case 'kept-retry': {
+      if (ui.keptBusy) return; // 겹쳐 누르기 막기(QA N1)
       if (!navigator.onLine) return toast('인터넷이 연결되면 다시 눌러 주세요. 기록은 이 기기에 그대로 있어요.');
-      const r = await data.retryKept();
+      ui.keptBusy = true; render();
+      let r;
+      try { r = await data.retryKept(); } finally { ui.keptBusy = false; render(); }
       if (!r.left) return toast(r.saved > 1 ? `보관해 둔 기록 ${r.saved}건을 모두 저장했어요.` : '보관해 둔 기록을 저장했어요.');
       return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
     }

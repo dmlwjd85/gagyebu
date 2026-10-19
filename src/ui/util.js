@@ -44,7 +44,7 @@ export function toast(msg, { action, onAction, duration = 3500 } = {}) {
   let el = $('#toast');
   if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.append(el); }
   el.className = 'toast show';
-  el.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
+  el.innerHTML = `<span class="tabular-nums">${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
   if (action) el.querySelector('button').onclick = () => { el.classList.remove('show'); onAction?.(); };
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), action ? Math.max(duration, 5000) : duration);

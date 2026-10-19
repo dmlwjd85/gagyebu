@@ -15,7 +15,7 @@ if (isFirebaseConfigured) {
     connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
   }
 } else {
-  console.info('[쓱 가계부] Firebase 설정값이 없어 설정 안내 화면을 보여 줍니다. (.env.example 참고)');
+  console.info('[쓱 가계부] Firebase 설정값이 없어 설정 안내 화면을 보여 줘요. (.env.example 참고)');
 }
 export { app, auth };
 export const googleProvider = new GoogleAuthProvider();

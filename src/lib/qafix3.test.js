@@ -92,7 +92,7 @@ describe('N10 환불이 지출보다 많은 달의 지출 표기', () => {
   test('예산: 환불이 더 많아도 사용 0%, 남은 예산이 예산보다 커지지 않음', () => {
     const m = model('2026-10', { budget: { total: 300000 } });
     const t = text(budgetView(m, {}));
-    expect(t).toMatch(/0% 사용/);
+    expect(t).toMatch(/0% 썼어요/);
     expect(t).toContain('300,000원 남았어요');
     expect(t).toContain('환불 +49,000원이 지출보다 많아 사용 0원으로 봐요');
     expect(m.weather.usedPct).toBe(0);

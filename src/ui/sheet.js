@@ -90,7 +90,7 @@ function render() {
       <div class="cat-grid" role="radiogroup" aria-label="카테고리">
         ${shown.map((c) => `<button role="radio" aria-checked="${c.id === s.categoryId}" class="cat-chip" data-cat="${esc(c.id)}">
           <span class="text-2xl leading-none" aria-hidden="true">${esc(c.emoji)}</span><span class="cat-name">${esc(c.name)}</span></button>`).join('')}
-        ${list.length > 8 && !s.more ? `<button class="cat-chip" data-more><span class="text-2xl leading-none" aria-hidden="true">⋯</span><span class="cat-name">더보기</span></button>` : ''}
+        ${list.length > 8 && !s.more ? `<button class="cat-chip" data-more><span class="text-2xl leading-none" aria-hidden="true">⋯</span><span class="cat-name">더 보기</span></button>` : ''}
       </div>
     </div>
     ${s.showOpts ? `<div class="px-5 pt-3 grid gap-2">

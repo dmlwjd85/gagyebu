@@ -27,6 +27,8 @@
   .tabular-nums, .key, .amount-display { font-family: var(--font-num); }
   h1, h2, h3, .text-title, .text-head, .text-display, .stat-v { font-family: var(--font-title); }
   .text-display, .stat-v, .amount-display { font-variant-numeric: tabular-nums; }
+  /* 같은 폭 숫자: 글자 크기에 따라 힌팅 반올림으로 숫자마다 26·27px처럼 갈리는 것 막기(롤링 중 폭 흔들림, QA N5) */
+  .tabular-nums, .text-display, .stat-v, .amount-display, .key { text-rendering: geometricPrecision; }
   .aurora { position: fixed; inset: 0; z-index: -1; pointer-events: none; background-color: var(--bg);
     background-image: radial-gradient(60% 50% at 10% 0%, var(--aurora-1) 0%, transparent 60%),
       radial-gradient(50% 45% at 100% 10%, var(--aurora-2) 0%, transparent 60%),
@@ -57,7 +59,8 @@
   .btn-primary:active:not([aria-disabled="true"]) { transform: scale(.98); }
   .btn-primary[aria-disabled="true"] { opacity: .45; }
   .btn-ghost { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-semibold border; border-color: var(--line); background: var(--surface-solid); }
-  .btn-ghost:hover { border-color: var(--primary); }
+  .btn-ghost:hover:not(:disabled) { border-color: var(--primary); }
+  .btn-ghost:disabled { opacity: .6; }
   .btn-danger { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-semibold border; color: var(--expense); border-color: var(--expense); background: transparent; }
   .btn-google { @apply flex items-center justify-center gap-3 min-h-[52px] rounded-2xl font-bold border text-ink; border-color: var(--line); background: var(--surface-solid); }
   .btn-google:hover { border-color: var(--primary); }

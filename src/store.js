@@ -7,7 +7,7 @@ import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/d
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences } from './lib/recurring.js';
 import { safeRef, isRuleId, fixedRecId } from './lib/ids.js';
-import { restorePlans, keptList, keepTx, unkeep } from './lib/restore.js';
+import { restorePlans, keptList, keepTx, unkeep, keepIdOf, editTarget } from './lib/restore.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
@@ -31,6 +31,10 @@ function fire(promise, onError) {
   promise.catch((e) => { console.error(e); onError?.(e); });
 }
 
+// 다른 탭이 보관함을 바꾸면(보관·다시 저장) 이 탭 화면도 바로 맞춤
+globalThis.addEventListener?.('storage', (e) => {
+  if (state?.user && e.key === `keptTx:${state.user.uid}`) { state.kept = keptList(state.user.uid); emit(); }
+});
 export function startUser() {
   state.kept = keptList(state.user.uid);
   unsubs.push(onSnapshot(u(), { includeMetadataChanges: true }, (snap) => {
@@ -65,7 +69,7 @@ export function startUser() {
   unsubs.push(onSnapshot(col('recurring'), { includeMetadataChanges: true }, (s) => {
     state.recurring = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.dayOfMonth - b.dayOfMonth);
     // 서버 기준 목록을 받은 뒤 한 번만 밀린 회차 기록(캐시만 보고 쓰면 다른 기기 기록을 모름)
-    if (!posted && !s.metadata.fromCache) { posted = true; postRecurring(ymd(new Date())); retryKept({ quiet: true }); }
+    if (!posted && !s.metadata.fromCache) { posted = true; postRecurring(ymd(new Date())); retryKept().catch((e) => console.error(e)); }
     emit();
   }));
 }
@@ -132,12 +136,17 @@ const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, impor
   clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4 });
 export const tagsOf = (memo = '') => [...new Set((memo.match(/#[^\s#]{1,20}/g) || []).map((t) => t.slice(1)))].slice(0, 20);
 
+// 고치기: 예전 형식 id(규칙이 늘 거부)면 늘 같은 새 id로 옮겨 쓰고 예전 문서는 같은 묶음에서 지움(QA N6, editTarget 참고)
 export function saveTx(tx) {
-  const ref = tx.id ? u('transactions', tx.id) : newRef('transactions');
-  const data = { ...txFields({ ...tx, tags: tagsOf(tx.memo) }), updatedAt: serverTimestamp(), ...(tx.id ? {} : { createdAt: serverTimestamp() }) };
+  const t = tx.id ? editTarget(tx) : { id: newRef('transactions').id, recurringId: tx.recurringId, moved: false };
+  const data = { ...txFields({ ...tx, recurringId: t.recurringId, tags: tagsOf(tx.memo) }), updatedAt: serverTimestamp(), ...(tx.id ? {} : { createdAt: serverTimestamp() }) };
   if (tx.id && tx.createdAt) data.createdAt = tx.createdAt;
-  fire(setDoc(ref, data), writeErrorHandler);
-  return ref.id;
+  if (!t.moved) { fire(setDoc(u('transactions', t.id), data), writeErrorHandler); return t.id; }
+  const b = writeBatch(db);
+  b.set(u('transactions', t.id), { ...data, createdAt: data.createdAt || serverTimestamp() });
+  b.delete(u('transactions', tx.id));
+  fire(b.commit(), writeErrorHandler);
+  return t.id;
 }
 // 여러 건 한 번에 저장 (400건씩 묶음)
 export async function saveTxBatch(list) {
@@ -153,10 +162,14 @@ export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
   const uid = state.user.uid;
   const createdAt = tx.createdAt || (tx.createdAtMs ? Timestamp.fromMillis(tx.createdAtMs) : undefined);
   const plans = restorePlans(tx);
+  const moved = tx.id && editTarget(tx).moved ? editTarget(tx).id : null;
   const run = async () => {
     for (const [i, p] of plans.entries()) {
-      if (!p.newId && !tx.id) continue;
-      const ref = p.newId ? newRef('transactions') : u('transactions', tx.id);
+      if (!p.newId && (!tx.id || moved)) continue; // 예전 형식 id는 규칙이 늘 거부하니 같은 id 시도는 건너뜀
+      // 보관함에서 다시 저장: 새 id도 보관 때 정한 고정 id → 겹쳐 눌러도·두 탭이 함께 해도 같은 문서 1건(QA N1)
+      // 예전 형식 id 문서는 고치기와 같은 고정 새 id(editTarget)로 → 되돌리기를 여러 번 해도 1건
+      const ref = !p.newId ? u('transactions', tx.id) : fromKeep ? u('transactions', keepIdOf(uid, tx))
+        : moved ? u('transactions', moved) : newRef('transactions');
       try {
         await setDoc(ref, { ...p.data, createdAt: createdAt || serverTimestamp(), updatedAt: serverTimestamp() });
         if (fromKeep) { state.kept = unkeep(uid, tx.keepKey); emit(); }
@@ -168,7 +181,7 @@ export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
       }
     }
     if (!fromKeep) { keepTx(uid, tx); state.kept = keptList(uid); emit(); }
-    if (!quiet) writeErrorHandler?.({ code: 'kept-locally', message: '서버에 저장하지 못해서, 이 기기에 따로 담아 뒀어요. 설정 › 데이터에서 다시 저장하거나 CSV로 받아요.' });
+    if (!quiet) writeErrorHandler?.({ code: 'kept-locally', message: '서버에 저장하지 못해서, 이 기기에 따로 담아 뒀어요. 설정 › 데이터에서 다시 저장하거나 CSV로 받을 수 있어요.' });
     return false;
   };
   const p = run();
@@ -176,13 +189,26 @@ export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
   return p;
 }
 // 이 기기에 보관해 둔 기록 다시 저장(앱을 열 때 조용히 한 번, 설정에서 버튼으로)
-export async function retryKept({ quiet = false } = {}) {
-  state.kept = keptList(state.user.uid);
-  const list = [...state.kept];
-  if (!list.length) return { saved: 0, left: 0 };
-  let saved = 0;
-  for (const t of list) if (await restoreTx(t, { fromKeep: true, quiet: true })) saved++;
-  return { saved, left: list.length - saved };
+// 겹침 막기: 이 탭에선 진행 중인 재저장을 함께 기다리고(앱 시작 자동 재저장·버튼 겹침), 다른 탭과는 Web Locks로 차례대로.
+// 차례가 오면 보관함을 다시 읽어 다른 탭이 이미 저장한 항목은 건너뜀. 그래도 겹치면 고정 id라 같은 문서에 덮어씀.
+let retrying = null;
+export function retryKept() {
+  if (retrying) return retrying;
+  const uid = state.user.uid;
+  const work = async () => {
+    state.kept = keptList(uid);
+    const list = [...state.kept];
+    let saved = 0;
+    for (const t of list) {
+      if (!keptList(uid).some((x) => x.keepKey === t.keepKey)) { saved++; continue; } // 다른 탭이 방금 저장함
+      if (await restoreTx(t, { fromKeep: true, quiet: true })) saved++;
+    }
+    state.kept = keptList(uid); emit();
+    return { saved, left: list.length - saved };
+  };
+  const locks = globalThis.navigator?.locks;
+  retrying = (locks ? locks.request(`keptTx:${uid}`, work) : work()).finally(() => { retrying = null; });
+  return retrying;
 }
 export const deleteTx = (id) => fire(deleteDoc(u('transactions', id)), writeErrorHandler);
 
@@ -238,7 +264,8 @@ export function saveRecurring(r) {
   // 규칙에 맞지 않는 예전 id면 늘 같은 새 id로 옮김: 새 문서 쓰기와 예전 문서 지우기를 한 묶음으로(둘 다 되거나 둘 다 안 됨, QA R5)
   if (r.id && !isRuleId(r.id)) {
     const id = fixedRecId(r.id), b = writeBatch(db);
-    b.set(u('recurring', id), data); b.delete(u('recurring', r.id));
+    const createdAt = r.createdAt ?? state.recurring.find((x) => x.id === r.id)?.createdAt; // 만든 날은 그대로(QA N7)
+    b.set(u('recurring', id), clean({ ...data, createdAt })); b.delete(u('recurring', r.id));
     fire(b.commit(), writeErrorHandler);
     return id;
   }

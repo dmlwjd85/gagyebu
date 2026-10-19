@@ -177,7 +177,7 @@ function step2(m, imp) {
   const refunds = items.filter((x) => x.amount < 0).length;
   const catMap = m.catMap;
   return `<div class="flex flex-wrap gap-2">
-      <span class="chip ${imp.preset.verified ? 'chip-ok' : ''}">${imp.preset.id === 'generic' ? '📄 일반 형식' : imp.preset.verified ? `✓ ${esc(imp.preset.label)} 형식` : `${imp.preset.emoji} ${esc(imp.preset.label)} 형식 같아요(추정) · 열을 확인해 주세요`}</span>
+      <span class="chip ${imp.preset.verified ? 'chip-ok' : ''}">${imp.preset.id === 'generic' ? '📄 일반 형식' : imp.preset.verified ? `✓ ${esc(imp.preset.label)} 형식` : `${imp.preset.emoji} ${esc(imp.preset.label)} 형식 같아요 · 열을 한 번 봐 주세요`}</span>
       ${t.encoding && imp.bytes ? `<button class="chip" data-imp-enc aria-label="글자 인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'}, 눌러서 바꾸기">인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'} ▾</button>` : ''}
       <span class="inline-flex items-center gap-1"><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="-1" aria-label="머리글 줄 위로" ${imp.headerRow === 0 ? 'disabled' : ''}>−</button><span class="text-caption font-semibold">머리글 ${imp.headerRow + 1}번째 줄</span><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="1" aria-label="머리글 줄 아래로">＋</button></span>
       ${t.sheets.length > 1 ? t.sheets.map((sh, i) => `<button class="chip" data-imp-sheet="${i}" aria-pressed="${i === imp.sheet}">${esc(sh.name)}</button>`).join('') : ''}
