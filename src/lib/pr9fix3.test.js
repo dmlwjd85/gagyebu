@@ -22,3 +22,15 @@ describe('N7 낮은 화면: 아래 메뉴 숨김·보임이 문서 길이를 바
     expect(main.slice(i, j)).toMatch(/if \(room <= 2\) \{ root\.classList\.remove\('nav-autohide'\); lastY = y; return; \}/);
   });
 });
+
+describe('N8 오프라인 배지 글자: 디자인 스펙 최소 크기(13px, 11px는 달력 칸만) 이상', () => {
+  const css = src('style.css');
+  const rule = css.match(/\.offline-badge \{[^}]*\}/)[0];
+  it('글자 13px 이상, 한 줄(줄바꿈 없음)·자리 차지 없음(absolute) 유지', () => {
+    const fs = Number(rule.match(/font-size: (\d+(?:\.\d+)?)px/)[1]);
+    expect(fs).toBeGreaterThanOrEqual(13);
+    expect(rule).toMatch(/position: absolute;/);
+    expect(rule).toMatch(/white-space: nowrap;/);
+  });
+  it('색(흰 글자/짙은 주황, 대비 약 5:1)은 그대로', () => expect(rule).toMatch(/background: #B45309; color: #fff;/));
+});
