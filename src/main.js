@@ -414,7 +414,7 @@ app.addEventListener('click', async (e) => {
     case 'budget': return editBudget(m);
     case 'login':
       ui.loginError = '';
-      try { await data.login(); } catch (err) { ui.loginError = '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.'; console.error(err); render(); }
+      try { await data.login(); } catch (err) { ui.loginError = data.loginErrorText(err); console.error(err); render(); }
       return;
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
@@ -587,6 +587,7 @@ if (isFirebaseConfigured) {
     }
     return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
   });
+  data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);
   data.initAuth();
   pickTip();
