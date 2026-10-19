@@ -5,7 +5,7 @@
    360·1280px × 라이트·다크로 모든 화면(+가져오기 단계·입력 시트)을 열어
    document 가로 스크롤(scrollWidth - clientWidth)과 화면 밖으로 나간 요소를 잼. 하나라도 있으면 종료 코드 1
 """
-import sys, json, urllib.request as U
+import os, sys, json, urllib.request as U
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
