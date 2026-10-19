@@ -10,8 +10,10 @@ from playwright.sync_api import sync_playwright
 
 URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
 SHOT = sys.argv[2] if len(sys.argv) > 2 else '/tmp/gagyebu-num-'
-PROJ = 'demo-gagyebu'
-for u in [f'http://127.0.0.1:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://127.0.0.1:9099/emulator/v1/projects/{PROJ}/accounts']:
+import os
+HOST = os.environ.get('GAGYEBU_EMU_HOST', '127.0.0.1')  # 다른 작업과 겹치지 않게 에뮬레이터 주소·프로젝트를 바꿀 수 있음
+PROJ = os.environ.get('GAGYEBU_PROJECT', 'demo-gagyebu')
+for u in [f'http://{HOST}:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents', f'http://{HOST}:9099/emulator/v1/projects/{PROJ}/accounts']:
     U.urlopen(U.Request(u, method='DELETE'))
 READY = 'window.__gagyebu && window.__gagyebu.state.user && window.__gagyebu.state.categories.length>0'
 SCAN = r"""()=>{
@@ -39,7 +41,12 @@ with sync_playwright() as p:
     # 반복 제안이 뜨게 6달 같은 가맹점·같은 금액, 환불 1건
     pg.evaluate("""() => { const d = window.__gagyebu.data;
       for (const ym of ['2026-05','2026-06','2026-07','2026-08','2026-09','2026-10']) d.saveTx({ date: ym + '-16', amount: 550000, kind: 'expense', categoryId: 'housing', memo: '월세 집주인' });
-      d.saveTx({ date: '2026-10-02', amount: -49000, kind: 'expense', categoryId: 'fashion', memo: '반품', importHash: '0123456789abcdef' }); }""")
+      d.saveTx({ date: '2026-10-02', amount: -49000, kind: 'expense', categoryId: 'fashion', memo: '반품', importHash: '0123456789abcdef' });
+      // D2: 저축 목표 카드 문장(한 달에 …씩 / 목표일이 지났어요 · … 남음 / … 남았어요 / 다 모음)도 검사 대상에 들게
+      d.saveGoal({ name: '여행', emoji: '✈️', target: 3000000, saved: 1250000, due: '2027-06-30', order: 0 });
+      d.saveGoal({ name: '노트북', emoji: '💻', target: 1800000, saved: 400000, due: '2026-09-30', order: 1 });
+      d.saveGoal({ name: '비상금', emoji: '🛟', target: 1000000, saved: 111000, order: 2 });
+      d.saveGoal({ name: '선물', emoji: '🎁', target: 200000, saved: 200000, order: 3 }); }""")
     pg.wait_for_timeout(2000)
     go = lambda v, w=800: (pg.evaluate(f"window.__gagyebu.go('{v}')"), pg.wait_for_timeout(w))
     for v in ['home', 'calendar', 'calendar-list', 'chart', 'chart-bar', 'budget', 'recurring', 'search', 'import', 'settings', 'sheet', 'toast']:
@@ -61,6 +68,8 @@ with sync_playwright() as p:
             go(v)
         items = pg.evaluate(SCAN)
         R['views'][v] = {'n': len(items), 'not_tnum': [i for i in items if 'tabular-nums' not in i['fvn']], 'not_geo': len([i for i in items if i['tr'] != 'geometricprecision'])}
+        if v == 'budget':
+            R['goal_lines'] = [i for i in items if any(w in i['text'] for w in ('한 달에', '목표일이 지났어요', '남았어요'))]
         if v in ('recurring', 'chart', 'budget', 'toast'): pg.screenshot(path=f'{SHOT}num-{v}-360.png')
         if v == 'sheet': pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
     # ② 롤링 중 폭
@@ -86,6 +95,8 @@ miss = sum(len(v['not_tnum']) for v in R['views'].values()); total = sum(v['n'] 
 wobble = {k: {l: w for l, w in v['width_by_len'].items() if len(w) > 1} for k, v in R['roll'].items()}
 wobble = {k: v for k, v in wobble.items() if v}
 print(f'금액 글자 {total}곳 중 tabular-nums 빠짐 {miss}곳 · 롤링 폭 흔들림 {len(wobble)}건 · 숫자 폭 종류 {len(set(R["glyph"]["now"]))}')
-ok = miss == 0 and not wobble and len(set(R['glyph']['now'])) == 1 and not errs
+goal_n = len(R.get('goal_lines', []))
+print(f'저축 목표 카드 문장 검사 {goal_n}곳(3곳 기대)')
+ok = goal_n >= 3 and miss == 0 and not wobble and len(set(R['glyph']['now'])) == 1 and not errs
 print('결과:', '통과' if ok else '실패')
 sys.exit(0 if ok else 1)
