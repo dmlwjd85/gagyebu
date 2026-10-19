@@ -261,7 +261,8 @@ describe('M5 실제 날짜·형식 검증', () => {
     await assertFails(tx({ importBatch: '1234-5678-9012-3456' }));
     await assertFails(tx({ importBatch: 'imp-' }));
     await assertFails(tx({ importBatch: 'imp-ABC' }));
-    await assertFails(tx({ importBatch: 'imp-' + 'a'.repeat(21) }));
+    await assertFails(tx({ importBatch: 'imp-' + 'a'.repeat(13) }));
+    await assertFails(tx({ importBatch: 'imp-1234567890123456' }));
   });
   test('recurringId·categoryId·accountId는 id 형식만', async () => {
     await assertFails(tx({ recurringId: '월세 4049-4700-0662-7012' }));
@@ -274,7 +275,7 @@ describe('M5 실제 날짜·형식 검증', () => {
   test('태그: 20개·각 20자까지', async () => {
     await assertSucceeds(tx({ tags: ['여행', 'x'.repeat(20)] }));
     // 최대치(20개·각 20자)+가져오기 필드 전부도 규칙 식 한도 안에서 통과
-    await assertSucceeds(tx({ tags: Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(20, 'x')), importHash: '0123456789abcdef', importBatch: 'imp-a1', card4: '7012', recurringId: 'r1', accountId: 'card', memo: 'm'.repeat(200) }));
+    await assertSucceeds(tx({ tags: Array.from({ length: 20 }, (_, i) => `${i}`.padEnd(20, 'x')), importHash: '0123456789abcdef', importBatch: 'imp-mgx1ab', card4: '7012', recurringId: 'r1', accountId: 'card', memo: 'm'.repeat(200) }));
     await assertFails(tx({ tags: ['x'.repeat(50000)] }));
     await assertFails(tx({ tags: ['a', 'x'.repeat(21)] }));
     await assertFails(tx({ tags: ['a', 3] }));
@@ -308,7 +309,7 @@ describe('M5 카테고리별 예산 값 검증', () => {
 describe('H3 카드 환불(지출 차감)', () => {
   const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/rf'), { ...TX, ...data });
   test('가져온 지출(지문 있음)만 음수 허용', async () => {
-    await assertSucceeds(tx({ amount: -12000, importHash: '0123456789abcdef', importBatch: 'imp-a1' }));
+    await assertSucceeds(tx({ amount: -12000, importHash: '0123456789abcdef', importBatch: 'imp-mgx1ab' }));
     await assertFails(tx({ amount: -12000 })); // 직접 기록은 음수 불가
     await assertFails(tx({ amount: -12000, kind: 'income', importHash: '0123456789abcdef' }));
     await assertFails(tx({ amount: -1000000001, importHash: '0123456789abcdef' }));
@@ -335,8 +336,30 @@ describe('M6 가져오기 묶음 기록', () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), p), { count: 1, at: new Date() }));
     await assertFails(getDoc(doc(bob(), p)));
     await assertFails(getDocs(collection(bob(), 'users/alice/imports')));
-    await assertFails(setDoc(doc(bob(), 'users/alice/imports/imp-b1'), IMP));
+    await assertFails(setDoc(doc(bob(), 'users/alice/imports/imp-mgx1bb'), IMP));
     await assertFails(deleteDoc(doc(bob(), p)));
     await assertFails(getDocs(collection(anon(), 'users/alice/imports')));
+  });
+});
+
+// ── QA 재검수 N8: id 칸에 카드번호 모양 글자 금지, 기존 id 형식은 그대로 허용 ──
+describe('N8 id 형식', () => {
+  const tx = (data) => setDoc(doc(alice(), 'users/alice/transactions/n8'), { ...TX, ...data });
+  test('카드번호 모양(하이픈·숫자 13자리 이상) 거부', async () => {
+    await assertFails(tx({ recurringId: '1234-5678-9012-3456' }));
+    await assertFails(tx({ categoryId: '1234-5678-9012-3456' }));
+    await assertFails(tx({ accountId: '4049470006627012' }));
+    await assertFails(tx({ recurringId: 'r1234567890123' }));
+    await assertFails(tx({ categoryId: 'food-1234' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/rules/n8'), { ...RULE, categoryId: '1234-5678-9012-3456' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { '4049470006627012': 1 } }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { food: 1, '1234-5678-9012-3456': 1 } }));
+  });
+  test('기존 id 형식 호환: 기본 카테고리·결제수단 id, 하이픈 기본 id, Firestore 자동 id', async () => {
+    for (const c of ['food', 'cafe', 'etc', 'etc-in', 'salary', 'refund', 'Xk3J9aZ0qLm2nB7cD4eF']) await assertSucceeds(tx({ categoryId: c }));
+    for (const a of ['card', 'cash', 'bank', 'Xk3J9aZ0qLm2nB7cD4eF']) await assertSucceeds(tx({ accountId: a }));
+    await assertSucceeds(tx({ recurringId: 'Xk3J9aZ0qLm2nB7cD4eF' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { food: 1, 'etc-in': 2, Xk3J9aZ0qLm2nB7cD4eF: 3 } }));
+    await assertSucceeds(tx({ importHash: '0123456789abcdef', importBatch: `imp-${Date.now().toString(36)}` }));
   });
 });

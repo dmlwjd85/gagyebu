@@ -14,7 +14,7 @@ function fit(ctx, text, weight, size, maxW) {
 
 /** 리포트에 넣을 숫자 모으기(화면 미리보기와 이미지가 같은 값을 씀) */
 export function reportData(m) {
-  const top = byCategory(m.periodTxs).slice(0, 3)
+  const top = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3)
     .map(({ categoryId, amount }) => ({ ...(m.catMap.get(categoryId) ?? { emoji: '🧾', name: '기타' }), amount }));
   const prev = m.trend[m.trend.length - 2];
   const diff = prev && prev.expense ? Math.round(((m.tot.expense - prev.expense) / prev.expense) * 100) : null;

@@ -1,7 +1,7 @@
 import { esc } from './util.js';
 import { formatWon, signedWon, shortWon, compactWon, isPlus } from '../lib/money.js';
 import { addDays, parseYmd, prettyDate, WEEK, monthLabel } from '../lib/dates.js';
-import { byCategory, byDay, heatLevel } from '../lib/stats.js';
+import { byCategory, byDay, heatLevel, envelope } from '../lib/stats.js';
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
 import { symbol } from './brand.js';
@@ -68,7 +68,7 @@ export function homeView(m) {
       ${used != null ? `<p class="mt-3 text-caption">예산 ${formatWon(m.budget.total)} 중 ${used}% 사용</p>` : ''}`;
   }
   const recent = m.periodTxs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)).slice(0, m.wide ? 6 : 3);
-  const top3 = byCategory(m.periodTxs).slice(0, 3);
+  const top3 = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3);
   return `<h1 class="sr-only">홈</h1><div class="view-grid">
     <div class="flex flex-col gap-3">
       <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
@@ -150,7 +150,10 @@ export function chartView(m, ui) {
   if (m.txLoaded && m.periodTxs.length < 3) return `<div class="flex flex-col gap-3">${head}<section class="card-solid p-4">${empty('📊', '기록이 3개 이상 모이면 그래프를 그려 드릴게요.')}</section>${trendCard(m, ui)}</div>`;
   if (kind === 'saved') return `<div class="flex flex-col gap-3">${head}<div class="view-grid">${savedCard(m)}${trendCard(m, ui)}</div></div>`;
   const sel = m.periodTxs.filter((t) => t.kind === kind);
-  const cats = byCategory(sel, kind);
+  // 순지출(환불 차감 후)이 남은 카테고리만 도넛·비율에. 환불이 더 크거나 상쇄된 카테고리는 아래에 따로
+  const all = byCategory(sel, kind);
+  const cats = all.filter((c) => c.amount > 0), overs = all.filter((c) => c.over && sel.some((t) => t.categoryId === c.categoryId && t.amount < 0));
+  const posSum = cats.reduce((a, c) => a + c.amount, 0);
   const top = cats.slice(0, 6), rest = cats.slice(6);
   if (rest.length) top.push({ categoryId: '__rest', amount: rest.reduce((a, c) => a + c.amount, 0), share: rest.reduce((a, c) => a + c.share, 0) });
   const items = top.map((c, i) => ({ ...c, color: c.categoryId === '__rest' ? REST_COLOR : PALETTE[i], label: c.categoryId === '__rest' ? '그 밖의' : catOf(m, c.categoryId).name, emoji: c.categoryId === '__rest' ? '⋯' : catOf(m, c.categoryId).emoji }));
@@ -162,11 +165,18 @@ export function chartView(m, ui) {
     <section class="card-solid p-4" aria-labelledby="donut-h">
       <h2 id="donut-h" class="text-head">카테고리별 ${kind === 'expense' ? '지출' : '수입'}</h2>
       ${sel.length ? `<div class="relative mt-3">${donut(items, { total, center: kind === 'expense' ? '총지출' : '총수입' })}</div>
+      ${overs.length || posSum !== total ? `<p class="mt-3 text-caption text-ink-sub">비율은 환불을 뺀 뒤 지출이 남은 카테고리 합 ${formatWon(posSum)} 기준이에요.</p>` : ''}
       <ol class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-2 -mx-2">${items.map((it, i) => `<li><button class="legend-row" ${it.categoryId === '__rest' ? 'disabled' : `data-filter-cat="${esc(it.categoryId)}"`}>
         <span class="w-3 h-3 rounded-full shrink-0" style="background:${it.color}" aria-hidden="true"></span>
         <span aria-hidden="true">${esc(it.emoji)}</span><span class="flex-1 text-left truncate">${esc(it.label)}</span>
-        <span class="text-caption text-ink-sub tabular-nums w-10 text-right">${Math.round(it.share * 100)}%</span>
-        <span class="tabular-nums font-semibold w-28 text-right">${formatWon(it.amount)}</span></button></li>`).join('')}</ol>`
+        <span class="text-caption text-ink-sub tabular-nums w-10 text-right whitespace-nowrap">${Math.round(it.share * 100)}%</span>
+        <span class="tabular-nums font-semibold w-28 text-right">${formatWon(it.amount)}</span></button></li>`).join('')}</ol>
+      ${overs.length ? `<h3 class="mt-4 text-caption font-semibold text-ink-sub">환불이 더 많은 카테고리(비율에서 뺐어요)</h3>
+      <ul class="mt-1 -mx-2">${overs.map((c) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}">
+        <span class="w-3 h-3 rounded-full shrink-0 border-2" style="border-color:var(--income)" aria-hidden="true"></span>
+        <span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left truncate">${esc(catOf(m, c.categoryId).name)}</span>
+        <span class="text-caption text-income font-semibold whitespace-nowrap">${c.amount < 0 ? '환불 초과' : '환불로 상쇄'}</span>
+        <span class="tabular-nums font-semibold w-28 text-right text-income">${c.amount < 0 ? '+' : ''}${formatWon(Math.abs(c.amount))}</span></button></li>`).join('')}</ul>` : ''}`
         : empty('🌱', `이 기간에는 ${kind === 'expense' ? '지출' : '수입'}이 없어요.`)}
     </section>
       ${ins ? `<section class="glass p-4 flex gap-3 items-start"><span class="text-2xl" aria-hidden="true">💡</span><p class="text-body">지난달보다 <b>${esc(catOf(m, ins.categoryId).emoji)} ${esc(catOf(m, ins.categoryId).name)}</b> 지출이 <b class="text-expense">${ins.pct}%</b>(${formatWon(ins.diff)}) 늘었어요.</p></section>` : ''}
@@ -229,12 +239,13 @@ export function budgetView(m, ui) {
         <label class="switch"><input type="checkbox" data-toggle-env ${showEnv ? 'checked' : ''} aria-label="카테고리별로 나눠서 관리"><span></span></label></div>
       <p class="mt-1 text-caption text-ink-sub">선택 사항이에요. 봉투처럼 카테고리마다 한도를 둘 수 있어요.</p>
       ${showEnv ? `<ul class="mt-3 flex flex-col gap-3">${m.categories.filter((c) => c.kind === 'expense' && !c.archived).map((c) => {
-        const lim = byCat[c.id] ?? 0, sp = spentBy.get(c.id) ?? 0, r = lim ? sp / lim : 0;
+        const lim = byCat[c.id] ?? 0, sp = spentBy.get(c.id) ?? 0, e = envelope(sp, lim);
         return `<li><button class="w-full min-h-[44px] py-1 text-left" data-env="${esc(c.id)}">
           <div class="flex items-center gap-2 text-body"><span aria-hidden="true">${esc(c.emoji)}</span><span class="flex-1 truncate">${esc(c.name)}</span>
-          <span class="tabular-nums text-caption ${lim && sp > lim ? 'text-expense font-semibold' : 'text-ink-sub'}">${formatWon(sp)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
-          <div class="mt-1.5 h-2 rounded-full bg-line"><div class="h-2 rounded-full ${r > 1 ? 'bg-expense' : r >= 0.9 ? 'bg-chart-3' : 'bg-primary'}" style="width:${lim ? Math.min(100, r * 100) : 0}%"></div></div>
-          ${r > 1 ? `<p class="mt-1 text-caption text-expense font-semibold">${formatWon(sp - lim)} 넘쳤어요</p>` : r >= 0.9 ? `<p class="mt-1 text-caption text-chart-3 font-semibold">한도의 ${Math.round(r * 100)}%예요</p>` : ''}</button></li>`;
+          <span class="tabular-nums text-caption ${e.over ? 'text-expense font-semibold' : 'text-ink-sub'}">${formatWon(e.used)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
+          <div class="mt-1.5 h-2 rounded-full bg-line overflow-hidden"><div class="h-2 rounded-full ${e.over ? 'bg-expense' : e.near ? 'bg-chart-3' : 'bg-primary'}" style="width:${e.width}%"></div></div>
+          ${e.over ? `<p class="mt-1 text-caption text-expense font-semibold">${formatWon(e.used - lim)} 넘쳤어요</p>` : e.near ? `<p class="mt-1 text-caption text-chart-3 font-semibold">한도의 ${e.pct}%예요</p>` : ''}
+          ${e.refund ? `<p class="mt-1 text-caption text-income font-semibold">환불 ${formatWon(e.refund)}이 더 많아 사용 0원으로 봐요</p>` : ''}</button></li>`;
       }).join('')}</ul>` : ''}
     </section>
     ${goalsCard(m)}</div></div>`;

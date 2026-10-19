@@ -19,6 +19,7 @@ const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup } from './lib/backup.js';
+import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
@@ -259,6 +260,7 @@ async function impFile(file) {
 async function onImportClick(d) {
   const imp = ui.imp;
   if (!imp) return;
+  if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); window.scrollTo(0, 0); return $('#main')?.focus({ preventScroll: true }); }
   if (d.impBack !== undefined) {
     if (imp.step === 2) { ui.imp = IMP.newImport(); return render(); }
     if (imp.step === 3 || imp.step === 4) { imp.step--; imp.error = ''; return render(); }
@@ -291,7 +293,8 @@ async function onImportClick(d) {
 async function editBudget(m) {
   const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 끕니다.', value: m.budget?.total ?? 0 });
   if (v == null) return;
-  data.setBudget(m.viewYm, v, state.budget?.byCategory);
+  const pr = state.budget?.byCategory ? pruneLimits(state.budget.byCategory, state.categories).by : undefined;
+  data.setBudget(m.viewYm, v, pr && Object.keys(pr).length ? pr : undefined);
   toast(v ? `예산을 ${formatWon(v)}으로 정했어요.` : '예산을 껐어요.');
 }
 
@@ -376,7 +379,11 @@ app.addEventListener('click', async (e) => {
   if (d.delcat) {
     const c = state.categories.find((x) => x.id === d.delcat);
     if (!c || !(await confirmDialog({ title: `'${c.name}' 카테고리를 지울까요?`, body: '이 카테고리의 기록은 기타로 옮겨져요.', ok: '지우기', danger: true }))) return;
-    try { const n = await data.deleteCategory(c); toast(n ? `지웠어요. 기록 ${n}개는 기타로 옮겼어요.` : '지웠어요.'); }
+    try {
+      const n = await data.deleteCategory(c);
+      // 지운 카테고리의 이 달 한도도 지움(30개 한도에 남지 않게)
+      if (state.budget?.byCategory?.[c.id] != null) { const by = { ...state.budget.byCategory }; delete by[c.id]; data.setBudget(m.viewYm, state.budget.total ?? 0, Object.keys(by).length ? by : undefined); }
+      toast(n ? `지웠어요. 기록 ${n}개는 기타로 옮겼어요.` : '지웠어요.'); }
     catch (err) { toast(err.message || '지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
     return;
   }
@@ -387,10 +394,11 @@ app.addEventListener('click', async (e) => {
     if (v == null) return;
     const by = { ...(state.budget?.byCategory ?? {}) };
     v ? (by[d.env] = v) : delete by[d.env];
-    // 규칙과 같은 한도: 카테고리 30개까지, 한도 100억 원까지(정수)
-    if (Object.keys(by).length > 30) return toast('카테고리 한도는 30개까지 정할 수 있어요.');
+    // 규칙과 같은 한도: 카테고리 30개까지(지운 카테고리 키는 버리고, 숨긴 카테고리는 넘칠 때만 버림), 100억 원까지
     if (v > 10_000_000_000) return toast('한도는 100억 원까지 정할 수 있어요.');
-    return data.setBudget(m.viewYm, state.budget?.total ?? 0, by);
+    const pr = pruneLimits(by, state.categories);
+    if (!pr.ok) return toast('카테고리 한도는 30개까지 정할 수 있어요. 안 쓰는 카테고리 한도를 눌러 0원으로 지운 뒤 다시 해 주세요.', { duration: 6000 });
+    return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   if (d.tipOpen !== undefined) { tipCollapsed = false; return renderTip(); }

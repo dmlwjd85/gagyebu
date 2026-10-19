@@ -53,9 +53,9 @@ describe('H1 직접 기록 ↔ 카드 파일 중복', () => {
 
 describe('H2 고칠 때 가져오기 필드 보존', () => {
   test('importHash·importBatch·card4·recurringId 유지', () => {
-    const orig = { id: 't', importHash: '0123456789abcdef', importBatch: 'imp-a1', card4: '7012', recurringId: 'r1', memo: '쿠팡' };
+    const orig = { id: 't', importHash: '0123456789abcdef', importBatch: 'imp-mgx1ab', card4: '7012', recurringId: 'r1', memo: '쿠팡' };
     const edited = { id: 't', date: '2026-10-04', amount: 45000, kind: 'expense', categoryId: 'living', memo: '쿠팡 생필품' };
-    expect(withKeptFields(edited, orig)).toMatchObject({ ...edited, importHash: orig.importHash, importBatch: 'imp-a1', card4: '7012', recurringId: 'r1' });
+    expect(withKeptFields(edited, orig)).toMatchObject({ ...edited, importHash: orig.importHash, importBatch: 'imp-mgx1ab', card4: '7012', recurringId: 'r1' });
     expect(KEEP_ON_EDIT).toEqual(['importHash', 'importBatch', 'card4', 'recurringId']);
     expect(withKeptFields(edited, null)).toEqual(edited);
     expect(withKeptFields(edited, { memo: 'x' })).not.toHaveProperty('importHash');
@@ -186,7 +186,7 @@ describe('M4 JSON 백업', () => {
     const b = buildBackup({
       transactions: [{ id: 't', amount: 1, createdAt: 'x' }], budgets: [{ id: '2026-10', total: 1, byCategory: { food: 1 } }],
       rules: [{ id: 'r', match: '스타벅스', categoryId: 'cafe', updatedAt: 'x' }], recurring: [{ id: 'rec', name: '월세' }],
-      goals: [{ id: 'g', name: '여행' }], imports: [{ id: 'imp-a1', count: 3, at: 'x' }],
+      goals: [{ id: 'g', name: '여행' }], imports: [{ id: 'imp-mgx1ab', count: 3, at: 'x' }],
     }, new Date('2026-10-19T00:00:00Z'));
     for (const k of ['transactions', 'budgets', 'rules', 'recurring', 'goals', 'imports', 'categories', 'accounts']) expect(Array.isArray(b[k])).toBe(true);
     expect(b.version).toBe(2);

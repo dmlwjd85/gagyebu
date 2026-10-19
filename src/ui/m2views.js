@@ -67,7 +67,7 @@ export function recurringView(m) {
         return `<li class="flex items-center gap-2 min-h-[64px] py-1 border-b last:border-0" style="border-color:var(--line)">
           <span class="tx-emoji shrink-0" aria-hidden="true">${esc(c.emoji)}</span>
           <button class="flex-1 min-w-0 text-left min-h-[44px]" data-rec-edit="${esc(r.id)}">
-            <span class="flex items-baseline gap-2"><span class="text-body font-semibold min-w-0 break-words line-clamp-2">${esc(r.name)}</span><span class="ml-auto text-body font-semibold tabular-nums whitespace-nowrap ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span></span>
+            <span class="flex items-baseline gap-2"><span class="flex-1 text-body font-semibold min-w-0 break-words">${esc(r.name)}</span><span class="ml-auto text-body font-semibold tabular-nums whitespace-nowrap ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span></span>
             <span class="block text-caption text-ink-sub">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}</span><span class="sr-only">, 고치기</span></button>
           <label class="switch"><input type="checkbox" data-rec-active="${esc(r.id)}" ${r.active ? 'checked' : ''} aria-label="${esc(r.name)} 자동 기록" /><span></span></label>
           <button class="icon-btn" data-rec-del="${esc(r.id)}" aria-label="${esc(r.name)} 삭제">🗑️</button></li>`;
@@ -92,7 +92,7 @@ export function goalsCard(m) {
         <div class="relative w-[72px] h-[72px] shrink-0">${ring(p.pct / 100, { size: 72, stroke: 8, color: p.done ? 'var(--income)' : 'var(--primary)' })}
           <span class="absolute inset-0 grid place-items-center text-2xl" aria-hidden="true">${esc(g.emoji || '🎯')}</span></div>
         <div class="min-w-0 flex-1">
-          <button class="block w-full text-left min-h-[44px] text-body font-semibold truncate" data-goal-edit="${esc(g.id)}">${esc(g.name)}<span class="sr-only"> 목표 고치기</span></button>
+          <button class="relative block w-full text-left min-h-[44px] text-body font-semibold break-words" data-goal-edit="${esc(g.id)}" aria-label="${esc(g.name)} 목표 고치기">${esc(g.name)}</button>
           <p class="tabular-nums" role="progressbar" aria-label="${esc(g.name)} 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p.pct}" aria-valuetext="${p.pct}%, ${formatWon(g.saved || 0)} / ${formatWon(g.target)}"><b class="text-head">${p.pct}%</b> <span class="text-caption">${shortWon(g.saved || 0)} / ${shortWon(g.target)}원</span></p>
           <p class="text-caption text-ink-sub">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${formatWon(p.left)} 남음` : `한 달에 ${formatWon(p.perMonth)}씩 · ${p.months}달 남음`) : `${formatWon(p.left)} 남았어요`}</p>
           <button class="chip mt-1" data-goal-add="${esc(g.id)}">＋ 모으기</button></div></li>`;

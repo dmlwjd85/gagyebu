@@ -71,10 +71,10 @@ const dayDiff = (a, b) => Math.round((Date.parse(a) - Date.parse(b)) / 86400000)
 /**
  * @param {Array} items 가져올 후보(toCandidates 결과, categoryId가 붙어 있으면 더 정확)
  * @param {Array} existing 이미 있는 거래({date, amount, kind, memo, categoryId, importHash})
- * @returns {{ fresh: Array, sure: Array, suspect: Array<{item, match, reason}> }}
+ * @returns {{ fresh: Array, sure: Array, suspect: Array<{item, match, reason, strength: 'strong'|'weak'}> }}
  *  중복 의심 기준(같은 금액·같은 구분, 날짜 ±1일 안):
  *   ① 가맹점 이름이 비슷함(별칭·지점명 정규화 뒤 0.8 이상)
- *   ② 기존 기록이 직접 남긴 것(importHash 없음)이고 메모가 비었거나 카테고리가 같음
+ *   ② 기존 기록이 직접 남긴 것(importHash 없음)이고 메모가 비었음(같은 날·같은 카테고리면 강한 의심, 아니면 약한 의심)
  *      → '평소 10초 기록 + 월말 카드 파일 가져오기'에서 같은 돈이 두 번 들어가는 것을 막음
  */
 export function findDuplicates(items, existing, threshold = 0.8) {
@@ -96,15 +96,22 @@ export function findDuplicates(items, existing, threshold = 0.8) {
     if (hashes.has(item.importHash)) { sure.push(item); continue; }
     const cands = (byAmt.get(`${Math.abs(item.amount)}|${item.kind}`) || [])
       .filter((t) => !used.has(t) && Math.abs(dayDiff(t.date, item.date)) <= 1 && Math.sign(t.amount) === Math.sign(item.amount));
+    // 강한 의심(기본 '건너뛰기'): 가맹점 이름이 같음(별칭·지점명 정규화 뒤), 또는 메모 없는 직접 기록이 같은 날·같은 카테고리
+    // 약한 의심(기본 '추가'): 메모 없는 직접 기록이 하루 차이거나 카테고리가 다름 → 지출이 빠지는 쪽보다 사용자가 고르게
+    // 메모가 있는데 가게 이름이 다르면 같은 금액·카테고리여도 새 거래(김밥 8,000 ≠ 맥도날드 8,000)
     const score = (t) => {
+      const dd = Math.abs(dayDiff(t.date, item.date));
       const sim = merchantSimilarity(t.memo, item.desc || item.memo);
-      if (sim >= threshold) return 3 + sim - Math.abs(dayDiff(t.date, item.date)) * 0.1;
-      if (!t.importHash && (!String(t.memo ?? '').trim() || (item.categoryId && t.categoryId === item.categoryId))) return 2 - Math.abs(dayDiff(t.date, item.date)) * 0.1;
-      return 0;
+      if (sim >= threshold) return [3 + sim - dd * 0.1, 'strong'];
+      if (!t.importHash && !String(t.memo ?? '').trim()) {
+        const sameCat = item.categoryId && t.categoryId === item.categoryId;
+        return [2 + (sameCat ? 0.5 : 0) - dd * 0.1, dd === 0 && sameCat ? 'strong' : 'weak'];
+      }
+      return [0, null];
     };
-    const best = cands.map((t) => [t, score(t)]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
-    if (best) { used.add(best[0]); suspect.push({ item, match: best[0], reason: 'existing' }); continue; }
-    if (n > 1) { suspect.push({ item, match: first.get(base), reason: 'file' }); continue; }
+    const best = cands.map((t) => [t, ...score(t)]).filter(([, v]) => v > 0).sort((a, b) => b[1] - a[1])[0];
+    if (best) { used.add(best[0]); suspect.push({ item, match: best[0], reason: 'existing', strength: best[2] }); continue; }
+    if (n > 1) { suspect.push({ item, match: first.get(base), reason: 'file', strength: 'strong' }); continue; }
     first.set(base, item);
     fresh.push(item);
   }

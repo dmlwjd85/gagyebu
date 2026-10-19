@@ -18,7 +18,11 @@ service cloud.firestore {
         && int(v[8:10]) <= mdays(int(v[0:4]), int(v[5:7]));
     }
     function ym(v) { return v is string && v.matches('^[0-9]{4}-(0[1-9]|1[0-2])$'); }
-    function id(v) { return v is string && v.matches('^[A-Za-z0-9_-]{1,64}$'); }
+    // id 형식: Firestore 자동 id(영문·숫자 20자)·짧은 영문 id('food'), 또는 소문자 낱말을 하이픈으로 이은 기본 id('etc-in').
+    // 숫자 13자리 이상 연속·숫자 들어간 하이픈 묶음은 거부 → 카드번호 모양 글자가 id 칸에 들어갈 수 없음
+    function id(v) {
+      return v is string && ((v.matches('^[A-Za-z0-9_]{1,64}$') && !v.matches('.*[0-9]{13}.*')) || v.matches('^[a-z]{1,20}(-[a-z]{1,20}){1,3}$'));
+    }
     // 태그 20개·각 1~20자 문자열. join 한 번으로 전체 검사(숫자 원소는 칸별로 거부, 줄바꿈 금지)
     function tagsOk(t) {
       return t is list && t.size() <= 20
@@ -35,7 +39,8 @@ service cloud.firestore {
     // 규칙 언어에 반복문이 없어 칸 번호로 하나씩 검사
     function limitsOk(m) {
       return m is map && m.size() <= 30
-        && (m.size() == 0 || m.keys().join(',').matches('^[A-Za-z0-9_-]{1,64}(,[A-Za-z0-9_-]{1,64})*$'))
+        && (m.size() == 0 || (m.keys().join(',').matches('^([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3})(,([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3}))*$')
+            && !m.keys().join(',').matches('.*[0-9]{13}.*')))
         && limVals(m.values(), m.size());
     }
     function limVals(v, n) {
@@ -50,7 +55,8 @@ service cloud.firestore {
         && (n <= 24 || (v[24] is int && v[24] >= 0 && v[24] <= 10000000000)) && (n <= 25 || (v[25] is int && v[25] >= 0 && v[25] <= 10000000000)) && (n <= 26 || (v[26] is int && v[26] >= 0 && v[26] <= 10000000000))
         && (n <= 27 || (v[27] is int && v[27] >= 0 && v[27] <= 10000000000)) && (n <= 28 || (v[28] is int && v[28] >= 0 && v[28] <= 10000000000)) && (n <= 29 || (v[29] is int && v[29] >= 0 && v[29] <= 10000000000));
     }
-    function batchId(v) { return v is string && v.matches('^imp-[0-9a-z]{1,20}$'); }
+    // 가져오기 묶음 id: 'imp-' + 시각(36진수 6~12자). 12자 넘는 숫자열(카드번호 모양)은 못 들어감
+    function batchId(v) { return v is string && v.matches('^imp-[0-9a-z]{6,12}$'); }
 
     // 사용자 설정 문서
     match /users/{uid} {

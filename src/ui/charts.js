@@ -6,15 +6,29 @@ import { formatWon, shortWon } from '../lib/money.js';
 export const PALETTE = [1, 2, 3, 4, 5, 6].map((i) => `var(--chart-${i})`);
 export const REST_COLOR = 'var(--chart-7)';
 
+/**
+ * 도넛 조각 길이·시작점: share는 0~1로 자르고 누적이 한 바퀴(c)를 넘지 않게 → 조각이 겹치지 않음
+ * (환불로 음수·100% 넘는 비율이 들어와도 안전)
+ */
+export function donutSegments(items, c) {
+  const gap = items.length > 1 ? 2 : 0;
+  let offset = 0;
+  return items.map((it) => {
+    const share = Math.min(1, Math.max(0, Number(it.share) || 0));
+    const span = Math.min(share * c, c - offset);
+    const seg = { len: Math.max(0, span - gap), offset };
+    offset += Math.max(0, span);
+    return seg;
+  });
+}
 export function donut(items, { total, center = '총지출', size = 220, stroke = 30 } = {}) {
   const r = (size - stroke) / 2, c = 2 * Math.PI * r;
-  let offset = 0;
+  const geo = donutSegments(items, c);
   const segs = items.map((it, i) => {
-    const len = Math.max(0, it.share * c - (items.length > 1 ? 2 : 0));
+    const { len, offset } = geo[i];
     const s = `<circle class="donut-seg" data-cat="${esc(it.categoryId)}" r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none"
       stroke="${it.color ?? PALETTE[i % PALETTE.length]}" stroke-width="${stroke}" stroke-dasharray="${len} ${c - len}"
       stroke-dashoffset="${-offset}" stroke-linecap="butt" style="animation-delay:${i * 40}ms"><title>${esc(it.label)} ${formatWon(it.amount)}</title></circle>`;
-    offset += it.share * c;
     return s;
   }).join('');
   return `<svg viewBox="0 0 ${size} ${size}" class="donut w-full max-w-[220px] mx-auto -rotate-90" role="img" aria-label="${esc(center)} ${formatWon(total)}, 카테고리 ${items.length}개">

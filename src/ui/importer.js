@@ -80,7 +80,8 @@ export async function checkDuplicates(imp, ctx) {
     const existing = s.count ? await ctx.txsInRange(s.from, s.to) : [];
     imp.dup = { ...findDuplicates(c.items, existing), cancelled: c.cancelled, invalid: c.invalid, reasons: c.reasons, offset: c.offset };
     imp.bytes = null; // 비교까지 끝나면 원본 바이트는 버림
-    imp.choice = {};
+    // 약한 의심은 기본 '추가'(그대로 진행해도 지출이 빠지지 않게), 강한 의심만 기본 '건너뛰기'
+    imp.choice = Object.fromEntries(imp.dup.suspect.map((x, i) => [i, x.strength === 'weak' ? 'add' : 'skip']));
     if (imp.opts.remember) {
       const maps = loadMaps();
       maps[headerSignature(headerOf(imp))] = { cols: imp.cols, opts: { sign: imp.opts.sign, excludeCancelled: imp.opts.excludeCancelled } };
@@ -138,7 +139,11 @@ function footer(m, imp) {
   let label = '다음', disabled = false;
   if (imp.step === 2) disabled = missingRoles(imp.cols).length > 0;
   if (imp.step === 3) { const skip = imp.dup.suspect.filter((_, i) => imp.choice[i] !== 'add').length; label = skip ? `중복 ${skip}건 건너뛰고 계속` : '계속'; }
-  if (imp.step === 4) { const n = toImport(imp).length; label = `${n}건 가져오기`; disabled = !n; }
+  if (imp.step === 4) {
+    const n = toImport(imp).length;
+    if (!n) return `<div class="imp-foot"><button class="btn-primary w-full !min-h-[52px]" data-imp-restart>다른 파일 고르기</button></div>`;
+    label = `${n}건 가져오기`;
+  }
   return `<div class="imp-foot"><button class="btn-primary w-full !min-h-[52px]" data-imp-next ${disabled ? 'disabled' : ''}>${label}</button></div>`;
 }
 
@@ -220,15 +225,28 @@ function step3(m, imp) {
     ${d.suspect.length ? `<div class="flex items-center justify-between"><h2 class="text-head">중복 의심 ${d.suspect.length}건</h2><button class="chip" data-imp-skipall>모두 건너뛰기</button></div>
     <ul class="flex flex-col gap-2">${d.suspect.map((s, i) => `<li class="card-solid p-3">
       <div class="grid grid-cols-2 gap-3"><div class="min-w-0">${s.reason === 'file' ? `<span class="block text-caption text-ink-sub">파일 안 같은 줄</span><span class="block text-body truncate">${esc(s.match.desc)}</span><span class="block text-caption tabular-nums">${dot(s.match.date)} · ${formatWon(s.match.amount)}</span>` : exist(s.match)}</div>
-        <div class="min-w-0"><span class="block text-caption text-ink-sub">가져올 줄</span><span class="block text-body truncate">${esc(s.item.desc)}</span><span class="block text-caption tabular-nums">${dot(s.item.date)} · ${formatWon(s.item.amount)}</span></div></div>
+        <div class="min-w-0"><span class="block text-caption ${s.strength === 'weak' ? 'text-ink-sub' : 'text-ink font-semibold'}">${s.strength === 'weak' ? '약한 의심 · 기본 추가' : '같은 거래 같아요'}</span><span class="block text-caption text-ink-sub">가져올 줄</span><span class="block text-body truncate">${esc(s.item.desc)}</span><span class="block text-caption tabular-nums">${dot(s.item.date)} · ${formatWon(s.item.amount)}</span></div></div>
       <div class="seg mt-2 w-full grid grid-cols-2" role="radiogroup" aria-label="${esc(s.item.desc)} ${formatWon(s.item.amount)} 처리">
         <button role="radio" aria-checked="${imp.choice[i] !== 'add'}" data-imp-choice="${i}" data-v="skip">건너뛰기</button>
         <button role="radio" aria-checked="${imp.choice[i] === 'add'}" data-imp-choice="${i}" data-v="add">그래도 추가</button></div></li>`).join('')}</ul>`
       : `<p class="glass px-4 py-3 text-body">✓ 기존 기록과 겹치는 거래가 없어요.</p>`}`;
 }
 
+// 새로 넣을 거래가 0건일 때 이유(QA N6)
+export function emptyReason(d) {
+  const parts = [];
+  if (d.sure.length) parts.push(`이미 가져온 거래 ${d.sure.length}건`);
+  if (d.suspect.length) parts.push(`중복이라 건너뛰기로 고른 ${d.suspect.length}건`);
+  if (d.cancelled) parts.push(`취소된 결제 ${d.cancelled}건`);
+  if (d.offset) parts.push(`환불로 상쇄된 ${d.offset}건`);
+  if (d.invalid) parts.push(`날짜·금액을 읽을 수 없는 ${d.invalid}줄`);
+  return parts.length ? `${parts.join(', ')}이 있어서 새로 넣을 거래가 없어요.` : '이 파일에는 가져올 거래가 없어요.';
+}
 function step4(m, imp) {
   const items = toImport(imp), s = summarize(items), d = imp.dup;
+  if (!items.length) return `<section class="card-solid p-5 text-center" role="status"><p class="text-4xl" aria-hidden="true">✅</p>
+    <h2 class="mt-2 text-head">새로 가져올 거래가 없어요</h2><p class="mt-2 text-body text-ink-sub">${esc(emptyReason(d))}</p>
+    ${d.suspect.length ? '<p class="mt-2 text-caption text-ink-sub">중복 의심 중 넣고 싶은 것이 있으면 이전 단계에서 \'그래도 추가\'를 골라 주세요.</p>' : ''}</section>`;
   const skipped = d.suspect.length - (items.length - d.fresh.length); // 건너뛴 의심 건
   const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-semibold tabular-nums text-right">${v}</dd></div>`;
   return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 확인해요</h2>
