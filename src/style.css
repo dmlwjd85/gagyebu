@@ -316,6 +316,11 @@
 .offline-badge { position: absolute; right: 0; bottom: 0; padding: 1px 6px; border-radius: 999px; background: #B45309; color: #fff;
   font-size: 10px; line-height: 14px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; pointer-events: none;
   box-shadow: 0 0 0 2px var(--surface-solid, #fff); z-index: 1; }
+/* 아주 좁은 폭(브라우저 확대 등 240px 미만): 달 이동 ‹ › 버튼 폭을 줄여(높이 44px 유지) 위 메뉴가 세 줄이 되지 않게 */
+@media (max-width: 239px) {
+  .app-top header [data-month="-1"], .app-top header [data-month="1"] { width: 32px; }
+  .app-top header .month-btn { padding-left: 2px; padding-right: 2px; }
+}
 /* 낮은 창(높이 700px 이하)에서 대화상자 위아래 여백을 줄여 폼이 화면 안에 들어가게(QA L8: 360×640 반복 폼 2px 넘침) */
 @media (max-height: 700px) {
   .dlg-wrap.dlg-wrap { padding-top: 8px; padding-bottom: 8px; }
