@@ -78,6 +78,8 @@ service cloud.firestore {
     }
     // 가져오기 묶음 id: 'imp-' + 시각(36진수 6~12자). 12자 넘는 숫자열(카드번호 모양)은 못 들어감
     function batchId(v) { return v is string && v.matches('^imp-[0-9a-z]{6,12}$'); }
+    // 계좌번호(숫자 10개 이상)는 기관·이름에 넣지 않음
+    function noAcctNo(v) { return !v.matches('.*[0-9]{10}.*'); }
 
     // 사용자 설정 문서
     match /users/{uid} {
@@ -198,6 +200,67 @@ service cloud.firestore {
           && d().count is int && d().count >= 0 && d().count <= 100000
           && (!('from' in d()) || ymd(d().from)) && (!('to' in d()) || ymd(d().to))
           && optStr('label', 20) && d().at is timestamp;
+      }
+      // 주식·연금 계좌. 결제수단(accounts: cash|card|bank)과 다른 컬렉션이라 기존 결제수단 형식은 그대로.
+      match /assetAccounts/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['type', 'institution', 'name', 'opened'])
+          && d().keys().hasOnly(['type', 'institution', 'name', 'opened', 'maturity', 'expectedPension', 'order', 'archived', 'createdAt', 'updatedAt'])
+          && d().type in ['stock', 'pension', 'irp', 'isa', 'dc', 'civil']
+          && str(d().institution, 1, 40) && noAcctNo(d().institution)
+          && str(d().name, 1, 40) && noAcctNo(d().name)
+          && ymd(d().opened)
+          && (!('maturity' in d()) || ymd(d().maturity))
+          && optInt('expectedPension', 0, 10000000000)
+          && optInt('order', 0, 1000) && optBool('archived')
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 보유. qtyE4 = 수량 × 10000(소수 넷째 자리). 시세는 종가·기준일만.
+      match /holdings/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['assetAccountId', 'name', 'kind', 'qtyE4', 'avgPrice'])
+          && d().keys().hasOnly(['assetAccountId', 'code', 'name', 'kind', 'qtyE4', 'avgPrice', 'lastPrice', 'priceDate', 'priceSource', 'createdAt', 'updatedAt'])
+          && id(d().assetAccountId)
+          && str(d().name, 1, 80) && noAcctNo(d().name)
+          && (!('code' in d()) || (d().code is string && d().code.matches('^[A-Za-z0-9]{1,12}$')))
+          && d().kind in ['stock', 'etf', 'fund', 'deposit']
+          && ((d().kind != 'stock' && d().kind != 'etf') || ('code' in d() && d().code.matches('^[A-Za-z0-9]{1,12}$')))
+          && d().qtyE4 is int && d().qtyE4 > 0 && d().qtyE4 <= 1000000000000
+          && d().avgPrice is int && d().avgPrice >= 0 && d().avgPrice <= 10000000000
+          && optInt('lastPrice', 0, 10000000000)
+          && (!('priceDate' in d()) || ymd(d().priceDate))
+          && (!('priceSource' in d()) || d().priceSource in ['manual', 'dataGoKr'])
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      match /contributions/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['assetAccountId', 'date', 'amount', 'deductible'])
+          && d().keys().hasOnly(['assetAccountId', 'date', 'amount', 'deductible', 'createdAt', 'updatedAt'])
+          && id(d().assetAccountId)
+          && ymd(d().date)
+          && d().amount is int && d().amount > 0 && d().amount <= 10000000000
+          && d().deductible is bool
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 세액공제 한도·세율. 문서 id는 tax 하나.
+      match /assetPrefs/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && docId == 'tax'
+          && d().keys().hasAll(['pensionLimit', 'combinedLimit', 'rateHigh', 'rateLow', 'rateChoice'])
+          && d().keys().hasOnly(['pensionLimit', 'combinedLimit', 'rateHigh', 'rateLow', 'rateChoice', 'updatedAt'])
+          && d().pensionLimit is int && d().pensionLimit >= 0 && d().pensionLimit <= 100000000000
+          && d().combinedLimit is int && d().combinedLimit >= 0 && d().combinedLimit <= 100000000000
+          && d().rateHigh is int && d().rateHigh >= 0 && d().rateHigh <= 10000
+          && d().rateLow is int && d().rateLow >= 0 && d().rateLow <= 10000
+          && d().rateChoice in ['high', 'low']
+          && optTs('updatedAt');
       }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부
     }

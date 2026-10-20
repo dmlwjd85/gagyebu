@@ -1,0 +1,6 @@
+{
+  "response": {
+    "header": { "resultCode": "12", "resultMsg": "NO_OPENAPI_SERVICE_ERROR" },
+    "body": {}
+  }
+}

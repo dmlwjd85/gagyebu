@@ -510,3 +510,60 @@ describe('R2 N8 잔여: 영문자 끼운 카드번호 모양', () => {
     await assertSucceeds(setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory: { food: 1, Xk3J9aZ0qLm2nB7cD4eF: 2, n1234567890: 3 } }));
   });
 });
+
+const ASSET = { type: 'pension', institution: '미래에셋', name: '내 연금', opened: '2019-01-15' };
+const HOLD = { assetAccountId: 'pension', name: '삼성전자', kind: 'stock', code: '005930', qtyE4: 100000, avgPrice: 70000, lastPrice: 71500, priceDate: '2026-10-16', priceSource: 'manual' };
+const CONTRIB = { assetAccountId: 'pension', date: '2026-03-25', amount: 500000, deductible: true };
+const TAX = { pensionLimit: 6000000, combinedLimit: 9000000, rateHigh: 1650, rateLow: 1320, rateChoice: 'high' };
+
+describe('주식·연금 계좌', () => {
+  test('본인: 계좌·보유·납입·세액 설정 쓰기와 시세만 고치기', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetAccounts/pension'), { ...ASSET, createdAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetAccounts/isa'), { type: 'isa', institution: '키움', name: '중개형 ISA', opened: '2023-11-01', maturity: '2026-11-20' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetAccounts/civil'), { type: 'civil', institution: '공무원연금공단', name: '공무원연금', opened: '2015-03-01', expectedPension: 2150000 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/holdings/h1'), HOLD));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/holdings/h1'), { lastPrice: 72000, priceDate: '2026-10-17', priceSource: 'dataGoKr' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/holdings/fund'), { assetAccountId: 'pension', name: 'TDF2045', kind: 'fund', qtyE4: 1205000, avgPrice: 10200 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/contributions/c1'), CONTRIB));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetPrefs/tax'), { ...TAX, updatedAt: serverTimestamp() }));
+    await assertSucceeds(getDocs(collection(alice(), 'users/alice/holdings')));
+    await assertSucceeds(deleteDoc(doc(alice(), 'users/alice/contributions/c1')));
+  });
+  test('결제수단 컬렉션에는 투자 계좌를 넣지 못함', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/inv'), { name: '연금', type: 'pension' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/inv'), { ...ASSET, type: 'card' }));
+  });
+  test('계좌번호·잘못된 종류·주식 코드 누락·소수 수량·시세 원문 거부', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetAccounts/bad'), { ...ASSET, institution: '110123456789' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetAccounts/bad'), { ...ASSET, type: 'crypto' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetAccounts/bad'), { ...ASSET, opened: '2019/01/15' }));
+    const { code, ...noCode } = HOLD;
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), noCode));
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), { ...HOLD, qtyE4: 10.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), { ...HOLD, clpr: '71500', nav: '1' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), { ...HOLD, priceSource: 'yahoo' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/contributions/bad'), { ...CONTRIB, amount: 0 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/contributions/bad'), { ...CONTRIB, deductible: 'yes' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetPrefs/other'), TAX));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetPrefs/tax'), { ...TAX, rateHigh: 16.5 }));
+  });
+  test('타인·비로그인: 읽기·쓰기·삭제 거부', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users/alice/assetAccounts/pension'), ASSET);
+      await setDoc(doc(db, 'users/alice/holdings/h1'), HOLD);
+      await setDoc(doc(db, 'users/alice/contributions/c1'), CONTRIB);
+      await setDoc(doc(db, 'users/alice/assetPrefs/tax'), TAX);
+    });
+    for (const path of ['users/alice/assetAccounts/pension', 'users/alice/holdings/h1', 'users/alice/contributions/c1', 'users/alice/assetPrefs/tax']) {
+      await assertFails(getDoc(doc(bob(), path)));
+      await assertFails(getDoc(doc(anon(), path)));
+      await assertFails(deleteDoc(doc(bob(), path)));
+    }
+    await assertFails(getDocs(collection(bob(), 'users/alice/holdings')));
+    await assertFails(getDocs(collection(anon(), 'users/alice/contributions')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/holdings/x'), HOLD));
+    await assertFails(updateDoc(doc(bob(), 'users/alice/holdings/h1'), { lastPrice: 1 }));
+    await assertFails(setDoc(doc(bob(), 'users/alice/assetPrefs/tax'), TAX));
+  });
+});

@@ -189,7 +189,11 @@ describe('M4 JSON 백업', () => {
       goals: [{ id: 'g', name: '여행' }], imports: [{ id: 'imp-mgx1ab', count: 3, at: 'x' }],
     }, new Date('2026-10-19T00:00:00Z'));
     for (const k of ['transactions', 'budgets', 'rules', 'recurring', 'goals', 'imports', 'categories', 'accounts']) expect(Array.isArray(b[k])).toBe(true);
-    expect(b.version).toBe(2);
+    expect(b.version).toBe(3);
+    expect(b.assetAccounts).toEqual([]);
+    expect(b.holdings).toEqual([]);
+    expect(b.contributions).toEqual([]);
+    expect(b.assetPrefs).toBeNull();
     expect(b.budgets[0].byCategory).toEqual({ food: 1 });
     expect(JSON.stringify(b)).not.toMatch(/createdAt|updatedAt|"at"/);
   });

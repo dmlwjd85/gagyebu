@@ -7,8 +7,8 @@ import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCAL
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
 let data = null;
-let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [] };
-import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
+let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null };
+import { ymd, period, periodOf, shiftYm, monthLabel, isYmd } from './lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
@@ -27,16 +27,18 @@ import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
+import { assetsView, taxView } from './ui/assetsView.js';
+import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
 
 initTheme();
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
-const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring'];
-const NO_NAV = new Set(['settings', 'import', 'search', 'recurring']); // 아래 탭 막대 없는 화면
+const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring', 'assets', 'tax'];
+const NO_NAV = new Set(['settings', 'import', 'search', 'recurring', 'assets', 'tax']); // 아래 탭 막대 없는 화면
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
-const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
+const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, assetOpen: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
 const today = () => ymd(new Date());
 
 function model() {
@@ -51,6 +53,7 @@ function model() {
   return {
     sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
     categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
+    assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
@@ -89,7 +92,7 @@ function render() {
   if (ui.view === 'import' && !IMP) loadImp().then(render);
   if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
   const body = ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
-    : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView }[ui.view](m, ui);
+    : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView, assets: assetsView, tax: taxView }[ui.view](m, ui);
   const nav = !NO_NAV.has(ui.view);
   // 위 메뉴 / 본문(여기만 스크롤, 글자 배율 적용) / 아래 메뉴 3줄 틀 — style.css '.app-frame'
   document.body.classList.add('has-frame');
@@ -258,6 +261,146 @@ async function editRule() {
   toast(old ? '같은 글자의 규칙을 바꿨어요.' : '규칙을 만들었어요.');
 }
 
+const TYPE_OPTIONS = [['stock', '일반 주식'], ['pension', '연금저축'], ['irp', 'IRP'], ['isa', 'ISA'], ['dc', 'DC'], ['civil', '공무원연금']];
+const KIND_OPTIONS = [['stock', '주식'], ['etf', 'ETF'], ['fund', '펀드'], ['deposit', '예금']];
+function assetById(id) { return state.assetAccounts.find((a) => a.id === id); }
+async function editAssetAccount(a) {
+  const v = await formDialog({
+    title: a ? '계좌 고치기' : '계좌 추가',
+    body: '계좌번호는 저장하지 않아요. 기관 이름과 별명만 적어 주세요.',
+    fields: [
+      { name: 'type', label: '종류', type: 'select', value: a?.type ?? 'pension', options: TYPE_OPTIONS },
+      { name: 'institution', label: '금융기관', value: a?.institution ?? '', maxlength: 40, hint: '예: 삼성증권, 공무원연금공단' },
+      { name: 'name', label: '이름', value: a?.name ?? '', maxlength: 40, hint: '예: 직장인 연금' },
+      { name: 'opened', label: '개설일', type: 'date', value: a?.opened ?? today() },
+      { name: 'maturity', label: 'ISA 만기일', type: 'date', value: a?.maturity ?? '', hint: 'ISA만 필요해요.' },
+      { name: 'expectedPension', label: '공무원연금 예상 월액', type: 'amount', value: a?.expectedPension ?? 0, hint: '공무원연금만 써요. 총자산에는 더하지 않아요.' },
+    ],
+    validate: (x) => validateAssetAccount(x),
+  });
+  if (!v) return;
+  const id = data.saveAssetAccount({ ...(a ?? { order: state.assetAccounts.length }), ...v, maturity: v.type === 'isa' ? v.maturity : undefined, expectedPension: v.type === 'civil' ? v.expectedPension : undefined });
+  ui.assetOpen = id;
+  toast(a ? '계좌를 고쳤어요.' : '계좌를 추가했어요.');
+  render();
+}
+async function editHolding(accountId, h) {
+  const v = await formDialog({
+    title: h ? '종목 고치기' : '종목 추가',
+    body: '주식·ETF 코드는 6자리예요. 펀드 기준가와 예금은 여기서 직접 적어요.',
+    fields: [
+      { name: 'kind', label: '종류', type: 'select', value: h?.kind ?? 'stock', options: KIND_OPTIONS },
+      { name: 'name', label: '이름', value: h?.name ?? '', maxlength: 80 },
+      { name: 'code', label: '종목 코드', value: h?.code ?? '', maxlength: 12, hint: '예: 005930. 펀드·예금은 비워도 돼요.' },
+      { name: 'qty', label: '수량', value: h ? formatQty(h.qtyE4) : '', inputmode: 'decimal', hint: '소수 넷째 자리까지' },
+      { name: 'avgPrice', label: '평균 단가', type: 'amount', value: h?.avgPrice ?? 0 },
+      { name: 'lastPrice', label: '현재 가격', type: 'amount', value: h?.lastPrice ?? 0, hint: '0원이면 시세 없음으로 둬요.' },
+      { name: 'priceDate', label: '시세 기준일', type: 'date', value: h?.priceDate || (h?.lastPrice ? today() : '') },
+    ],
+    validate: (x) => validateHolding({ ...x, priceDate: x.lastPrice > 0 ? x.priceDate : '' }),
+  });
+  if (!v) return;
+  const qtyE4 = parseQtyE4(v.qty);
+  const code = normalizeCode(v.code);
+  const priced = v.lastPrice > 0;
+  data.saveHolding({
+    ...(h ?? {}), assetAccountId: accountId, kind: v.kind, name: v.name, code: code || undefined, qtyE4,
+    avgPrice: v.avgPrice, lastPrice: priced ? v.lastPrice : undefined, priceDate: priced ? v.priceDate : undefined,
+    priceSource: priced ? 'manual' : undefined,
+  });
+  ui.assetOpen = accountId;
+  toast(h ? '종목을 고쳤어요.' : '종목을 추가했어요.');
+  render();
+}
+async function editHoldingPrice(h) {
+  const v = await formDialog({
+    title: '시세 고치기',
+    body: `${h.name}의 가격과 기준일을 적어 주세요. 0원이면 시세를 비워요. 자동 시세는 이 날짜보다 더 새로운 날만 덮어써요.`,
+    fields: [
+      { name: 'lastPrice', label: '현재 가격', type: 'amount', value: h.lastPrice || 0 },
+      { name: 'priceDate', label: '시세 기준일', type: 'date', value: h.priceDate || today() },
+    ],
+    validate: (x) => (x.lastPrice < 0 || x.lastPrice > 10_000_000_000 ? '가격은 0원~100억 원이에요.' : x.lastPrice > 0 && !isYmd(x.priceDate) ? '기준일을 확인해 주세요.' : null),
+  });
+  if (!v) return;
+  const priced = v.lastPrice > 0;
+  data.saveHolding({ ...h, lastPrice: priced ? v.lastPrice : undefined, priceDate: priced ? v.priceDate : undefined, priceSource: priced ? 'manual' : undefined });
+  toast('시세를 고쳤어요.', { action: '되돌리기', onAction: () => data.saveHolding(h) });
+}
+async function editContribution(account) {
+  const deductible = account.type === 'pension' || account.type === 'irp' || account.type === 'dc';
+  const v = await formDialog({
+    title: '납입 추가',
+    body: '세액공제에 체크한 연금저축·IRP·DC만 올해 환급 계산에 들어가요.',
+    fields: [
+      { name: 'date', label: '날짜', type: 'date', value: today() },
+      { name: 'amount', label: '금액', type: 'amount', value: 0 },
+      { name: 'deductible', label: '세액공제 대상', type: 'checkbox', value: deductible },
+    ],
+    validate: (x) => validateContribution(x),
+  });
+  if (!v) return;
+  data.saveContribution({ assetAccountId: account.id, date: v.date, amount: v.amount, deductible: v.deductible });
+  ui.assetOpen = account.id;
+  toast('납입을 적었어요.');
+  render();
+}
+async function editTaxPrefs() {
+  const p = taxPrefs(state.assetPrefs);
+  const v = await formDialog({
+    title: '세액공제 한도·세율',
+    body: '기본은 연금저축 600만 원, 연금저축+IRP+DC 900만 원, 16.5%와 13.2%예요.',
+    fields: [
+      { name: 'pensionLimit', label: '연금저축 한도', type: 'amount', value: p.pensionLimit },
+      { name: 'combinedLimit', label: '합산 한도', type: 'amount', value: p.combinedLimit },
+      { name: 'rateHigh', label: '높은 세율 (%)', value: formatRateBp(p.rateHigh).replace('%', '') },
+      { name: 'rateLow', label: '낮은 세율 (%)', value: formatRateBp(p.rateLow).replace('%', '') },
+    ],
+    validate: (x) => validateTaxPrefs(x),
+  });
+  if (!v) return;
+  data.saveAssetPrefs({ ...p, pensionLimit: v.pensionLimit, combinedLimit: v.combinedLimit, rateHigh: parseRateBp(v.rateHigh), rateLow: parseRateBp(v.rateLow) });
+  toast('한도와 세율을 저장했어요.');
+}
+async function onAssetClick(d) {
+  if (d.assetAdd !== undefined) return editAssetAccount(null);
+  if (d.assetOpen) { ui.assetOpen = ui.assetOpen === d.assetOpen ? null : d.assetOpen; return render(); }
+  if (d.assetEdit) return editAssetAccount(assetById(d.assetEdit));
+  if (d.assetDel) {
+    const a = assetById(d.assetDel);
+    if (!a) return;
+    const holdings = state.holdings.filter((h) => h.assetAccountId === a.id);
+    const contributions = state.contributions.filter((c) => c.assetAccountId === a.id);
+    if (!(await confirmDialog({ title: `'${a.name}' 계좌를 지울까요?`, body: '이 계좌의 종목과 납입 기록도 함께 지워져요. 가계부 거래는 그대로예요.', ok: '지우기', danger: true }))) return;
+    try { await data.deleteAssetAccount(a.id); } catch { return toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+    if (ui.assetOpen === a.id) ui.assetOpen = null;
+    return toast('지웠어요.', { action: '되돌리기', onAction: () => { data.saveAssetAccount(a); holdings.forEach((h) => data.saveHolding(h)); contributions.forEach((c) => data.saveContribution(c)); } });
+  }
+  if (d.holdingAdd) return editHolding(d.holdingAdd, null);
+  if (d.holdingEdit) { const h = state.holdings.find((x) => x.id === d.holdingEdit); return h && editHolding(h.assetAccountId, h); }
+  if (d.holdingPrice) { const h = state.holdings.find((x) => x.id === d.holdingPrice); return h && editHoldingPrice(h); }
+  if (d.holdingDel) {
+    const h = state.holdings.find((x) => x.id === d.holdingDel);
+    if (!h || !(await confirmDialog({ title: `'${h.name}' 종목을 지울까요?`, ok: '지우기', danger: true }))) return;
+    data.deleteHolding(h.id);
+    return toast('지웠어요.', { action: '되돌리기', onAction: () => data.saveHolding(h) });
+  }
+  if (d.contribAdd) { const a = assetById(d.contribAdd); return a && editContribution(a); }
+  if (d.contribDel) {
+    const c = state.contributions.find((x) => x.id === d.contribDel);
+    if (!c) return;
+    data.deleteContribution(c.id);
+    return toast('납입을 지웠어요.', { action: '되돌리기', onAction: () => data.saveContribution(c) });
+  }
+  if (d.taxRate) {
+    const p = taxPrefs(state.assetPrefs);
+    if (p.rateChoice === d.taxRate) return;
+    data.saveAssetPrefs({ ...p, rateChoice: d.taxRate === 'low' ? 'low' : 'high' });
+    return;
+  }
+  if (d.taxEdit !== undefined) return editTaxPrefs();
+}
+
 // ── 가져오기 동작 ──────────────────────────────────
 const impCtx = () => ({ categories: state.categories, rules: state.rules, txsInRange: data.txsInRange, importTxs: data.importTxs });
 async function impLoad(bytes, name, enc) {
@@ -324,6 +467,7 @@ app.addEventListener('click', async (e) => {
   if (d.scaleStep !== undefined) return setScale(stepScale(contentScale, Number(d.scaleStep)));
   if (d.scaleReset !== undefined) return setScale(1);
   const m = state.user ? model() : null;
+  if (d.assetAdd !== undefined || d.assetOpen || d.assetEdit || d.assetDel || d.holdingAdd || d.holdingEdit || d.holdingPrice || d.holdingDel || d.contribAdd || d.contribDel || d.taxRate || d.taxEdit !== undefined) return onAssetClick(d);
   if (d.nav) {
     // '목록에서 보기'(가져오기 완료): 가져온 거래가 있는 달로 이동
     const ym = d.date ? periodOf(d.date, m?.sd) : null;
@@ -456,8 +600,8 @@ app.addEventListener('click', async (e) => {
     case 'json-all':
       try {
         // 규칙·반복·목표·모든 달 예산·가져오기 기록까지(QA M4)
-        const [txs, budgets] = await Promise.all([data.allTransactions(), data.allBudgets()]);
-        const b = buildBackup({ profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports });
+        const [txs, budgets, assets] = await Promise.all([data.allTransactions(), data.allBudgets(), data.assetExport()]);
+        const b = buildBackup({ profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, ...assets });
         download(`쓱가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
@@ -745,6 +889,7 @@ if (isFirebaseConfigured) {
   pickTip();
 }
 render();
+document.fonts?.ready?.then(() => { if ($('#main')) fitNums(); });
 
 // 에뮬레이터 전용 데모 데이터 (스크린샷·수동 검증용)
 if (import.meta.env.VITE_USE_EMULATOR === 'true') {

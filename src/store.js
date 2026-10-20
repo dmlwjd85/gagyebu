@@ -1,6 +1,6 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache, getDoc, getDocFromCache } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
@@ -57,6 +57,17 @@ export function startUser() {
     emit();
   }));
   let posted = false;
+  const byOrder = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+  unsubs.push(onSnapshot(col('assetAccounts'), (s) => { state.assetAccounts = byOrder(s); emit(); }));
+  unsubs.push(onSnapshot(col('holdings'), (s) => {
+    state.holdings = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+    emit();
+  }));
+  unsubs.push(onSnapshot(col('contributions'), (s) => {
+    state.contributions = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    emit();
+  }));
+  unsubs.push(onSnapshot(u('assetPrefs', 'tax'), (s) => { state.assetPrefs = s.exists() ? { id: s.id, ...s.data() } : null; emit(); }));
   unsubs.push(onSnapshot(col('recurring'), { includeMetadataChanges: true }, (s) => {
     state.recurring = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.dayOfMonth - b.dayOfMonth);
     // 서버 기준 목록을 받은 뒤 한 번만 밀린 회차 기록(캐시만 보고 쓰면 다른 기기 기록을 모름)
@@ -209,6 +220,59 @@ export function saveGoal(g) {
 }
 export const deleteGoal = (id) => fire(deleteDoc(u('goals', id)), writeErrorHandler);
 
+const stamp = (id, createdAt) => ({ updatedAt: serverTimestamp(), ...(createdAt ? { createdAt } : id ? {} : { createdAt: serverTimestamp() }) });
+export function saveAssetAccount(a) {
+  const ref = a.id ? u('assetAccounts', a.id) : doc(col('assetAccounts'));
+  fire(setDoc(ref, clean({
+    type: a.type, institution: a.institution.trim(), name: a.name.trim(), opened: a.opened,
+    maturity: a.type === 'isa' ? a.maturity : undefined,
+    expectedPension: a.type === 'civil' ? a.expectedPension : undefined,
+    order: a.order ?? 0, archived: a.archived || undefined, ...stamp(a.id, a.createdAt),
+  })), writeErrorHandler);
+  return ref.id;
+}
+export function saveHolding(h) {
+  const ref = h.id ? u('holdings', h.id) : doc(col('holdings'));
+  const priced = Number.isInteger(h.lastPrice);
+  fire(setDoc(ref, clean({
+    assetAccountId: h.assetAccountId, code: h.code || undefined, name: h.name.trim(), kind: h.kind,
+    qtyE4: h.qtyE4, avgPrice: h.avgPrice,
+    lastPrice: priced ? h.lastPrice : undefined,
+    priceDate: priced ? h.priceDate : undefined,
+    priceSource: priced ? (h.priceSource === 'dataGoKr' ? 'dataGoKr' : 'manual') : undefined,
+    ...stamp(h.id, h.createdAt),
+  })), writeErrorHandler);
+  return ref.id;
+}
+export function saveContribution(c) {
+  const ref = c.id ? u('contributions', c.id) : doc(col('contributions'));
+  fire(setDoc(ref, clean({
+    assetAccountId: c.assetAccountId, date: c.date, amount: c.amount, deductible: Boolean(c.deductible),
+    ...stamp(c.id, c.createdAt),
+  })), writeErrorHandler);
+  return ref.id;
+}
+export function saveAssetPrefs(p) {
+  fire(setDoc(u('assetPrefs', 'tax'), clean({
+    pensionLimit: p.pensionLimit, combinedLimit: p.combinedLimit, rateHigh: p.rateHigh, rateLow: p.rateLow,
+    rateChoice: p.rateChoice === 'low' ? 'low' : 'high', updatedAt: serverTimestamp(),
+  })), writeErrorHandler);
+}
+export async function deleteAssetAccount(id) {
+  const refs = [
+    ...state.holdings.filter((h) => h.assetAccountId === id).map((h) => u('holdings', h.id)),
+    ...state.contributions.filter((c) => c.assetAccountId === id).map((c) => u('contributions', c.id)),
+    u('assetAccounts', id),
+  ];
+  for (let i = 0; i < refs.length; i += 400) {
+    const b = writeBatch(db);
+    refs.slice(i, i + 400).forEach((ref) => b.delete(ref));
+    await b.commit();
+  }
+}
+export const deleteHolding = (id) => fire(deleteDoc(u('holdings', id)), writeErrorHandler);
+export const deleteContribution = (id) => fire(deleteDoc(u('contributions', id)), writeErrorHandler);
+
 // 오프라인이면 서버를 기다리지 않고 이 기기 캐시에서 읽음(가져오기가 멈추지 않게)
 const read = (q) => (navigator.onLine ? getDocs(q) : getDocsFromCache(q));
 // 가져오기: 겹치는 기간의 기존 거래(중복 검사용). 날짜 ±1일 근접 중복도 보므로 앞뒤 하루씩 넓혀 읽음
@@ -247,6 +311,22 @@ export async function allBudgets() {
   const s = await read(col('budgets'));
   return s.docs.map((d) => ({ ym: d.id, ...d.data() }));
 }
+const readDoc = (ref) => (navigator.onLine ? getDoc(ref) : getDocFromCache(ref));
+export async function assetExport() {
+  try {
+    const [accounts, holdings, contributions, prefs] = await Promise.all([
+      read(col('assetAccounts')), read(col('holdings')), read(col('contributions')), readDoc(u('assetPrefs', 'tax')),
+    ]);
+    return {
+      assetAccounts: accounts.docs.map((d) => ({ id: d.id, ...d.data() })),
+      holdings: holdings.docs.map((d) => ({ id: d.id, ...d.data() })),
+      contributions: contributions.docs.map((d) => ({ id: d.id, ...d.data() })),
+      assetPrefs: prefs.exists() ? { id: prefs.id, ...prefs.data() } : null,
+    };
+  } catch {
+    return { assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null };
+  }
+}
 
 export async function allTransactions() {
   const s = await getDocs(query(col('transactions'), orderBy('date')));
@@ -254,7 +334,7 @@ export async function allTransactions() {
 }
 // 모든 기록 삭제(계정 삭제 포함)
 export async function deleteEverything() {
-  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports']) {
+  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports', 'assetAccounts', 'holdings', 'contributions', 'assetPrefs']) {
     const s = await getDocs(col(name));
     for (let i = 0; i < s.docs.length; i += 400) {
       const b = writeBatch(db);
