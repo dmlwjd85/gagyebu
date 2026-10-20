@@ -6,6 +6,7 @@ import { pickLoginMode, isIOS, isStandalone, isSameOriginAuth, loginErrorMessage
 const listeners = new Set();
 export const state = {
   ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [],
+  assetAccounts: [], holdings: [], contributions: [], assetPrefs: null,
   txWindow: null, txLoaded: false, pendingWrites: false,
 };
 const emit = () => listeners.forEach((fn) => fn(state));
@@ -51,7 +52,7 @@ export function initAuth() {
       try { await loadStore(); } catch (e) { console.error(e); }
       if (auth.currentUser?.uid !== user.uid) return; // 기다리는 사이 로그아웃·계정 전환됨
     } else localStorage.removeItem(SIGNED_IN);
-    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], txWindow: null, txLoaded: false, budgetYm: null, ready: true });
+    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true });
     if (user && store) store.startUser();
     emit();
   });
@@ -84,6 +85,14 @@ export const txsInRange = call('txsInRange');
 export const importTxs = call('importTxs');
 export const undoImport = call('undoImport');
 export const allBudgets = call('allBudgets');
+export const saveAssetAccount = call('saveAssetAccount');
+export const saveHolding = call('saveHolding');
+export const saveContribution = call('saveContribution');
+export const saveAssetPrefs = call('saveAssetPrefs');
+export const deleteAssetAccount = call('deleteAssetAccount');
+export const deleteHolding = call('deleteHolding');
+export const deleteContribution = call('deleteContribution');
+export const assetExport = call('assetExport');
 
 export async function login() {
   if (loginMode() === 'redirect') {

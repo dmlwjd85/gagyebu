@@ -300,6 +300,8 @@
   .done-check { @apply grid place-items-center w-20 h-20 rounded-full; background: var(--income); }
   .done-check path { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw .5s .1s ease-out forwards; }
   .set-link { @apply flex w-full items-center gap-3 min-h-[56px] px-3 rounded-2xl text-body border; border-color: var(--line); background: var(--surface-solid); }
+  .asset-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .asset-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; width: 100%; min-width: 0; }
   .set-link:hover, .report-btn:hover { border-color: var(--primary); }
   .report-btn { @apply flex w-full items-center gap-3 min-h-[60px] px-4 rounded-3xl border; border-color: var(--line); background: var(--surface-solid); }
   .search-box { @apply flex items-center gap-2 min-h-[52px] px-4 rounded-2xl border; border-color: var(--line); background: var(--surface-solid); }
@@ -384,6 +386,7 @@
    레이어 밖에 두어 bg-black/40·bg-surface-solid 유틸보다 이 모양이 이긴다. */
 .dlg-wrap {
   background: rgba(15, 14, 26, 0.62);
+  overflow-y: auto;
   padding-top: max(16px, env(safe-area-inset-top));
   padding-right: max(16px, env(safe-area-inset-right));
   padding-bottom: max(16px, env(safe-area-inset-bottom));

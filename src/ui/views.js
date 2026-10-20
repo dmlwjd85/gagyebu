@@ -6,6 +6,7 @@ import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
 import { symbol } from './brand.js';
 import { goalsCard, rulesCard } from './m2views.js';
+import { summarizeAll } from '../lib/assets.js';
 
 // 설정 아래 버전 표시(package.json version, vite.config의 define)
 const VERSION = typeof __APP_VERSION__ === 'string' ? `v${__APP_VERSION__}` : '';
@@ -78,6 +79,7 @@ export function homeView(m) {
         ${stat('남긴 돈', compactWon(m.tot.saved), formatWon(m.tot.saved), m.tot.saved < 0 ? 'text-expense' : '')}
       </section>
       ${m.streak || m.noSpend ? `<div class="glass px-4 py-3 text-body flex items-center gap-2"><span aria-hidden="true">🔥</span><span>${m.streak ? `${m.streak}일째 기록 중` : '오늘 기록하면 연속 기록 시작'}${m.noSpend ? ` · 이번 달 무지출 🌱 ${m.noSpend}일` : ''}</span></div>` : ''}
+      ${assetHomeLink(m)}
       <div id="tip-slot"></div>
       ${m.wide && top3.length ? `<section class="card-solid p-4" aria-labelledby="top-h"><h2 id="top-h" class="text-head">많이 쓴 곳 TOP 3</h2>
         <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''}
@@ -100,6 +102,11 @@ const spendStat = (net) => {
 };
 const stat = (k, v, full, cls) => `<div class="glass p-3" role="group" aria-label="${k} ${esc(full)}"><p class="text-caption text-ink-sub" aria-hidden="true">${k}</p><p data-fit class="stat-v tabular-nums ${cls}" title="${esc(full)}" aria-hidden="true">${esc(v)}</p></div>`;
 const skeleton = (n) => `<ul class="mt-2 space-y-2" aria-busy="true" aria-label="불러오는 중">${'<li class="skeleton h-12 rounded-md"></li>'.repeat(n)}</ul>`;
+const assetHomeLink = (m) => {
+  const roll = summarizeAll(m.assetAccounts, m.holdings);
+  const sub = roll.rows.length ? `평가 ${formatWon(roll.valuation)}` : '계좌·납입·세액공제';
+  return `<button class="glass w-full px-4 py-3 text-left flex items-center gap-2 min-h-[44px] min-w-0" data-nav="assets"><span class="shrink-0" aria-hidden="true">📈</span><span class="min-w-0 flex-1"><span class="block text-body">주식·연금</span><span class="block text-caption text-ink-sub break-words">${esc(sub)}</span></span><span class="shrink-0" aria-hidden="true">›</span></button>`;
+};
 
 export function calendarView(m, ui) {
   const days = byDay(m.periodTxs);
@@ -329,6 +336,7 @@ export function settingsView(m, ui) {
       ${scaleControl(m.contentScale ?? 1)}
       <button class="btn-ghost self-start" data-action="tips-reset">팁 다시 보기</button></section>
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-data"><h2 id="s-data" class="text-head">데이터</h2>
+      <button class="set-link" data-nav="assets"><span aria-hidden="true">📈</span><span class="flex-1 text-left min-w-0">주식·연금 계좌<span class="block text-caption text-ink-sub break-words">평가·납입·세액공제·ISA 만기</span></span><span aria-hidden="true">›</span></button>
       <button class="set-link" data-nav="import"><span aria-hidden="true">📥</span><span class="flex-1 text-left">카드사·은행 파일 가져오기<span class="block text-caption text-ink-sub">엑셀·CSV · 중복은 알아서 걸러요</span></span><span aria-hidden="true">›</span></button>
       <button class="set-link" data-nav="recurring"><span aria-hidden="true">🔁</span><span class="flex-1 text-left">반복 거래<span class="block text-caption text-ink-sub">${m.recurring.length ? `${m.recurring.filter((r) => r.active).length}개 켜짐 · 월세·구독 자동 기록` : '월세·구독 자동 기록'}</span></span><span aria-hidden="true">›</span></button>
       <div class="flex flex-wrap gap-2"><button class="btn-ghost" data-action="csv-month">이 달 CSV 내보내기</button><button class="btn-ghost" data-action="csv-all">전체 CSV 내보내기</button><button class="btn-ghost" data-action="json-all">JSON 백업</button></div>
