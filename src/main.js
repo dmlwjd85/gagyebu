@@ -889,6 +889,7 @@ if (isFirebaseConfigured) {
   pickTip();
 }
 render();
+document.fonts?.ready?.then(() => { if ($('#main')) fitNums(); });
 
 // 에뮬레이터 전용 데모 데이터 (스크린샷·수동 검증용)
 if (import.meta.env.VITE_USE_EMULATOR === 'true') {

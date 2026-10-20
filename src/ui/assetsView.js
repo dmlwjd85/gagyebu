@@ -17,8 +17,8 @@ function priceBanner(holdings) {
   return `<p class="glass px-4 py-3 text-body" role="status">${esc(line)}<span class="block text-caption text-ink-sub mt-1">시세는 금융위원회 주식시세정보·증권상품시세정보(한국거래소, 공공누리 4유형)예요. 이 계정 안에만 두고 바깥에 다시 올리지 않아요. 펀드 기준가는 직접 입력해요.</span></p>`;
 }
 
-function stat(label, value, cls = '') {
-  return `<div class="glass p-3 min-w-0" role="group" aria-label="${esc(label)} ${esc(value)}"><p class="text-caption text-ink-sub">${esc(label)}</p><p data-fit class="stat-v tabular-nums ${cls}">${esc(value)}</p></div>`;
+function metric(label, value, cls = '') {
+  return `<div class="asset-line min-w-0" role="group" aria-label="${esc(label)} ${esc(value)}"><span class="text-caption text-ink-sub shrink-0">${esc(label)}</span><span data-fit class="text-body font-semibold tabular-nums min-w-0 ${cls}">${esc(value)}</span></div>`;
 }
 
 function bar(label, used, limit, detail) {
@@ -66,10 +66,10 @@ export function assetsView(m, ui) {
     return `<section class="card-solid p-4 min-w-0" aria-labelledby="acc-${esc(a.id)}">
       <div class="asset-line gap-y-1"><h2 id="acc-${esc(a.id)}" class="text-head min-w-0 break-words">${esc(a.name)}</h2><p class="text-body font-semibold tabular-nums ${pctCls(r.returnPct)}">${esc(formatPct(r.returnPct))}</p></div>
       <p class="text-caption text-ink-sub break-words">${esc(meta)}</p>
-      <div class="stat-grid mt-3">
-        ${stat('투자원금', formatWon(r.invested))}
-        ${stat('평가', formatWon(r.valuation))}
-        ${stat('손익', diffText(r.gain), pctCls(r.gain))}
+      <div class="mt-3 flex flex-col gap-1 min-w-0">
+        ${metric('투자원금', formatWon(r.invested))}
+        ${metric('평가', formatWon(r.valuation))}
+        ${metric('손익', diffText(r.gain), pctCls(r.gain))}
       </div>
       ${r.unpriced ? `<p class="mt-2 text-caption text-ink-sub">시세 없는 종목 ${r.unpriced}개는 평가·수익률에서 빠져 있어요.</p>` : ''}
       ${a.type === 'civil' ? `<p class="mt-2 text-body">예상 연금 월 ${a.expectedPension > 0 ? money(a.expectedPension) : '—'} <span class="text-caption text-ink-sub">(총자산에 더하지 않아요)</span></p>` : ''}

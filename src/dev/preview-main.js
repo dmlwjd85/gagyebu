@@ -51,6 +51,7 @@ function draw() {
     <div class="app-top"><div class="app-shell">${topBar(m, { month: false })}</div></div>
     <main id="main" class="app-main no-nav" tabindex="-1"><div class="app-shell">${body}</div></main></div>`;
   fitNums(app);
+  document.fonts?.ready?.then(() => fitNums(app));
 }
 app.addEventListener('click', (e) => {
   const t = e.target.closest('button');

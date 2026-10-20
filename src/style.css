@@ -301,6 +301,7 @@
   .done-check path { fill: none; stroke: #fff; stroke-width: 5; stroke-linecap: round; stroke-linejoin: round; stroke-dasharray: 48; stroke-dashoffset: 48; animation: draw .5s .1s ease-out forwards; }
   .set-link { @apply flex w-full items-center gap-3 min-h-[56px] px-3 rounded-2xl text-body border; border-color: var(--line); background: var(--surface-solid); }
   .asset-actions { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .asset-actions > button { max-width: 100%; height: auto; white-space: normal; text-align: center; }
   .asset-line { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 4px 12px; width: 100%; min-width: 0; }
   .set-link:hover, .report-btn:hover { border-color: var(--primary); }
   .report-btn { @apply flex w-full items-center gap-3 min-h-[60px] px-4 rounded-3xl border; border-color: var(--line); background: var(--surface-solid); }
