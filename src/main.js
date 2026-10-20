@@ -15,7 +15,7 @@ import { toCSV } from './lib/csv.js';
 import { editTarget } from './lib/restore.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
+import { $, esc, toast, placeToast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
@@ -109,6 +109,7 @@ function render() {
   const mainEl = $('#main');
   if (mainEl) scroller().scrollTop = ui.view === lastView ? scrollY : 0;
   fitNums(app);
+  placeToast(); // 새 버전 안내 줄이 새로 생기면 토스트가 비킴(QA 6차 1)
   syncRailShift();
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;

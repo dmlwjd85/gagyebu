@@ -74,12 +74,38 @@ export function confirmDialog({ title, body = '', ok = '확인', cancel = '닫�
 }
 
 let toastTimer;
+// 토스트 자리(QA 6차 1): 기본은 아래 메뉴 바로 위. 새 버전 안내 줄의 [지금 적용] 버튼과 겹치면 버튼 아래(자리가 없으면 위)로 비켜요.
+const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+export function placeToast(el = $('#toast')) {
+  if (!el?.classList.contains('show')) return;
+  const H = window.innerHeight, gap = 8;
+  const tab = $('.tabbar')?.getBoundingClientRect();
+  const floor = tab && tab.height && tab.top < H && tab.bottom > 0 ? tab.top - gap : H - gap; // 아래 메뉴가 보이면 그 위, 아니면 화면 아래
+  el.style.top = ''; el.style.bottom = `${Math.max(gap, H - floor)}px`;
+  const [bar, btn] = ['.update-bar', '.update-bar .update-btn'].map((q) => $(q)?.getBoundingClientRect());
+  const r = el.getBoundingClientRect();
+  if (!bar || !bar.height || !overlap(r, bar)) return;
+  // 자리 후보: 안내 줄 아래 → 위 → 버튼만 피해 아래 → 위 → (그래도 없으면) 아래 메뉴 위까지 덮고 버튼 아래
+  const h = r.height, put = (top) => { el.style.bottom = 'auto'; el.style.top = `${top}px`; };
+  for (const [box, lim] of [[bar, floor], [btn || bar, floor], [btn || bar, H - gap]]) {
+    if (box.bottom + gap + h <= lim) return put(box.bottom + gap);
+    if (box.top - gap - h >= gap) return put(box.top - gap - h);
+  }
+}
+let toastWatch = false;
 export function toast(msg, { action, onAction, duration = 3500 } = {}) {
   let el = $('#toast');
   if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.append(el); }
   el.className = 'toast show';
   el.innerHTML = `<span class="tabular-nums">${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
   if (action) el.querySelector('button').onclick = () => { el.classList.remove('show'); onAction?.(); };
+  placeToast(el);
+  if (!toastWatch) { // 본문을 스크롤하거나 화면 크기가 바뀌면 다시 비켜요
+    toastWatch = true;
+    const again = () => placeToast();
+    document.addEventListener('scroll', again, { capture: true, passive: true });
+    window.addEventListener('resize', again);
+  }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), action ? Math.max(duration, 5000) : duration);
 }
