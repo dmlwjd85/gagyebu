@@ -1,8 +1,8 @@
 import { initializeApp } from 'firebase/app';
 import { initializeAuth, indexedDBLocalPersistence, browserLocalPersistence, GoogleAuthProvider, connectAuthEmulator } from 'firebase/auth';
 
-import { useEmulator, firebaseConfig, isFirebaseConfigured } from './config.js';
-export { useEmulator, firebaseConfig, isFirebaseConfigured };
+import { useEmulator, firebaseConfig, isFirebaseConfigured, emu } from './config.js';
+export { useEmulator, firebaseConfig, isFirebaseConfigured, emu };
 
 let app = null, auth = null;
 if (isFirebaseConfigured) {
@@ -11,8 +11,7 @@ if (isFirebaseConfigured) {
   auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
   // Firestore는 store.js에서 로그인한 뒤에 시작(로그인 화면을 가볍게)
   if (useEmulator) {
-    const host = location.hostname || '127.0.0.1';
-    connectAuthEmulator(auth, `http://${host}:9099`, { disableWarnings: true });
+    connectAuthEmulator(auth, `http://${emu.host}:${emu.authPort}`, { disableWarnings: true });
   }
 } else {
   console.info('[쓱 가계부] Firebase 설정값이 없어 설정 안내 화면을 보여 줍니다. (.env.example 참고)');

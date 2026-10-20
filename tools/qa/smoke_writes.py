@@ -1,21 +1,19 @@
 #!/usr/bin/env python3
 """앱의 모든 쓰기 경로를 에뮬레이터에서 한 번씩 돌리고 권한 오류 0건을 확인(QA 4차 R1 교훈).
-사용: 에뮬레이터(auth 9099·firestore 8080) + VITE_USE_EMULATOR 미리보기 띄운 뒤
+사용: 에뮬레이터(기본 auth 9099·firestore 8080, 바꾸려면 tools/qa/emu.py 참고) + VITE_USE_EMULATOR 미리보기 띄운 뒤
   python3 tools/qa/smoke_writes.py [URL]
 종료 코드 0 = 권한 오류 없음·핵심 기록이 서버에 있음.
 """
-import json, sys, urllib.request as U
+import json, os, sys, urllib.request as U
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 from playwright.sync_api import sync_playwright
 
-URL = sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/'
-PROJ = 'demo-gagyebu'
-FS = f'http://127.0.0.1:8080/v1/projects/{PROJ}/databases/(default)/documents'
+URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')
+FS = emu.FS_DOCS
 SHOT = '/workspace/gagyebu-m2fix4-'
 
 def wipe():
-    for u in [f'http://127.0.0.1:8080/emulator/v1/projects/{PROJ}/databases/(default)/documents',
-              f'http://127.0.0.1:9099/emulator/v1/projects/{PROJ}/accounts']:
-        U.urlopen(U.Request(u, method='DELETE'))
+    emu.reset()  # 이 실행의 프로젝트만 지움
 
 def val(v):
     k = list(v.keys())[0]; x = v[k]

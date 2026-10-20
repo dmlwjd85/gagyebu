@@ -2,14 +2,14 @@
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
 import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
-import { app, auth, useEmulator } from './firebase.js';
+import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
-if (useEmulator) connectFirestoreEmulator(db, location.hostname || '127.0.0.1', 8080);
+if (useEmulator) connectFirestoreEmulator(db, emu.host, emu.fsPort);
 
 // data.js가 넘겨주는 공용 상태·알림 함수
 let state, emit, writeErrorHandler;

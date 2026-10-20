@@ -3,6 +3,8 @@ import './style.css';
 import('./fonts.css');
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
+import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
+import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
 let data = null;
 let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [] };
@@ -12,7 +14,7 @@ import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
@@ -26,6 +28,8 @@ import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
+// 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
+let contentScale = applyScale(readScale());
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
 const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring'];
@@ -53,7 +57,7 @@ function model() {
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine,
+    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine, contentScale,
   };
 }
 
@@ -61,6 +65,7 @@ function model() {
 let lastHero = null, lastView = null;
 // 로그인·설정 안내: 첫 화면(index.html)의 브랜드 카드는 그대로 두고 아래 카드만 바꿈 → 화면 깜빡임·LCP 지연 없음
 function gateView({ caption, card }) {
+  document.body.classList.remove('has-frame');
   const hero = $('#boot-hero');
   if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
     <h1 class="flex justify-center" id="boot-logo">${logo({ cls: 'boot-logo' })}</h1>
@@ -77,26 +82,32 @@ function render() {
   const m = model();
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
-  const scrollY = window.scrollY;
+  const scrollY = $('#main') ? scroller().scrollTop : 0;
+  const mainFocused = document.activeElement?.id === 'main'; // 다시 그려도 본문 포커스 유지(PageDown·스페이스 스크롤)
   if (ui.view === 'import' && !IMP) loadImp().then(render);
   if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
   const body = ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
     : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView }[ui.view](m, ui);
   const nav = !NO_NAV.has(ui.view);
+  // 위 메뉴 / 본문(여기만 스크롤, 글자 배율 적용) / 아래 메뉴 3줄 틀 — style.css '.app-frame'
+  document.body.classList.add('has-frame');
   app.innerHTML = `
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
-    <div class="app-shell ${nav ? 'has-nav' : ''}">
-      ${topBar(m, { month: !NO_NAV.has(ui.view) })}
-      <main id="main" class="mt-3 pb-[124px] ${ui.view !== lastView ? 'view-enter' : ''}" tabindex="-1">${body}</main>
-    </div>
-    ${nav ? tabBar() : ''}
-    <div id="tip-slot"></div>`;
+    <div class="app-frame ${nav ? 'has-nav' : ''}">
+      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
+      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
+      ${nav ? tabBar() : ''}
+    </div>`;
   // 홈 숫자 롤링
   const hero = $('#hero-num');
   if (hero) { const to = Number(hero.dataset.target); rollNumber(hero, to, formatWon, lastHero ?? 0); lastHero = to; }
   if (focusKey) { const el = app.querySelector(`[data-${focusKey[0].replace(/[A-Z]/g, (c) => '-' + c.toLowerCase())}="${CSS.escape(focusKey[1])}"]`); el?.focus({ preventScroll: true }); }
-  window.scrollTo(0, scrollY);
+  const mainEl = $('#main');
+  if (mainEl) scroller().scrollTop = ui.view === lastView ? scrollY : 0;
+  fitNums(app);
+  syncRailShift();
+  if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
   renderTip();
 }
@@ -110,22 +121,18 @@ const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on
 // ── 구석 팁 ─────────────────────────────────────────
 const tipState = () => { try { return JSON.parse(localStorage.getItem('tips')) ?? emptyTipState(); } catch { return emptyTipState(); } };
 const saveTipState = (s) => localStorage.setItem('tips', JSON.stringify(s));
-let currentTip = null, tipCollapsed = false, tipTimer;
+let currentTip = null;
 function pickTip() {
   const r = nextTip(tipState(), today());
   saveTipState(r.state);
   currentTip = r.tip ? { text: r.tip, index: r.index } : null;
-  tipCollapsed = false;
-  clearTimeout(tipTimer);
-  tipTimer = setTimeout(() => { tipCollapsed = true; renderTip(); }, 8000);
 }
 function renderTip() {
   const slot = $('#tip-slot');
   if (!slot) return;
   if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
-  slot.innerHTML = `<div class="tip ${tipCollapsed ? 'collapsed' : ''}" aria-live="polite">
-    ${tipCollapsed ? `<button class="tip-mini" data-tip-open aria-label="팁 보기">💡</button>`
-      : `<span aria-hidden="true">💡</span><p class="flex-1">${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button>`}</div>`;
+  // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
+  slot.innerHTML = `<div class="tip" role="note" aria-label="팁"><span class="py-1.5" aria-hidden="true">💡</span><p>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
 }
 
 // ── 동작 ───────────────────────────────────────────
@@ -183,8 +190,14 @@ function go(view, extra = {}) {
   history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
   render();
   $('#main')?.focus({ preventScroll: true });
-  window.scrollTo(0, 0);
+  scrollMainTop();
 }
+// 지금 스크롤되는 곳: 보통은 본문(#main), 높이가 낮은 화면(max-height 500px)에서는 문서 전체(style.css 참고)
+const scroller = () => {
+  const main = $('#main');
+  return main && getComputedStyle(main).overflowY !== 'visible' ? main : document.scrollingElement;
+};
+const scrollMainTop = () => { if ($('#main')) scroller().scrollTop = 0; };
 
 // ── M2: 반복 거래·저축 목표·규칙 입력 대화상자 ─────────────
 const catOptions = () => state.categories.filter((c) => !c.archived).map((c) => [c.id, `${c.kind === 'income' ? '수입' : '지출'} · ${c.emoji} ${c.name}`]);
@@ -260,7 +273,7 @@ async function impFile(file) {
 async function onImportClick(d) {
   const imp = ui.imp;
   if (!imp) return;
-  if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); window.scrollTo(0, 0); return $('#main')?.focus({ preventScroll: true }); }
+  if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); scrollMainTop(); return $('#main')?.focus({ preventScroll: true }); }
   if (d.impBack !== undefined) {
     if (imp.step === 2) { ui.imp = IMP.newImport(); return render(); }
     if (imp.step === 3 || imp.step === 4) { imp.step--; imp.error = ''; return render(); }
@@ -286,7 +299,7 @@ async function onImportClick(d) {
     if (imp.step === 2) { imp.busy = true; render(); await IMP.checkDuplicates(imp, impCtx()); }
     else if (imp.step === 3) imp.step = 4;
     else if (imp.step === 4) { imp.busy = true; render(); await IMP.commit(imp, impCtx()); if (imp.step === 5) haptic(20); }
-    render(); window.scrollTo(0, 0); $('#main')?.focus({ preventScroll: true });
+    render(); scrollMainTop(); $('#main')?.focus({ preventScroll: true });
   }
 }
 
@@ -304,6 +317,8 @@ app.addEventListener('click', async (e) => {
   const t = e.target.closest('button, [data-tx]');
   if (!t || t.disabled) return;
   const d = t.dataset;
+  if (d.scaleStep !== undefined) return setScale(stepScale(contentScale, Number(d.scaleStep)));
+  if (d.scaleReset !== undefined) return setScale(1);
   const m = state.user ? model() : null;
   if (d.nav) {
     // '목록에서 보기'(가져오기 완료): 가져온 거래가 있는 달로 이동
@@ -401,7 +416,6 @@ app.addEventListener('click', async (e) => {
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
-  if (d.tipOpen !== undefined) { tipCollapsed = false; return renderTip(); }
   switch (d.action) {
     case 'add': haptic(); return openSheet();
     case 'add-rec': return editRecurring(null);
@@ -494,6 +508,7 @@ app.addEventListener('change', (e) => {
 });
 let searchTimer;
 app.addEventListener('input', (e) => {
+  if (e.target.dataset?.contentScale !== undefined) return setScale(Number(e.target.value) / 100);
   if (e.target.dataset?.searchQ === undefined) return;
   ui.search.q = e.target.value;
   clearTimeout(searchTimer);
@@ -519,6 +534,106 @@ window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => stat
 document.addEventListener('keydown', (e) => {
   if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
   if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
+});
+
+// 새로 고친 직후처럼 아무 곳에도 포커스가 없을 때 PageDown·화살표·스페이스·Home/End 가 본문을 스크롤하도록(QA M7).
+// 처음부터 본문에 포커스를 주면 Tab 순서(본문으로 건너뛰기 → 위 메뉴)가 흐트러지므로, 첫 스크롤 키를 누를 때만 본문으로 넘김(테두리 없음)
+document.addEventListener('keydown', (e) => {
+  const t = document.activeElement;
+  if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey || (t && t !== document.body && t !== document.documentElement)) return;
+  const main = $('#main');
+  if (!main || scroller() !== main || isSheetOpen() || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
+  const page = main.clientHeight * 0.875;
+  const dy = { PageDown: page, PageUp: -page, ArrowDown: 40, ArrowUp: -40, ' ': e.shiftKey ? -page : page, Home: -main.scrollHeight, End: main.scrollHeight }[e.key];
+  if (dy === undefined) return;
+  e.preventDefault();
+  main.focus({ preventScroll: true });
+  main.scrollBy({ top: dy, behavior: reducedMotionNow() ? 'auto' : 'smooth' });
+});
+const reducedMotionNow = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+
+// 화면 키보드 감지(QA M5): 입력칸에 포커스가 있고 보이는 높이가 창보다 150px 넘게 줄면 html.kbd-open → 폰에서 아래 메뉴를 숨김
+const vv = window.visualViewport;
+const kbdCheck = () => {
+  const typing = document.activeElement?.matches?.('input:not([type=range]):not([type=checkbox]):not([type=radio]),textarea,select,[contenteditable=true]');
+  // 기준: 보이는 높이가 창 높이의 85% 미만으로 줄고(가로 화면처럼 낮은 창도 비율로), 60px 넘게 줄었을 때
+  const shrink = vv ? window.innerHeight - vv.height : 0;
+  document.documentElement.classList.toggle('kbd-open', !!(vv && typing && shrink > 60 && vv.height < window.innerHeight * 0.85));
+};
+vv?.addEventListener('resize', kbdCheck);
+document.addEventListener('focusin', kbdCheck);
+document.addEventListener('focusout', () => setTimeout(kbdCheck, 50));
+// 대화상자가 떠 있을 때 휠: 대화상자 안에서 더 스크롤할 곳이 없으면 뒤쪽 본문이 대신 스크롤되지 않게 막음(QA L2)
+document.addEventListener('wheel', (e) => {
+  const wrap = e.target.closest?.('.dlg-wrap, #sheet-root');
+  if (!wrap || e.ctrlKey) return;
+  for (let el = e.target; el && el !== wrap.parentElement; el = el.parentElement) {
+    const oy = getComputedStyle(el).overflowY;
+    if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 1) {
+      if (e.deltaY < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1) return;
+    }
+  }
+  e.preventDefault();
+}, { passive: false });
+// PC 세로 메뉴: 본문 스크롤 막대 자리를 양쪽에 두는 경우(scrollbar-gutter both-edges) 그 폭만큼 메뉴도 안쪽으로 → 왼쪽·오른쪽 여백이 같게(QA L5)
+function syncRailShift() {
+  const m = $('#main');
+  const g = m && getComputedStyle(m).scrollbarGutter.includes('both') ? (m.offsetWidth - m.clientWidth) / 2 : 0;
+  document.documentElement.style.setProperty('--rail-shift', `${g}px`);
+}
+// 낮은 화면(높이 500px 이하, 폰·태블릿 폭): 본문을 내리면 아래 메뉴를 숨기고, 올리거나 맨 끝에 닿으면 다시 보임(QA M5)
+// 숨김은 transform 만 쓰고 틀(.app-frame)이 overflow: clip 이라 숨김·보임이 바뀌어도 문서 길이가 그대로 → 맨 끝에서 위치가 튀지 않음(QA N7, style.css).
+// 맨 끝 판정은 움직임이 6px 미만이어도 먼저 함(마지막 짧은 움직임으로 끝에 닿아도 숨김으로 남아 아래가 비지 않게).
+const lowMq = window.matchMedia('(max-height: 500px) and (max-width: 1023px)');
+let lastY = window.scrollY;
+window.addEventListener('scroll', () => {
+  const y = window.scrollY, root = document.documentElement;
+  if (!lowMq.matches) { root.classList.remove('nav-autohide'); lastY = y; return; }
+  const room = document.scrollingElement.scrollHeight - window.innerHeight - y;
+  if (room <= 2) { root.classList.remove('nav-autohide'); lastY = y; return; }
+  const dy = y - lastY;
+  if (Math.abs(dy) < 6) return;
+  root.classList.toggle('nav-autohide', dy > 0 && y > 24);
+  lastY = y;
+}, { passive: true });
+lowMq.addEventListener?.('change', () => document.documentElement.classList.remove('nav-autohide'));
+// 창 크기가 바뀌면 큰 금액 한 줄 맞춤·메뉴 여백을 다시
+let fitRaf = 0;
+window.addEventListener('resize', () => { cancelAnimationFrame(fitRaf); fitRaf = requestAnimationFrame(() => { fitNums(); syncRailShift(); }); });
+
+// ── 본문 글자 배율(위·아래 메뉴는 그대로, 가운데 본문만) ─────────────
+// 설정 슬라이더·가−/가+ 버튼. Ctrl(⌘)+휠·Ctrl(⌘)+/−/0 은 가로채지 않고 브라우저 확대에 맡김(QA M3 결정, scaleShortcuts.js).
+// 손가락 핀치 줌도 막지 않음(접근성: 브라우저 확대는 늘 가능).
+function setScale(v, { announce = false } = {}) {
+  const prev = contentScale;
+  const main = $('#main') && scroller();
+  const room = main ? main.scrollHeight - main.clientHeight : 0;
+  const ratio = main && room > 0 ? main.scrollTop / room : 0;
+  contentScale = applyScale(saveScale(v));
+  fitNums();
+  if (main && room > 0) main.scrollTop = ratio * (main.scrollHeight - main.clientHeight); // 읽던 자리 유지
+  syncScaleUi();
+  if (announce && contentScale !== prev) {
+    toast(`본문 글자 크기 ${scalePct(contentScale)}`, contentScale === 1 ? {} : { action: '기본 크기로', onAction: () => setScale(1, { announce: true }) });
+  }
+}
+function syncScaleUi() {
+  const pct = Math.round(contentScale * 100);
+  const r = $('[data-content-scale]');
+  if (r) { if (Number(r.value) !== pct) r.value = String(pct); r.setAttribute('aria-valuetext', `${pct}%`); }
+  const o = $('[data-scale-out]'); if (o) o.textContent = `${pct}%`;
+  // disabled 대신 aria-disabled: 누르던 버튼에서 키보드 포커스가 사라지지 않게
+  $('[data-scale-step="-1"]')?.setAttribute('aria-disabled', String(contentScale <= SCALE_MIN));
+  $('[data-scale-step="1"]')?.setAttribute('aria-disabled', String(contentScale >= SCALE_MAX));
+}
+const scaleBlocked = () => !state.user || !$('#main') || isSheetOpen() || !!document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)');
+// Ctrl(⌘)+휠·Ctrl(⌘)+/−/0 가로채기: 지금은 꺼짐(브라우저 확대). src/lib/scaleShortcuts.js 의 INTERCEPT_BROWSER_ZOOM 한 줄로 켜고 끔
+installScaleShortcuts({ getScale: () => contentScale, setScale: (v) => setScale(v, { announce: true }), blocked: scaleBlocked });
+// 다른 탭에서 배율을 바꾸면 이 탭도 따라감(QA L4)
+window.addEventListener('storage', (e) => {
+  if (e.key !== SCALE_KEY && e.key !== null) return;
+  const v = clampScale(e.newValue ?? 1);
+  if (v !== contentScale) { contentScale = applyScale(v); syncScaleUi(); fitNums(); }
 });
 
 window.addEventListener('online', render);

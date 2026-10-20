@@ -30,7 +30,8 @@ function model(viewYm, { txs = TXS, budget = null, today = '2026-10-19', extra =
     trend: trend(txs, [-5, -4, -3, -2, -1, 0].map((d) => period(shiftYm(viewYm, d), sd))), streak: 0, noSpend: 0,
     insight: topIncrease(periodTxs, prevTxs), wide: false, dark: false, themeMode: 'system', offline: false, ...extra };
 }
-const text = (html) => html.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
+const unwrapNum = (html) => html.replace(/<span data-fit class="num tabular-nums">([^<]*)<\/span>/g, '$1'); // 문장 속 금액 감싸개(QA L6)는 글자만
+const text = (html) => unwrapNum(html).replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ');
 // 모든 화면 공통 금지 표기: 빼기 두 번, '−0원', 음수 지출(−49,000·−45,000), 100 넘는 비율 합
 const BAD = [/[−-]\s*[−-]\s*\d/, /−0원/, /지출\s*−\s*4[59],000/, /총지출\s*−/];
 function noBadSigns(html) { const t = text(html); for (const re of BAD) expect(t, `${re} in: ${t.slice(0, 300)}`).not.toMatch(re); }
@@ -143,11 +144,11 @@ describe('N11 카테고리 비율 합 100(최대 나머지 방식)', () => {
   test('차트 범례 % 합 = 100(그 밖의 묶음 포함)', () => {
     const txs = ['food', 'cafe', 'living', 'transport', 'shopping', 'fashion', 'health', 'culture'].map((c, i) => T('2026-10-0' + (i % 9 + 1), 10000 + i * 1777, c));
     const html = chartView(model('2026-10', { txs }), {});
-    const pcts = [...html.matchAll(/w-10 text-right whitespace-nowrap">(\d+)%/g)].map((x) => Number(x[1]));
+    const pcts = [...html.matchAll(/min-w-\[2\.5rem\] text-right">(\d+)%/g)].map((x) => Number(x[1]));
     expect(pcts.length).toBe(7);
     expect(pcts.reduce((a, x) => a + x, 0)).toBe(100);
     const q = chartView(model('2026-10', { txs: [T('2026-10-01', 50000, 'food'), T('2026-10-02', 20000, 'living'), T('2026-10-03', 10000, 'cafe'), T('2026-10-04', -40000, 'fashion', 'expense', { importHash: '0123456789abcdef' })] }), {});
-    expect([...q.matchAll(/w-10 text-right whitespace-nowrap">(\d+)%/g)].map((x) => Number(x[1]))).toEqual([63, 25, 12]);
+    expect([...q.matchAll(/min-w-\[2\.5rem\] text-right">(\d+)%/g)].map((x) => Number(x[1]))).toEqual([63, 25, 12]);
   });
 });
 
@@ -173,7 +174,8 @@ describe('N13 긴 이름(공백 없는 20자) 넘침 방지 구조', () => {
   const css = readFileSync('src/style.css', 'utf8');
   test('select는 부모 폭 안(min-w-0·max-w-full), 옵션 줄 글자는 줄지 않음', () => {
     expect(css).toMatch(/\.select \{[^}]*min-w-0[^}]*max-w-full/);
-    expect(css).toMatch(/\.opt-row > \.opt-k \{[^}]*shrink-0[^}]*whitespace-nowrap/);
+    // 이름표는 줄지 않고(shrink-0), 줄 전체 폭보다 길 때만(160px 같은 아주 좁은 폭) 이름표 안에서 줄바꿈(PR #9 QA)
+    expect(css).toMatch(/\.opt-row > \.opt-k \{[^}]*shrink-0[^}]*max-w-full/);
   });
   test('라벨+select 줄은 모두 opt-row(가져오기 결제수단·금액 부호, 설정 시작일)', () => {
     const src = ['src/ui/importer.js', 'src/ui/views.js'].map((f) => readFileSync(f, 'utf8')).join('\n');
@@ -205,8 +207,10 @@ describe('추가로 찾은 것', () => {
   });
   test('지난 달 화면 위 막대: 360px에서는 "이번 달로" 대신 ↩ 아이콘(가로 30px 넘침)', () => {
     const html = topBar(model('2026-08'));
-    expect(html).toContain('max-[379px]:hidden">이번 달로');
-    expect(html).toContain('min-[380px]:hidden">↩');
+    // 줌 대응(위 메뉴 고정): 오프라인 표시가 있어도 430px 폰까지 한 줄에 들어가도록 기준을 480px로 올림
+    expect(html).toContain('max-[479px]:hidden">이번 달로');
+    expect(html).toContain('min-[480px]:hidden">↩');
+    expect(html).toContain('is-past'); // 좁은 폰에서는 심볼을 숨겨 자리 확보
     expect(html).toMatch(/aria-label="[^"]+, 이번 달로 이동"/); // 화면 읽기 프로그램에는 그대로 안내
     expect(topBar(model('2026-10'))).not.toContain('↩');
   });
@@ -222,7 +226,7 @@ describe('QA 4차 낮음·표기', () => {
   test('예산 카테고리 환불 문구에 +', () => {
     const m = model('2026-10', { budget: { total: 300000, byCategory: { fashion: 30000 } } });
     // 쇼핑·패션에 환불 −89000 → envelope refund
-    expect(budgetView(m, { envelopes: true })).toContain('환불 +89,000원이 더 많아 사용 0원으로 봐요');
+    expect(unwrapNum(budgetView(m, { envelopes: true }))).toContain('환불 +89,000원이 더 많아 사용 0원으로 봐요');
   });
   test('리포트 스티커: 연속 0일이면 제외', () => {
     const d = reportData(model('2026-10'));

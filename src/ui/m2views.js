@@ -1,5 +1,5 @@
 // M2 화면: 검색·필터, 반복 거래, 저축 목표(진행 링), 자동 분류 규칙
-import { esc } from './util.js';
+import { esc, numSpan } from './util.js';
 import { formatWon, signedWon, shortWon, spendText } from '../lib/money.js';
 import { searchTxs, hasFilter } from '../lib/search.js';
 import { nextDue, monthlyFixed, detectSubscriptions } from '../lib/recurring.js';
@@ -37,14 +37,14 @@ export function searchView(m, ui) {
       <select class="select" data-search-f="categoryId" aria-label="카테고리"><option value="">모든 카테고리</option>${cats.map((c) => `<option value="${esc(c.id)}" ${f.categoryId === c.id ? 'selected' : ''}>${esc(c.emoji)} ${esc(c.name)}</option>`).join('')}</select>
       <select class="select" data-search-f="accountId" aria-label="결제수단"><option value="">모든 결제수단</option>${m.accounts.map((a) => `<option value="${esc(a.id)}" ${f.accountId === a.id ? 'selected' : ''}>${esc(a.emoji || '')} ${esc(a.name)}</option>`).join('')}</select>
       <select class="select" data-search-f="range" aria-label="기간">${[['3', '최근 3개월'], ['6', '최근 6개월'], ['month', '보고 있는 달'], ['all', '전체 기간']].map(([v, l]) => `<option value="${v}" ${f.range === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <span class="inline-flex items-center gap-1 text-caption text-ink-sub"><input class="amount-in" inputmode="numeric" data-search-amt="min" value="${f.min ?? ''}" placeholder="최소" aria-label="최소 금액(원)" />~<input class="amount-in" inputmode="numeric" data-search-amt="max" value="${f.max ?? ''}" placeholder="최대" aria-label="최대 금액(원)" />원</span>
+      <span class="inline-flex flex-wrap max-w-full items-center gap-1 text-caption text-ink-sub"><input class="amount-in" inputmode="numeric" data-search-amt="min" value="${f.min ?? ''}" placeholder="최소" aria-label="최소 금액(원)" />~<input class="amount-in" inputmode="numeric" data-search-amt="max" value="${f.max ?? ''}" placeholder="최대" aria-label="최대 금액(원)" />원</span>
       ${has ? '<button type="button" class="chip" data-search-clear>✕ 필터 지우기</button>' : ''}
     </div>
     ${m.searchLoading ? '<p class="text-body text-ink-sub" role="status">기록을 불러오는 중…</p>' : ''}
     <section class="card-solid p-4" aria-live="polite" aria-labelledby="sr-h">
       ${has ? `<div class="flex flex-wrap items-baseline justify-between gap-2"><h2 id="sr-h" class="text-head">${list.length}건</h2>
           <p class="text-caption tabular-nums"><span class="text-expense font-semibold">지출 ${spendText(exp)}</span> · <span class="text-income font-semibold">수입 ${formatWon(inc)}</span></p></div>
-        ${list.length ? `<ul class="mt-2 flex flex-col gap-1">${list.slice(0, 200).map((t) => `<li class="flex items-center gap-2"><span class="text-caption text-ink-sub tabular-nums w-12 shrink-0">${Number(t.date.slice(5, 7))}.${t.date.slice(8)}</span><ul class="flex-1 min-w-0">${txRow(m, t)}</ul></li>`).join('')}</ul>
+        ${list.length ? `<ul class="mt-2 flex flex-col gap-1">${list.slice(0, 200).map((t) => `<li class="flex items-center gap-2"><span class="text-caption text-ink-sub tabular-nums num min-w-[3rem]">${Number(t.date.slice(5, 7))}.${t.date.slice(8)}</span><ul class="flex-1 min-w-0">${txRow(m, t)}</ul></li>`).join('')}</ul>
           ${list.length > 200 ? '<p class="mt-2 text-caption text-ink-sub">앞의 200건만 보여 드려요. 조건을 더 좁혀 보세요.</p>' : ''}`
         : '<div class="py-8 text-center"><p class="text-4xl" aria-hidden="true">🔎</p><p class="mt-2 text-body text-ink-sub">맞는 기록이 없어요.</p></div>'}`
       : `<h2 id="sr-h" class="sr-only">검색 결과</h2><div class="py-6 text-center"><p class="text-4xl" aria-hidden="true">🔍</p><p class="mt-2 text-body text-ink-sub">가맹점 이름, 메모, #태그로 찾아보세요.</p>
@@ -64,9 +64,9 @@ export function recurringView(m) {
       ${list.length ? `<ul class="mt-2 flex flex-col">${list.map((r) => {
         const c = m.catMap.get(r.categoryId) ?? { emoji: '🧾', name: '기타' };
         const nd = nextDue(r, m.today);
-        return `<li class="flex items-center gap-2 min-h-[64px] py-1 border-b last:border-0" style="border-color:var(--line)">
+        return `<li class="flex flex-wrap items-center gap-2 min-h-[64px] py-1 border-b last:border-0" style="border-color:var(--line)">
           <span class="tx-emoji shrink-0" aria-hidden="true">${esc(c.emoji)}</span>
-          <button class="flex-1 min-w-0 text-left min-h-[44px]" data-rec-edit="${esc(r.id)}">
+          <button class="flex-1 min-w-[min(100%,7em)] text-left min-h-[44px]" data-rec-edit="${esc(r.id)}">
             <span class="block text-body font-semibold break-words">${esc(r.name)}</span>
             <span class="block text-body font-semibold tabular-nums ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span>
             <span class="block text-caption text-ink-sub">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}</span><span class="sr-only">, 고치기</span></button>
@@ -78,7 +78,7 @@ export function recurringView(m) {
     </section>
     ${subs.length ? `<section class="card-solid p-4" aria-labelledby="sub-h"><h2 id="sub-h" class="text-head">구독 같아요</h2>
       <p class="mt-1 text-caption text-ink-sub">같은 곳에 같은 금액이 매달 비슷한 날에 나갔어요. 반복으로 등록할까요?</p>
-      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex items-center gap-3 min-h-[52px]"><span class="flex-1 min-w-0 text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · 매달 ${s.day}일쯤 · ${formatWon(s.amount)}</span></span>
+      <ul class="mt-2 flex flex-col">${subs.map((s) => `<li class="flex flex-wrap items-center gap-x-3 min-h-[52px]"><span class="flex-1 min-w-[min(100%,9em)] text-body break-words">${esc(s.name)}<span class="block text-caption text-ink-sub">${s.months}달 · 매달 ${s.day}일쯤 · ${numSpan(formatWon(s.amount))}</span></span>
         <button class="chip" data-rec-from="${esc(s.name)}" data-amount="${s.amount}" data-day="${s.day}" data-cat="${esc(s.categoryId ?? '')}" aria-label="${esc(s.name)} 반복으로 등록">등록</button></li>`).join('')}</ul></section>` : ''}
   </div>`;
 }
@@ -95,7 +95,7 @@ export function goalsCard(m) {
         <div class="min-w-0 flex-1">
           <button class="relative block w-full text-left min-h-[44px] text-body font-semibold break-words" data-goal-edit="${esc(g.id)}" aria-label="${esc(g.name)} 목표 고치기">${esc(g.name)}</button>
           <p class="tabular-nums" role="progressbar" aria-label="${esc(g.name)} 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p.pct}" aria-valuetext="${p.pct}%, ${formatWon(g.saved || 0)} / ${formatWon(g.target)}"><b class="text-head">${p.pct}%</b> <span class="text-caption">${shortWon(g.saved || 0)} / ${shortWon(g.target)}원</span></p>
-          <p class="text-caption text-ink-sub">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${formatWon(p.left)} 남음` : `한 달에 ${formatWon(p.perMonth)}씩 · ${p.months}달 남음`) : `${formatWon(p.left)} 남았어요`}</p>
+          <p class="text-caption text-ink-sub">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${numSpan(formatWon(p.left))} 남음` : `한 달에 ${numSpan(formatWon(p.perMonth))}씩 · ${p.months}달 남음`) : `${numSpan(formatWon(p.left))} 남았어요`}</p>
           <button class="chip mt-1" data-goal-add="${esc(g.id)}">＋ 모으기</button></div></li>`;
     }).join('')}</ul>` : '<p class="mt-2 text-body text-ink-sub">여행·비상금처럼 모으고 싶은 돈을 정해 보세요. 진행 링으로 보여 드려요.</p>'}
   </section>`;
