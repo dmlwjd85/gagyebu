@@ -4,15 +4,49 @@ export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
 export const reducedMotion = () => window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 export const haptic = (ms = 8) => { if (localStorage.getItem('haptic') !== 'off') navigator.vibrate?.(ms); };
 
+// 문장 속 금액: 숫자 폭을 고르게(tabular-nums) + 금액 중간에서 줄이 갈리지 않게
+export const numSpan = (txt) => `<span data-fit class="num tabular-nums">${txt}</span>`;
+
+// 큰 금액 한 줄 맞춤: 금액은 자르거나(…) 쪼개지 않고, 칸보다 넓을 때만 '딱 들어가는 크기'로 한 번에 줄임(최소 55%).
+// - 글자 폭은 Range로, 기준 크기(100px)에서 잰 '글자 1px당 폭'으로 크기를 계산한 뒤 0.1px 단위로 '칸에 들어가는 가장 큰 크기'를 찾음
+//   → 같은 칸이면 배율을 올려도 결과가 줄지 않음(작은 배율에서 들어가던 크기보다 작아질 수 없음)
+// - 들어갈 자리는 자기(블록일 때)와 조상 4단계의 안쪽 폭 중 가장 좁은 값(가운데 정렬 부모는 내용만큼 넓어지므로)
+// - data-fit-label="prev": 바로 위 라벨(예: 도넛 '총지출')이 금액보다 커지지 않게, 금액을 줄였으면 라벨도 같은 크기 이하로
+const innerW = (e) => { const cs = getComputedStyle(e); return e.clientWidth - parseFloat(cs.paddingLeft) - parseFloat(cs.paddingRight); };
+const REF = 100;
+export function fitNum(el) {
+  if (!el || !el.isConnected) return;
+  const lab = el.dataset.fitLabel === 'prev' ? el.previousElementSibling : null;
+  // 글자 줄임 효과(움직임 줄이기 설정의 전역 0.01ms 전환 포함)가 끼면 재는 순간 이전 크기가 읽히므로 전환을 끔
+  el.style.transition = 'none'; el.style.fontSize = '';
+  if (lab) { lab.style.transition = 'none'; lab.style.fontSize = ''; }
+  const cs = getComputedStyle(el), base = parseFloat(cs.fontSize);
+  let room = cs.display.startsWith('inline') ? Infinity : innerW(el);
+  for (let p = el.parentElement, i = 0; p && i < 4 && p.id !== 'main'; p = p.parentElement, i++) room = Math.min(room, innerW(p));
+  const rg = document.createRange(); rg.selectNodeContents(el);
+  if (!(room > 0) || rg.getBoundingClientRect().width <= room + 0.5) return;
+  el.style.fontSize = `${REF}px`;
+  const per = rg.getBoundingClientRect().width / REF; // 글자 1px당 폭
+  const min = base * 0.55, fits = (v) => { el.style.fontSize = `${v}px`; return rg.getBoundingClientRect().width <= room + 0.5; };
+  // 비례 계산값에서 0.1px씩 맞춰 '들어가는 가장 큰 크기'로(글꼴 힌팅 때문에 폭이 크기에 딱 비례하지 않음)
+  let size = per ? Math.max(min, Math.min(base, Math.floor((room / per) * 10) / 10)) : base;
+  for (let i = 0; i < 12 && size > min && !fits(size); i++) size = Math.max(min, Math.round((size - 0.1) * 10) / 10);
+  for (let i = 0; i < 30 && size + 0.1 < base && fits(size + 0.1); i++) size = Math.round((size + 0.1) * 10) / 10;
+  el.style.fontSize = `${size}px`;
+  if (lab && parseFloat(getComputedStyle(lab).fontSize) > size) lab.style.fontSize = `${size}px`;
+}
+export const fitNums = (root = document) => $$('[data-fit]', root).forEach(fitNum);
+
 // 숫자 롤링(카운트업) — 420ms, reduced-motion 이면 즉시
 export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0)) {
   el.dataset.value = to;
-  if (reducedMotion() || from === to) { el.textContent = format(to); return; }
+  if (reducedMotion() || from === to) { el.textContent = format(to); fitNum(el); return; }
   const t0 = performance.now(), dur = 420, ease = (t) => 1 - Math.pow(1 - t, 3);
   const step = (now) => {
     const t = Math.min(1, (now - t0) / dur);
     el.textContent = format(Math.round(from + (to - from) * ease(t)));
     if (t < 1 && el.dataset.value == to) requestAnimationFrame(step);
+    else if (t >= 1) fitNum(el);
   };
   requestAnimationFrame(step);
 }
@@ -21,7 +55,7 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
 export function confirmDialog({ title, body = '', ok = '확인', cancel = '닫기', danger = false, typeToConfirm = '' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6 fade-in';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
       <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
       ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>라고 적어 주세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
@@ -54,7 +88,7 @@ export function toast(msg, { action, onAction, duration = 3500 } = {}) {
 export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-6 fade-in';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass"><form>
       <h2 id="pa-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
       <label class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg px-4 h-14 focus-within:ring-2 focus-within:ring-primary">
@@ -89,7 +123,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
 export function formDialog({ title, body = '', fields, ok = '저장', validate = () => null }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] grid place-items-center bg-black/40 p-4 fade-in overflow-y-auto';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-4 fade-in';
     const inputCls = 'mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body';
     const field = (f) => {
       const id = `fd-${f.name}`;

@@ -31,11 +31,11 @@ export function donut(items, { total, center = '총지출', size = 220, stroke =
       stroke-dashoffset="${-offset}" stroke-linecap="butt" style="animation-delay:${i * 40}ms"><title>${esc(it.label)} ${formatWon(it.amount)}</title></circle>`;
     return s;
   }).join('');
-  return `<svg viewBox="0 0 ${size} ${size}" class="donut w-full max-w-[220px] mx-auto -rotate-90" role="img" aria-label="${esc(center)} ${formatWon(total)}, 카테고리 ${items.length}개">
+  return `<svg viewBox="0 0 ${size} ${size}" class="donut w-full max-w-[calc(220px*var(--fs,1))] mx-auto -rotate-90" role="img" aria-label="${esc(center)} ${formatWon(total)}, 카테고리 ${items.length}개">
       <circle r="${r}" cx="${size / 2}" cy="${size / 2}" fill="none" stroke="var(--line)" stroke-width="${stroke}"/>${segs}
     </svg>
     <div class="absolute inset-0 grid place-items-center pointer-events-none text-center">
-      <div><p class="text-caption text-ink-sub">${esc(center)}</p><p class="text-head tabular-nums">${formatWon(total)}</p></div></div>`;
+      <div class="w-[min(62%,calc(136px*var(--fs,1)))]"><p class="text-caption text-ink-sub">${esc(center)}</p><p data-fit data-fit-label="prev" class="text-head tabular-nums whitespace-nowrap">${formatWon(total)}</p></div></div>`;
 }
 
 // 월 추이 막대: 지출(c1)과 남긴 돈(수입색), 왼쪽 눈금·점선 격자, 막대(월)를 누르면 아래에 상세

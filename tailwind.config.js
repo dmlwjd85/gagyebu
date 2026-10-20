@@ -16,14 +16,16 @@ export default {
         num: ['var(--font-num)'], // 금액·날짜·키패드(tabular-nums와 함께)
         sans: ['var(--font-body)'], // 기본 = 본문
       },
-      fontSize: {
-        display: ['40px', { lineHeight: '44px', fontWeight: '800', letterSpacing: '-0.02em' }],
-        title: ['22px', { lineHeight: '30px', fontWeight: '700' }],
-        head: ['17px', { lineHeight: '24px', fontWeight: '700' }],
-        body: ['15px', { lineHeight: '22px', fontWeight: '500' }],
-        caption: ['13px', { lineHeight: '18px', fontWeight: '500' }],
-        micro: ['11px', { lineHeight: '14px', fontWeight: '600' }],
-      },
+      // 글자 크기: --fs(본문 #main 안에서만 설정의 '본문 글자 크기'를 따름, 그 밖은 1) × 디자인 크기
+      fontSize: Object.fromEntries(Object.entries({
+        display: [40, 44, { fontWeight: '800', letterSpacing: '-0.02em' }],
+        title: [22, 30, { fontWeight: '700' }],
+        head: [17, 24, { fontWeight: '700' }],
+        body: [15, 22, { fontWeight: '500' }],
+        caption: [13, 18, { fontWeight: '500' }],
+        micro: [11, 14, { fontWeight: '600' }],
+        xs: [12, 16], sm: [14, 20], base: [16, 24], lg: [18, 28], xl: [20, 28], '2xl': [24, 32], '3xl': [30, 36], '4xl': [36, 40],
+      }).map(([k, [fs, lh, extra = {}]]) => [k, [`calc(${fs}px * var(--fs, 1))`, { lineHeight: `calc(${lh}px * var(--fs, 1))`, ...extra }]])),
     },
   },
   plugins: [],

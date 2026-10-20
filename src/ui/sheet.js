@@ -1,5 +1,5 @@
 // 10초 입력 시트: ＋ → 숫자 → 카테고리 → 저장
-import { esc, $, $$, haptic, confirmDialog } from './util.js';
+import { esc, $, $$, haptic, confirmDialog, fitNums } from './util.js';
 import { formatWon } from '../lib/money.js';
 import { ymd, prettyDate, parseYmd, WEEK } from '../lib/dates.js';
 const longDate = (d, today) => { const x = parseYmd(d); return `${x.getFullYear()}년 ${x.getMonth() + 1}월 ${x.getDate()}일 (${WEEK[x.getDay()]})${d === today ? ' · 오늘' : ''}`; };
@@ -82,7 +82,7 @@ function render() {
       </div>
     </div>
     <div class="px-5 pt-3 pb-1 text-right">
-      <p class="amount-display tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
+      <p data-fit class="amount-display tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
         <span class="${s.kind === 'income' || (s.refund && s.kind === 'expense') ? 'text-income' : 'text-expense'}">${amt ? (s.kind === 'income' || (s.refund && s.kind === 'expense') ? '+' : '−') : ''}</span>${amt.toLocaleString('ko-KR')}<span class="text-head ml-1 text-ink">원</span></p>
       ${s.refund && s.kind === 'expense' && !s.error ? '<p class="h-5 text-caption text-ink-sub">↩️ 카드 환불 · 이 달 지출에서 빼요</p>' : `<p class="h-5 text-caption text-expense" role="alert">${esc(s.error)}</p>`}
     </div>
@@ -113,6 +113,7 @@ function render() {
       <button class="btn-primary w-full h-14 text-head ${canSave ? 'pulse' : ''}" data-save ${canSave ? '' : 'aria-disabled="true"'}>${s.id ? '고친 내용 저장' : s.repeat ? '저장 · 매달 반복' : '저장'}</button>
       ${s.id ? '' : '<p class="mt-1 text-center text-caption text-ink-sub">저장을 길게 누르면 매달 반복으로 저장해요</p>'}
     </div>`;
+  fitNums($('.sheet', el));
   s.shake = false;
 }
 
