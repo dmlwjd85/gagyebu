@@ -257,6 +257,19 @@
   .opt-row:has(.date-overlay:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
   .keypad { @apply grid grid-cols-3 gap-2; }
   .key { @apply h-14 rounded-2xl text-[26px] leading-8 font-semibold tabular-nums transition-colors; background: var(--bg); }
+  /* 문자 붙여넣기: 본문 글자 배율(--content-scale)을 이 영역만 따른다. 줄바꿈·최소 높이로 390px·160%에서도 겹치지 않게 */
+  .sms-scale { --fs: var(--content-scale, 1); font-size: calc(15px * var(--fs)); line-height: calc(22px * var(--fs)); }
+  .sms-btn { height: auto; white-space: normal; text-align: center; padding-top: 10px; padding-bottom: 10px; }
+  .sms-field { display: flex; flex-direction: column; align-items: stretch; gap: 4px; min-width: 0; max-width: 100%; }
+  .sms-row { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sms-row > .sms-field { flex: 1 1 calc(140px * var(--fs, 1)); min-width: min(100%, calc(140px * var(--fs, 1))); }
+  .sms-in, .sms-area { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 8px 12px; }
+  .sms-pick { position: relative; display: flex; align-items: center; cursor: pointer; }
+  .sms-pick:has(.date-overlay:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
+  .sms-area { min-height: calc(140px * var(--fs, 1)); resize: vertical; }
+  .sms-cats { display: flex; flex-wrap: wrap; gap: 8px; }
+  .sms-chip { height: auto; white-space: normal; text-align: left; max-width: 100%; }
+  .sms-dup { border: 1px solid var(--expense); border-radius: 16px; padding: 12px; }
   .key:active { background: var(--heat-2); }
   .pulse { animation: pulse 1.6s ease-in-out infinite; }
   .shake { animation: shake .2s; }

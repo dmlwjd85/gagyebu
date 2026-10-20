@@ -6,6 +6,10 @@ const longDate = (d, today) => { const x = parseYmd(d); return `${x.getFullYear(
 import { validateTx, MAX_AMOUNT, MAX_MEMO } from '../lib/validate.js';
 import { suggestOrder } from '../lib/defaults.js';
 import { withKeptFields } from '../lib/txedit.js';
+import {
+  smsPasteRow, smsHtml, blankSms, fillFromClipboard, applySmsText, setSmsStatus,
+  applySmsInput, smsTx, advanceSms,
+} from './smsSheet.js';
 
 let el, ctx, s, lastFocus, longPressAt = 0;
 const recentKey = 'recentCats';
@@ -60,6 +64,11 @@ const amount = () => (s.digits ? parseInt(s.digits, 10) : 0);
 const cats = () => ctx.getState().categories.filter((c) => c.kind === s.kind && !c.archived);
 
 function render() {
+  if (s?.sms) {
+    $('.sheet', el).innerHTML = smsHtml(s.sms, ctx.getState());
+    fitNums($('.sheet', el));
+    return;
+  }
   const st = ctx.getState();
   const list = suggestOrder(cats(), recentIds());
   if (s.categoryId && !list.slice(0, 7).some((c) => c.id === s.categoryId)) s.more = true;
@@ -70,7 +79,7 @@ function render() {
   const acc = st.accounts.find((a) => a.id === s.accountId);
   $('.sheet', el).innerHTML = `
     <div class="mx-auto mt-2 h-1.5 w-10 rounded-full bg-line" aria-hidden="true"></div>
-    <div class="flex items-center justify-between px-5 pt-3">
+    <div class="flex items-center justify-between px-5 pt-3 gap-2">
       <h2 id="sheet-title" class="sr-only">${s.id ? '기록 고치기' : '새 기록'}</h2>
       <div class="seg" role="radiogroup" aria-label="구분">
         <button role="radio" aria-checked="${s.kind === 'expense'}" data-kind="expense">지출</button>
@@ -81,6 +90,7 @@ function render() {
         <button class="icon-btn" data-close aria-label="닫기">✕</button>
       </div>
     </div>
+    ${s.id ? '' : smsPasteRow()}
     <div class="px-5 pt-3 pb-1 text-right">
       <p data-fit class="amount-display tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
         <span class="${s.kind === 'income' || (s.refund && s.kind === 'expense') ? 'text-income' : 'text-expense'}">${amt ? (s.kind === 'income' || (s.refund && s.kind === 'expense') ? '+' : '−') : ''}</span>${amt.toLocaleString('ko-KR')}<span class="text-head ml-1 text-ink">원</span></p>
@@ -147,10 +157,78 @@ async function save() {
   ctx.onSave(tx, { repeat: !s.id && !!s.repeat });
 }
 
+function renderKeep() {
+  const a = document.activeElement;
+  const name = a?.name;
+  const pos = typeof a?.selectionStart === 'number' ? a.selectionStart : null;
+  render();
+  if (!name) return;
+  const n = $(`[name="${CSS.escape(name)}"]`, el);
+  if (!n) return;
+  n.focus();
+  if (pos != null && n.setSelectionRange) {
+    const p = Math.min(pos, n.value.length);
+    n.setSelectionRange(p, p);
+  }
+}
+
+async function runSms() {
+  if (s.sms) return;
+  s.sms = blankSms();
+  render();
+  const token = s.sms;
+  await fillFromClipboard(token, () => ctx.getState());
+  if (!isSheetOpen() || s.sms !== token) return;
+  render();
+  (s.sms.phase === 'paste' ? $('textarea', el) : $('.sheet', el))?.focus?.();
+}
+
+function onSmsClick(t) {
+  if (t.hasAttribute('data-sms-back')) { s.sms = null; render(); return; }
+  if (t.hasAttribute('data-sms-parse')) {
+    applySmsText(s.sms, s.sms.pasteText, ctx.getState());
+    render();
+    (s.sms.phase === 'paste' ? $('textarea', el) : $('#sheet-title', el))?.focus?.();
+    return;
+  }
+  if (t.dataset.smsStatus && s.sms.draft) { setSmsStatus(s.sms.draft, t.dataset.smsStatus, ctx.getState()); return render(); }
+  if (t.dataset.smsCat && s.sms.draft) { s.sms.draft.categoryId = t.dataset.smsCat; s.sms.draft.catTouched = true; s.sms.draft.error = ''; return render(); }
+  if (t.dataset.smsAcc && s.sms.draft) {
+    s.sms.draft.accountId = s.sms.draft.accountId === t.dataset.smsAcc ? '' : t.dataset.smsAcc;
+    s.sms.draft.accTouched = true;
+    return render();
+  }
+  if (t.hasAttribute('data-sms-save')) return confirmSms();
+  if (t.hasAttribute('data-sms-skip')) return skipSms();
+}
+
+function confirmSms() {
+  const d = s.sms?.draft;
+  if (!d) return;
+  const { tx, err } = smsTx(d);
+  if (err) { d.error = err; render(); return; }
+  if (tx.accountId) localStorage.setItem('lastAccount', tx.accountId);
+  pushRecent(tx.categoryId);
+  haptic(12);
+  ctx.onSave(tx, { repeat: false });
+  s.sms.saved = [...(s.sms.saved || []), tx];
+  if (!advanceSms(s.sms)) return closeSheet();
+  render();
+  $('#sheet-title', el)?.focus?.();
+}
+function skipSms() {
+  if (!s.sms) return;
+  if (!advanceSms(s.sms)) return closeSheet();
+  render();
+  $('#sheet-title', el)?.focus?.();
+}
+
 function onClick(e) {
   const t = e.target.closest('button,[data-close]');
   if (!t) return;
   if (t.hasAttribute('data-close')) return closeSheet();
+  if (t.hasAttribute('data-sms')) return runSms();
+  if (s.sms) return onSmsClick(t);
   if (t.dataset.key) return press(t.dataset.key);
   if (t.dataset.kind) { if (s.kind !== t.dataset.kind) { s.kind = t.dataset.kind; s.categoryId = null; s.more = false; } return render(); }
   if (t.dataset.cat) { s.categoryId = t.dataset.cat; s.error = ''; haptic(); render(); $(`[data-cat="${CSS.escape(s.categoryId)}"]`, el)?.classList.add('pop'); return; }
@@ -162,17 +240,30 @@ function onClick(e) {
   if (t.hasAttribute('data-del')) { const id = s.id; closeSheet(); return ctx.onDelete(id); }
 }
 function onInput(e) {
+  if (s?.sms) { if (applySmsInput(s.sms, e.target, ctx.getState())) renderKeep(); return; }
   if (e.target.name === 'memo') s.memo = e.target.value;
   if (e.target.name === 'date' && e.type === 'change' && e.target.value) { s.date = e.target.value; render(); $('input[name=date]', el)?.focus(); }
 }
 function onPaste(e) {
-  if (e.target.name === 'memo' || e.target.name === 'date') return;
+  if (s?.sms || e.target.name === 'memo' || e.target.name === 'date') return;
   e.preventDefault();
   const digits = (e.clipboardData?.getData('text') ?? '').split('.')[0].replace(/[^0-9]/g, '');
   if (digits) setDigits(digits);
 }
 function onKey(e) {
   if (!isSheetOpen() || document.querySelector('[role=alertdialog]')) return;
+  if (s?.sms) {
+    if (e.key === 'Escape') { e.preventDefault(); return closeSheet(); }
+    if (e.key === 'Tab') {
+      const f = $$('button:not([disabled]), input, textarea', $('.sheet', el));
+      if (!f.length) return;
+      const first = f[0], last = f[f.length - 1];
+      if (e.shiftKey && (document.activeElement === first || document.activeElement === $('.sheet', el))) { e.preventDefault(); last.focus(); }
+      else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+    }
+    if (e.key === 'Enter' && !e.isComposing && e.target.matches?.('[data-sms-save]')) { e.preventDefault(); return confirmSms(); }
+    return;
+  }
   const inField = e.target.matches?.('input');
   if (e.key === 'Escape') { e.preventDefault(); return closeSheet(); }
   if (e.key === 'Enter' && !e.isComposing) { if (e.target.closest?.('button') && !inField) return; e.preventDefault(); return save(); }
