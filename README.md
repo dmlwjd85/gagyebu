@@ -17,6 +17,6 @@ npm run build
 npm run emulators   # 터미널 1: Auth+Firestore 에뮬레이터
 npm run dev:emu     # 터미널 2: http://127.0.0.1:5173/gagyebu/ → '테스트 계정으로 로그인'
 ```
-QA 도구(`tools/qa/*.py`)는 실행마다 따로 쓰는 에뮬레이터 프로젝트(`demo-qa-<프로세스번호>`)의 데이터만 지워서, 여러 검사가 동시에 돌아도 서로 지우지 않아요. 호스트·포트·프로젝트는 `QA_EMU_HOST`·`QA_AUTH_PORT`·`QA_FS_PORT`·`QA_PROJECT` 환경변수나 `--emu-host=`·`--auth-port=`·`--fs-port=`·`--project=` 인자로 바꿀 수 있어요(`tools/qa/emu.py`).
+QA 도구(`tools/qa/*.py`)는 에뮬레이터 호스트를 꼭 직접 정해야 돌아가요(`QA_EMU_HOST=127.0.0.x` 또는 `--emu-host=`). 기본값으로 남의 에뮬레이터에 규칙을 거는 일을 막으려는 거예요. 실행마다 따로 쓰는 에뮬레이터 프로젝트(`demo-qa-<프로세스번호>`)의 데이터만 지워서, 여러 검사가 동시에 돌아도 서로 지우지 않아요. 호스트·포트·프로젝트는 `QA_EMU_HOST`·`QA_AUTH_PORT`·`QA_FS_PORT`·`QA_PROJECT` 환경변수나 `--emu-host=`·`--auth-port=`·`--fs-port=`·`--project=` 인자로 바꿀 수 있어요(`tools/qa/emu.py`). 다른 규칙 파일로 검사하려면 `QA_RULES`(또는 `--rules=`)를 써요.
 
 실제 Firebase에 연결하려면 `.env.example`을 `.env`로 복사해 값을 넣으세요(.env는 커밋 금지).

@@ -47,14 +47,15 @@ describe('N10 환불이 지출보다 많은 달의 지출 표기', () => {
     expect(minusWon(40000, compactWon)).toBe('−40,000원');
     expect(minusWon(0)).toBe('0원');
   });
-  test('홈 요약 카드: "0원 +4.9만" 한 줄(360px 높이 유지), 빼기 겹침·말줄임 없음', () => {
+  test('홈 요약 카드: "0원 환불 4.9만" 한 줄(360px 높이 유지), 환불 글자 표시(R7), 빼기 겹침·말줄임 없음', () => {
     const m = model('2026-10');
     expect(m.tot.expense).toBe(-49000);
     const h = homeView(m);
     noBadSigns(h);
     expect(h).toContain('aria-label="지출 0원, 환불 49,000원이 더 많아요"');
-    expect(text(h)).toMatch(/지출 0원 \+4\.9만/);
-    expect(h).toContain('>+4.9만</span>');
+    expect(text(h)).toMatch(/지출 0원 환불 4\.9만/);
+    expect(h).toContain('>환불 4.9만</span>');
+    expect(text(h)).not.toMatch(/0원 \+4\.9만/);
     expect(h).toContain('whitespace-nowrap');
   });
   test('8월(환불만): 홈·차트·예산·달력·검색 모두 음수 지출 표기 없음', () => {
@@ -92,7 +93,7 @@ describe('N10 환불이 지출보다 많은 달의 지출 표기', () => {
   test('예산: 환불이 더 많아도 사용 0%, 남은 예산이 예산보다 커지지 않음', () => {
     const m = model('2026-10', { budget: { total: 300000 } });
     const t = text(budgetView(m, {}));
-    expect(t).toMatch(/0% 사용/);
+    expect(t).toMatch(/0% 썼어요/);
     expect(t).toContain('300,000원 남았어요');
     expect(t).toContain('환불 +49,000원이 지출보다 많아 사용 0원으로 봐요');
     expect(m.weather.usedPct).toBe(0);

@@ -110,7 +110,7 @@ export async function commit(imp, ctx) {
     imp.step = 5;
   } catch (e) {
     console.error(e);
-    imp.error = '저장하지 못했어요. 잠시 후 다시 시도해 주세요.';
+    imp.error = '저장하지 못했어요. 잠시 후 다시 해 주세요.';
   }
   imp.busy = false;
 }
@@ -151,16 +151,16 @@ function step1(m, imp) {
   const list = (m.imports || []).slice(0, 5);
   return `<label class="drop" data-drop>
       <span class="text-4xl" aria-hidden="true">📥</span>
-      <span class="text-body font-semibold text-center">카드사·은행에서 받은 파일을<br />여기에 끌어다 놓으세요</span>
-      <span class="text-caption text-ink-sub">엑셀(.xls, .xlsx)과 CSV를 읽을 수 있어요</span>
+      <span class="text-body font-semibold text-center">카드사·은행에서 받은 파일을<br />여기로 끌어다 놓으세요</span>
+      <span class="text-caption text-ink-sub">엑셀(.xls, .xlsx)이랑 CSV 다 돼요</span>
       <span class="btn-ghost mt-1 pointer-events-none" aria-hidden="true">파일 고르기</span>
       <input type="file" class="sr-only" data-imp-file accept=".xls,.xlsx,.csv,.txt,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="가져올 파일 고르기" />
     </label>
     <button class="link-btn self-center" data-imp-sample>예시 파일로 해 보기</button>
-    <p class="glass px-4 py-3 text-caption flex gap-2"><span aria-hidden="true">🔒</span><span>파일은 이 기기 밖으로 나가지 않아요.<br />원본은 저장하지 않고, 카드번호는 읽자마자 끝 4자리만 남겨요.</span></p>
-    <section class="card-solid p-4" aria-labelledby="fmt-h"><h2 id="fmt-h" class="text-head">알아보려고 하는 형식</h2>
+    <p class="glass px-4 py-3 text-caption flex gap-2"><span aria-hidden="true">🔒</span><span>파일은 이 폰·컴퓨터 밖으로 나가지 않아요.<br />원본은 남기지 않고, 카드번호는 읽자마자 끝 4자리만 남겨요.</span></p>
+    <section class="card-solid p-4" aria-labelledby="fmt-h"><h2 id="fmt-h" class="text-head">알아서 알아보는 형식</h2>
       <div class="mt-3 flex flex-wrap gap-2">${PRESETS.map((p) => `<span class="chip">${p.emoji} ${esc(p.label)}${p.verified ? '' : ' <span class="text-ink-sub">(추정)</span>'}</span>`).join('')}<span class="chip">📄 일반 형식</span></div>
-      <p class="mt-3 text-caption text-ink-sub">현대·신한·은행 형식은 공개 자료로 만든 추정이라, 실제 파일과 다르면 다음 단계에서 열을 직접 맞춰 주세요. 다른 카드사 파일도 '일반 형식'으로 가져올 수 있어요.</p></section>
+      <p class="mt-3 text-caption text-ink-sub">현대·신한·은행 형식은 공개 자료로 만든 추정이라, 실제 파일과 다르면 다음 단계에서 열을 직접 맞춰 주세요. 다른 카드사 파일도 '일반 형식'으로 열만 맞추면 가져와요.</p></section>
     ${list.length ? `<section class="card-solid p-4" aria-labelledby="hist-h"><h2 id="hist-h" class="text-head">최근 가져온 묶음</h2>
       <p class="mt-1 text-caption text-ink-sub">묶음마다 한 번에 되돌릴 수 있어요(다른 기기에서도).</p>
       <ul class="mt-2 flex flex-col">${list.map((x) => `<li class="flex items-center gap-3 min-h-[52px] border-b last:border-0" style="border-color:var(--line)">
@@ -177,7 +177,7 @@ function step2(m, imp) {
   const refunds = items.filter((x) => x.amount < 0).length;
   const catMap = m.catMap;
   return `<div class="flex flex-wrap gap-2">
-      <span class="chip ${imp.preset.verified ? 'chip-ok' : ''}">${imp.preset.id === 'generic' ? '📄 일반 형식' : imp.preset.verified ? `✓ ${esc(imp.preset.label)} 형식` : `${imp.preset.emoji} ${esc(imp.preset.label)} 형식 같아요(추정) · 열을 확인해 주세요`}</span>
+      <span class="chip ${imp.preset.verified ? 'chip-ok' : ''}">${imp.preset.id === 'generic' ? '📄 일반 형식' : imp.preset.verified ? `✓ ${esc(imp.preset.label)} 형식` : `${imp.preset.emoji} ${esc(imp.preset.label)} 형식 같아요 · 열을 한 번 봐 주세요`}</span>
       ${t.encoding && imp.bytes ? `<button class="chip" data-imp-enc aria-label="글자 인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'}, 눌러서 바꾸기">인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'} ▾</button>` : ''}
       <span class="inline-flex items-center gap-1"><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="-1" aria-label="머리글 줄 위로" ${imp.headerRow === 0 ? 'disabled' : ''}>−</button><span class="text-caption font-semibold">머리글 ${imp.headerRow + 1}번째 줄</span><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="1" aria-label="머리글 줄 아래로">＋</button></span>
       ${t.sheets.length > 1 ? t.sheets.map((sh, i) => `<button class="chip" data-imp-sheet="${i}" aria-pressed="${i === imp.sheet}">${esc(sh.name)}</button>`).join('') : ''}
@@ -191,14 +191,14 @@ function step2(m, imp) {
           <select class="map-sel" data-imp-col="${i}" aria-label="'${esc(h || `${i + 1}번째 열`)}' 열의 용도">${ROLES.map((r) => `<option value="${r}" ${imp.cols[i] === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>
           <span class="block mt-1 text-caption text-ink-sub font-normal truncate" title="${esc(h)}">원본: ${esc(h || '(이름 없음)')}</span></th>`).join('')}</tr></thead>
         <tbody>${preview.map((r) => `<tr>${header.map((_, i) => `<td>${cell(r[i], imp.cols[i])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-      ${miss.length ? `<p class="mt-3 text-caption text-expense font-semibold" role="alert">● ${miss.join(' ')}</p>` : '<p class="mt-3 text-caption text-ink-sub">보라색 칸은 자동으로 맞춘 것이에요. 눌러서 바꿀 수 있어요.</p>'}
+      ${miss.length ? `<p class="mt-3 text-caption text-expense font-semibold" role="alert">● ${miss.join(' ')}</p>` : '<p class="mt-3 text-caption text-ink-sub">보라색 칸은 알아서 맞춘 거예요. 누르면 바꿔요.</p>'}
     </section>
     <section class="card-solid p-4 flex flex-col gap-1" aria-label="가져오기 옵션">
       ${split ? '<p class="text-caption text-ink-sub min-h-[44px] flex items-center">입금·출금 열이 따로 있어요: 출금은 지출, 입금은 수입으로 넣어요.</p>'
         : `<label class="opt-row"><span class="opt-k">금액 부호</span><select class="select" data-imp-opt="sign">${[['expense', '양수 = 지출(카드)'], ['income', '양수 = 수입'], ['flip', '부호 뒤집기']].map(([v, l]) => `<option value="${v}" ${imp.opts.sign === v ? 'selected' : ''}>${l}</option>`).join('')}</select></label>`}
-      <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">'취소'된 결제는 빼기<span class="switch"><input type="checkbox" data-imp-opt="excludeCancelled" ${imp.opts.excludeCancelled ? 'checked' : ''} /><span></span></span></label>
+      <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">취소된 결제는 빼기<span class="switch"><input type="checkbox" data-imp-opt="excludeCancelled" ${imp.opts.excludeCancelled ? 'checked' : ''} /><span></span></span></label>
       <label class="opt-row"><span class="opt-k">결제수단</span><select class="select" data-imp-opt="accountId"><option value="">지정 안 함</option>${m.accounts.map((a) => `<option value="${esc(a.id)}" ${imp.opts.accountId === a.id ? 'selected' : ''}>${esc(a.emoji || '')} ${esc(a.name)}</option>`).join('')}</select></label>
-      <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">이 맞춤 기억하기<span class="switch"><input type="checkbox" data-imp-opt="remember" ${imp.opts.remember ? 'checked' : ''} /><span></span></span></label>
+      <label class="flex items-center justify-between gap-2 text-body min-h-[44px]">이번 맞춤 기억해 두기<span class="switch"><input type="checkbox" data-imp-opt="remember" ${imp.opts.remember ? 'checked' : ''} /><span></span></span></label>
     </section>
     <section class="card-solid p-4" aria-labelledby="pv-h">
       <div class="flex items-baseline justify-between"><h2 id="pv-h" class="text-head">이렇게 들어가요</h2><span class="text-caption text-ink-sub">미리보기 · ${items.length}건${cancelled ? ` · 취소 ${cancelled}건 제외` : ''}</span></div>
@@ -221,7 +221,7 @@ function step3(m, imp) {
       <div class="card-solid p-3"><p class="text-title tabular-nums">${d.fresh.length}</p><p class="text-caption text-ink-sub">새 거래</p></div>
       <div class="card-solid p-3"><p class="text-title tabular-nums">${d.suspect.length}</p><p class="text-caption text-ink-sub"><span class="inline-block w-2 h-2 rounded-full bg-chart-3 mr-1 align-middle" aria-hidden="true"></span>중복 의심</p></div>
       <div class="card-solid p-3"><p class="text-title tabular-nums">${d.sure.length + d.cancelled}</p><p class="text-caption text-ink-sub">이미 있음·취소</p></div></div>
-    ${d.sure.length || d.invalid || d.offset ? `<p class="text-caption text-ink-sub px-1">${[d.sure.length ? `이미 가져온 거래 ${d.sure.length}건은 자동으로 건너뛰어요.` : '', d.offset ? `취소·환불 ${d.offset}건은 원래 결제에서 뺐어요.` : '', skipReasonText(d.reasons)].filter(Boolean).join(' ')}</p>` : ''}
+    ${d.sure.length || d.invalid || d.offset ? `<p class="text-caption text-ink-sub px-1">${[d.sure.length ? `이미 가져온 거래 ${d.sure.length}건은 알아서 건너뛸게요.` : '', d.offset ? `취소·환불 ${d.offset}건은 원래 결제에서 뺐어요.` : '', skipReasonText(d.reasons)].filter(Boolean).join(' ')}</p>` : ''}
     ${d.suspect.length ? `<div class="flex items-center justify-between"><h2 class="text-head">중복 의심 ${d.suspect.length}건</h2><button class="chip" data-imp-skipall>모두 건너뛰기</button></div>
     <ul class="flex flex-col gap-2">${d.suspect.map((s, i) => `<li class="card-solid p-3">
       <div class="grid grid-cols-2 gap-3"><div class="min-w-0">${s.reason === 'file' ? `<span class="block text-caption text-ink-sub">파일 안 같은 줄</span><span class="block text-body truncate">${esc(s.match.desc)}</span><span class="block text-caption tabular-nums">${dot(s.match.date)} · ${formatWon(s.match.amount)}</span>` : exist(s.match)}</div>
@@ -249,7 +249,7 @@ function step4(m, imp) {
     ${d.suspect.length ? '<p class="mt-2 text-caption text-ink-sub">중복 의심 중 넣고 싶은 것이 있으면 이전 단계에서 \'그래도 추가\'를 골라 주세요.</p>' : ''}</section>`;
   const skipped = d.suspect.length - (items.length - d.fresh.length); // 건너뛴 의심 건
   const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-semibold tabular-nums text-right">${v}</dd></div>`;
-  return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 확인해요</h2>
+  return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 한 번 볼게요</h2>
       <dl class="mt-2">${row('파일', esc(imp.fileName))}${s.count ? row('기간', `${dot(s.from)} ~ ${dot(s.to)}`) : ''}${row('가져올 거래', `${s.count}건`)}
         ${row('지출 합계', s.expense < 0 ? `0원 <span class="block text-caption text-income">환불이 ${formatWon(-s.expense)} 더 많아요</span>` : `<span class="text-expense tabular-nums">${s.expense ? '−' : ''}${formatWon(s.expense)}</span>`)}
         ${s.refund ? row('환불·취소 차감', `<span class="text-income">+${formatWon(s.refund)}</span> <span class="text-caption text-ink-sub font-normal">(지출 합계에 반영)</span>`) : ''}
@@ -261,8 +261,8 @@ function step4(m, imp) {
 function step5(m, imp) {
   return `<div class="card-solid p-6 text-center" role="status">
     <div class="done-check mx-auto" aria-hidden="true"><svg viewBox="0 0 56 56" width="56" height="56"><path d="M14 29l9 9 19-20"/></svg></div>
-    <h2 class="mt-3 text-title tabular-nums">${imp.result.count}건을 가져왔어요!</h2>
-    ${imp.result.pending ? '<p class="mt-2 text-body font-semibold" role="alert">📴 지금은 오프라인이라 이 기기에 먼저 저장했어요. 연결되면 자동으로 올릴게요.</p>' : ''}
-    <p class="mt-2 text-body text-ink-sub">분류를 한 번 고치면<br />다음부터는 알아서 맞춰 드릴게요.</p>
+    <h2 class="mt-3 text-title tabular-nums">${imp.result.count}건 가져왔어요</h2>
+    ${imp.result.pending ? '<p class="mt-2 text-body font-semibold" role="alert">📴 지금은 오프라인이라 이 기기에 먼저 저장했어요. 연결되면 알아서 올릴게요.</p>' : ''}
+    <p class="mt-2 text-body text-ink-sub">분류만 한 번 고치면,<br />다음부터는 알아서 맞춰 둘게요.</p>
     <div class="mt-5 flex gap-2 justify-center"><button class="btn-primary" data-nav="calendar" data-mode="list" ${imp.result.to ? `data-date="${esc(imp.result.to)}"` : ''}>목록에서 보기</button><button class="btn-ghost" data-imp-undo="${esc(imp.result.id)}">되돌리기</button></div></div>`;
 }

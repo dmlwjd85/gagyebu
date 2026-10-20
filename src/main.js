@@ -12,9 +12,10 @@ import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
+import { editTarget } from './lib/restore.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
+import { $, esc, toast, placeToast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
@@ -25,6 +26,8 @@ import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
+import { createUpdater } from './lib/pwa.js';
+import { isBusyNow } from './lib/busy.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
 
 initTheme();
@@ -49,7 +52,7 @@ function model() {
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
     sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
-    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
+    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, kept: state.kept, keptBusy: !!ui.keptBusy, txs: state.txs,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
@@ -96,7 +99,7 @@ function render() {
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-frame ${nav ? 'has-nav' : ''}">
       <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
-      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
+      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${ui.updateReady ? updateBar() : ''}${body}</div></main>
       ${nav ? tabBar() : ''}
     </div>`;
   // 홈 숫자 롤링
@@ -106,11 +109,14 @@ function render() {
   const mainEl = $('#main');
   if (mainEl) scroller().scrollTop = ui.view === lastView ? scrollY : 0;
   fitNums(app);
+  placeToast(); // 새 버전 안내 줄이 새로 생기면 토스트가 비킴(QA 6차 1)
   syncRailShift();
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
   renderTip();
 }
+// 새 버전 안내(QA 3차 N3): 입력 중이라 바로 다시 불러오지 못할 때만 보임
+const updateBar = () => `<div class="update-bar" role="status"><span>새 버전이 있어요.</span><button class="btn-primary update-btn" data-action="apply-update">지금 적용</button></div>`;
 const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
   <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쓱 가계부' })}</div>
   ${TABS.slice(0, 2).map(tabBtn).join('')}
@@ -125,21 +131,25 @@ let currentTip = null;
 function pickTip() {
   const r = nextTip(tipState(), today());
   saveTipState(r.state);
-  currentTip = r.tip ? { text: r.tip, index: r.index } : null;
+  currentTip = r.tip ? { text: r.tip, key: r.key } : null;
 }
 function renderTip() {
   const slot = $('#tip-slot');
   if (!slot) return;
-  if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
-  // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
-  slot.innerHTML = `<div class="tip" role="note" aria-label="팁"><span class="py-1.5" aria-hidden="true">💡</span><p>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
+  slot.setAttribute('aria-live', 'polite'); // 스펙 7절: aria-live="polite", 앞에 💡 붙이지 않음(QA 6차 4)
+  const html = ui.view !== 'home' || !currentTip || isSheetOpen() ? ''
+    // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
+    : `<div class="tip"><p><span class="sr-only">팁: </span>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
+  if (slot.innerHTML !== html) slot.innerHTML = html; // 같은 팁을 다시 그려 화면 읽기가 되풀이하지 않게
 }
 
 // ── 동작 ───────────────────────────────────────────
 function onSave(tx, { repeat = false } = {}) {
   const isEdit = !!tx.id;
-  const before = isEdit ? findTx(tx.id) : null;
+  const old = isEdit ? findTx(tx.id) : null;
   const id = data.saveTx(tx);
+  // 예전 형식 id라 새 id로 옮겨 고쳤으면, 되돌리기도 옮긴 문서에(QA N6)
+  const before = old && id !== old.id ? { ...old, id, recurringId: editTarget(old).recurringId } : old;
   const c = state.categories.find((x) => x.id === tx.categoryId);
   if (ui.view === 'search') refreshSearch();
   if (repeat && tx.amount > 0) {
@@ -154,15 +164,15 @@ function onSave(tx, { repeat = false } = {}) {
     const old = sug.existing, oc = old && state.categories.find((x) => x.id === old.categoryId);
     const q = old ? `'${sug.key}' 규칙(${oc?.name ?? '다른 카테고리'})을 ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 바꿀까요?`
       : `앞으로 ${josa(`'${sug.key}'`, '은는')} ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 분류할까요?`;
-    return setTimeout(() => toast(`고쳤어요. ${q}`, {
+    return setTimeout(() => toast(`고쳤어요 · ${q}`, {
       action: old ? '바꾸기' : '그렇게 하기', duration: 6000,
       onAction: () => { data.saveRule({ id: old?.id, match: sug.key, categoryId: tx.categoryId }); toast(old ? '규칙을 바꿨어요.' : '규칙을 만들었어요. 설정에서 고칠 수 있어요.'); },
     }), 50);
   }
   setTimeout(() => {
     const m = model();
-    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
-    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요.' : '기록!'}${extra}`, {
+    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` · 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
+    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요' : '남겼어요'}${extra}`, {
       action: '되돌리기', onAction: () => (before ? data.restoreTx(before) : data.deleteTx(id)),
     });
   }, 50);
@@ -175,7 +185,7 @@ function onDelete(id) {
   const before = findTx(id);
   data.deleteTx(id);
   if (ui.searchAll) { ui.searchAll = ui.searchAll.filter((t) => t.id !== id); if (ui.view === 'search') schedule(); }
-  toast('삭제했어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
+  toast('지웠어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
 }
 function download(name, text, type = 'text/csv;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -213,7 +223,7 @@ async function editRecurring(r) {
       { name: 'dayOfMonth', label: '매달 며칠', type: 'select', value: r?.dayOfMonth ?? Number(t.slice(8)), options: Array.from({ length: 31 }, (_, i) => [i + 1, `${i + 1}일`]) },
       { name: 'accountId', label: '결제수단', type: 'select', value: r?.accountId ?? '', options: [['', '지정 안 함'], ...state.accounts.map((a) => [a.id, `${a.emoji || ''} ${a.name}`])] },
     ],
-    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 입력해 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
+    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 먼저 적어 주세요.' : x.amount > 1_000_000_000 ? '한 번에 10억 원까지 적을 수 있어요.' : null),
   });
   if (!v) return;
   const c = state.categories.find((x) => x.id === v.categoryId);
@@ -223,7 +233,7 @@ async function editRecurring(r) {
   const lastPosted = isNew ? (day <= Number(t.slice(8)) ? ym : undefined) : r.lastPosted;
   data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted });
   setTimeout(() => data.postRecurring(today()), 300);
-  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요.');
+  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요');
 }
 const GOAL_EMOJI = ['🎯', '✈️', '🏠', '🚗', '💍', '🎓', '🛟', '💻', '🎁', '🐷'];
 async function editGoal(g) {
@@ -240,7 +250,7 @@ async function editGoal(g) {
   });
   if (!v) return;
   data.saveGoal({ ...(g ?? { order: state.goals.length }), ...v, due: v.due || undefined });
-  toast(g ? '고쳤어요.' : `🎯 '${v.name}' 목표를 만들었어요.`);
+  toast(g ? '고쳤어요' : `🎯 '${v.name}' 목표를 만들었어요.`);
 }
 async function editRule() {
   const v = await formDialog({
@@ -304,7 +314,7 @@ async function onImportClick(d) {
 }
 
 async function editBudget(m) {
-  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 끕니다.', value: m.budget?.total ?? 0 });
+  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 꺼요.', value: m.budget?.total ?? 0 });
   if (v == null) return;
   const pr = state.budget?.byCategory ? pruneLimits(state.budget.byCategory, state.categories).by : undefined;
   data.setBudget(m.viewYm, v, pr && Object.keys(pr).length ? pr : undefined);
@@ -326,6 +336,7 @@ app.addEventListener('click', async (e) => {
     return go(d.nav, { ...(d.mode ? { mode: d.mode, catFilter: null } : {}), ...(ym ? { viewYm: m && ym >= m.curYm ? null : ym, selDate: null } : {}) });
   }
   if (d.tx) { const tx = findTx(d.tx); return tx && openSheet(tx); }
+  if (d.action === 'apply-update') return updater.apply();
   if (Object.keys(d).some((k) => k.startsWith('imp'))) return onImportClick(d);
   // 검색
   if (d.searchKind !== undefined) { ui.search.kind = d.searchKind; if (ui.search.categoryId && m.catMap.get(ui.search.categoryId)?.kind !== d.searchKind && d.searchKind) ui.search.categoryId = ''; return render(); }
@@ -405,7 +416,7 @@ app.addEventListener('click', async (e) => {
   if (d.env) {
     const c = state.categories.find((x) => x.id === d.env);
     const cur = state.budget?.byCategory?.[d.env] ?? 0;
-    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없앱니다.', value: cur });
+    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없애요.', value: cur });
     if (v == null) return;
     const by = { ...(state.budget?.byCategory ?? {}) };
     v ? (by[d.env] = v) : delete by[d.env];
@@ -415,7 +426,7 @@ app.addEventListener('click', async (e) => {
     if (!pr.ok) return toast('카테고리 한도는 30개까지 정할 수 있어요. 안 쓰는 카테고리 한도를 눌러 0원으로 지운 뒤 다시 해 주세요.', { duration: 6000 });
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
-  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
+  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.key, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
     case 'add': haptic(); return openSheet();
     case 'add-rec': return editRecurring(null);
@@ -432,7 +443,17 @@ app.addEventListener('click', async (e) => {
       return;
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
-    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
+    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 줄게요.');
+    case 'kept-retry': {
+      if (ui.keptBusy) return; // 겹쳐 누르기 막기(QA N1)
+      if (!navigator.onLine) return toast('인터넷이 연결되면 다시 눌러 주세요. 기록은 이 기기에 그대로 있어요.');
+      ui.keptBusy = true; render();
+      let r;
+      try { r = await data.retryKept(); } finally { ui.keptBusy = false; render(); }
+      if (!r.left) return toast(r.saved > 1 ? `보관해 둔 기록 ${r.saved}건을 모두 저장했어요.` : '보관해 둔 기록을 저장했어요.');
+      return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
+    }
+    case 'kept-csv': return download(`쓱가계부_보관기록_${m.today}.csv`, toCSV(state.kept, state));
     case 'csv-month': return download(`쓱가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
       try { download(`쓱가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
@@ -458,7 +479,7 @@ app.addEventListener('click', async (e) => {
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'delete-all':
-      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 지워지고 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
+      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 다 지워지고, 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
       try { const r = await data.deleteEverything(); toast(r === 'deleted' ? '모두 지웠어요.' : '기록을 지웠어요. 계정 삭제는 다시 로그인한 뒤 해 주세요.'); }
       catch { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
   }
@@ -475,7 +496,7 @@ app.addEventListener('change', (e) => {
   if (t.dataset.accName) {
     const a = state.accounts.find((x) => x.id === t.dataset.accName), name = t.value.trim();
     if (!name || name.length > 20) { toast('이름은 1~20자로 적어 주세요.'); t.value = a?.name ?? ''; return; }
-    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 저장하지 않아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
+    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 안 받아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
     if (a && a.name !== name) data.saveAccount({ ...a, name });
   }
   if (t.dataset.accType) { const a = state.accounts.find((x) => x.id === t.dataset.accType); if (a) data.saveAccount({ ...a, type: t.value }); }
@@ -648,7 +669,7 @@ const dayCheck = () => {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
 setInterval(dayCheck, 60_000);
 window.addEventListener('hashchange', () => { if (hashView() !== ui.view) go(hashView()); });
-window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
+window.addEventListener('offline', () => { render(); toast('인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 알아서 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
 
 // 거래 밀어서 지우기 (왼쪽으로 40% 이상 밀면 삭제 + 되돌리기). 키보드·스크린리더는 거래를 눌러 시트의 🗑️ 사용
@@ -687,20 +708,43 @@ app.addEventListener('click', (e) => { if (Date.now() - swipedAt < 300 && e.targ
 let raf = 0;
 const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!isSheetOpen() || ui.view) render(); }); };
 
+// 새 버전 적용(QA 3차 N3, src/lib/pwa.js). 입력 중인 내용이 있으면 바로 다시 불러오지 않고 안내만
+// 빈 시트(늘 DOM에 있음)는 '입력 중'이 아님(QA 4차 4-1). 판단은 src/lib/busy.js
+const isBusy = () => isBusyNow({ doc: document, signedIn: !!state?.user, sheetOpen: isSheetOpen(),
+  importing: ui.view === 'import' && (ui.imp?.step ?? 1) > 1 });
+const updater = createUpdater({ base: import.meta.env.BASE_URL, isBusy, canApplyAnytime: () => !state?.user,
+  onReady: () => { ui.updateReady = true; render(); } });
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => updater.register().catch((e) => console.error(e)));
+}
+// 빌드 표시(검사·문의 때 어느 빌드인지 확인용, 값이 있을 때만)
+if (import.meta.env.VITE_BUILD_TAG) document.documentElement.dataset.build = import.meta.env.VITE_BUILD_TAG;
+// 배포로 예전 조각 파일이 사라졌을 때(이전 버전 화면에서 늦게 불러오는 조각): 입력 중이 아니면 한 번만 다시 불러오고, 아니면 안내
+window.addEventListener('vite:preloadError', (e) => {
+  const k = 'preloadReloadAt', last = Number(sessionStorage.getItem(k) || 0);
+  if (!isBusy() && Date.now() - last > 60_000) { e.preventDefault(); sessionStorage.setItem(k, String(Date.now())); return location.reload(); }
+  ui.updateReady = true; render();
+});
+
 if (isFirebaseConfigured) {
   data = await import('./data.js');
   state = data.state;
   initSheet({ getState: () => state, onSave, onDelete });
-  data.onWriteError((e) => {
+  data.onWriteError((e, retry) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
+    // 반복 자동 기록이 거부됐고, 서버에서 확인해 보니 정말 없는 달(QA 3차 N1): 그 달은 다음에 열 때 다시 시도
+    if (e?.code === 'recurring-pending') return toast(`반복 기록 ${e.count}건을 아직 못 남겼어요. 다음에 앱을 열면 다시 해 볼게요.`, { duration: 6000 });
+    if (e?.code === 'kept-locally') return toast(e.message, { action: '설정 열기', onAction: () => go('settings'), duration: 8000 });
     if (e?.code === 'permission-denied') {
       // 로그인 만료와 규칙 거부를 구분(반복 id 거부 때 '다시 로그인'은 틀린 안내였음, QA R1)
+      // 앱 안에 문의 창구가 없으므로 사용자가 직접 할 수 있는 일을 안내(QA R8)
       const signedIn = !!data.state?.user;
-      return toast(signedIn
-        ? '저장이 거부됐어요. 문제가 계속되면 알려 주세요.'
-        : '로그인이 만료됐어요. 다시 로그인해 주세요.');
+      return signedIn
+        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 다시 해 주세요.', { action: '새로 고침', onAction: () => updater.refresh(), duration: 8000 })
+        : toast('다시 로그인해 주세요. 이번 기록은 저장하지 못했어요.');
     }
-    return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    // 스펙 8절: [다시 하기] — 같은 쓰기를 한 번 더(묶음 쓰기처럼 다시 할 수 없는 건 버튼 없이)
+    return toast('저장하지 못했어요. 잠시 후 다시 해 주세요.', retry ? { action: '다시 하기', onAction: retry, duration: 8000 } : {});
   });
   data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);

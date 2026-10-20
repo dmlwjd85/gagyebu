@@ -24,12 +24,16 @@ function preloadMainFonts() {
 
 export default defineConfig({
   base: BASE,
-  define: { __APP_VERSION__: JSON.stringify(pkg.version) },
+  // 배포마다 달라지는 빌드 표시: GitHub Actions의 커밋 앞 7자리(설정 아래 버전 옆). 로컬 빌드는 비어 있음
+  define: { __APP_VERSION__: JSON.stringify(pkg.version), __APP_BUILD__: JSON.stringify((process.env.GITHUB_SHA || '').slice(0, 7)) },
   plugins: [
     preloadMainFonts(),
     VitePWA({
+      // 새 버전 적용(QA 3차 N3): 새 서비스 워커가 기다리지 않고 바로 자리를 잡게(skipWaiting·clientsClaim).
+      // injectRegister를 쓰면 플러그인이 이 두 값을 넣지 않아서(예전 설정의 원인) 직접 적고, 등록·화면 다시 불러오기는
+      // src/lib/pwa.js가 맡아요(입력 중이면 '새 버전이 있어요 [지금 적용]' 안내).
       registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      injectRegister: false,
       includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
         name: '쓱 가계부',
@@ -48,6 +52,9 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
+        cleanupOutdatedCaches: true,
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         // 폰트 조각(92개)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
         runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],

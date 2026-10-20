@@ -10,7 +10,11 @@ export default {
       backgroundImage,
       boxShadow,
       fontFamily: {
-        sans: ['"Pretendard Variable"', 'Pretendard', '-apple-system', '"Noto Sans KR"', 'sans-serif'],
+        // 글꼴 자리(design-spec 1-4): 값은 src/style.css의 --font-title/--font-body/--font-num. 나중에 변수만 바꾸면 됨
+        title: ['var(--font-title)'], // 쓱 제목체 자리: 화면·카드 제목, 홈 카드 큰 금액
+        body: ['var(--font-body)'], // 쓱 본문체 자리: 본문·목록·버튼
+        num: ['var(--font-num)'], // 금액·날짜·키패드(tabular-nums와 함께)
+        sans: ['var(--font-body)'], // 기본 = 본문
       },
       // 글자 크기: --fs(본문 #main 안에서만 설정의 '본문 글자 크기'를 따름, 그 밖은 1) × 디자인 크기
       fontSize: Object.fromEntries(Object.entries({

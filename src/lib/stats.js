@@ -69,7 +69,7 @@ export function moneyWeather({ budget, periodTxs, p, today }) {
   const ratio = base === 0 ? (spentToday > 0 ? Infinity : 1.01) : spentToday / base;
   let weather;
   if (remaining < 0 || ratio > 1) weather = { key: 'rainy', icon: '🌧️', label: '비', text: '오늘은 쉬어가요' };
-  else if (ratio > 0.7) weather = { key: 'cloudy', icon: '⛅', label: '흐림', text: '딱 맞게 쓰는 중' };
+  else if (ratio > 0.7) weather = { key: 'cloudy', icon: '⛅', label: '흐림', text: '딱 맞게 쓰고 있어요' };
   else weather = { key: 'sunny', icon: '☀️', label: '맑음', text: '여유 있어요' };
   const spent = spentBefore + spentToday;
   // 내일 예보: 오늘 남긴 돈이 내일 하루 권장액에 더해지는 몫

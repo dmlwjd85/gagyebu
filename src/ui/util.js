@@ -52,13 +52,13 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
 }
 
 // 가벼운 확인 대화상자 (alert/confirm 대체)
-export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '' }) {
+export function confirmDialog({ title, body = '', ok = '확인', cancel = '닫기', danger = false, typeToConfirm = '' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
     wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
       <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
-      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
+      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>라고 적어 주세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
       <div class="mt-5 flex gap-2 justify-end">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
@@ -74,12 +74,38 @@ export function confirmDialog({ title, body = '', ok = '확인', cancel = '취�
 }
 
 let toastTimer;
+// 토스트 자리(QA 6차 1): 기본은 아래 메뉴 바로 위. 새 버전 안내 줄의 [지금 적용] 버튼과 겹치면 버튼 아래(자리가 없으면 위)로 비켜요.
+const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
+export function placeToast(el = $('#toast')) {
+  if (!el?.classList.contains('show')) return;
+  const H = window.innerHeight, gap = 8;
+  const tab = $('.tabbar')?.getBoundingClientRect();
+  const floor = tab && tab.height && tab.top < H && tab.bottom > 0 ? tab.top - gap : H - gap; // 아래 메뉴가 보이면 그 위, 아니면 화면 아래
+  el.style.top = ''; el.style.bottom = `${Math.max(gap, H - floor)}px`;
+  const [bar, btn] = ['.update-bar', '.update-bar .update-btn'].map((q) => $(q)?.getBoundingClientRect());
+  const r = el.getBoundingClientRect();
+  if (!bar || !bar.height || !overlap(r, bar)) return;
+  // 자리 후보: 안내 줄 아래 → 위 → 버튼만 피해 아래 → 위 → (그래도 없으면) 아래 메뉴 위까지 덮고 버튼 아래
+  const h = r.height, put = (top) => { el.style.bottom = 'auto'; el.style.top = `${top}px`; };
+  for (const [box, lim] of [[bar, floor], [btn || bar, floor], [btn || bar, H - gap]]) {
+    if (box.bottom + gap + h <= lim) return put(box.bottom + gap);
+    if (box.top - gap - h >= gap) return put(box.top - gap - h);
+  }
+}
+let toastWatch = false;
 export function toast(msg, { action, onAction, duration = 3500 } = {}) {
   let el = $('#toast');
   if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.append(el); }
   el.className = 'toast show';
-  el.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
+  el.innerHTML = `<span class="tabular-nums">${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
   if (action) el.querySelector('button').onclick = () => { el.classList.remove('show'); onAction?.(); };
+  placeToast(el);
+  if (!toastWatch) { // 본문을 스크롤하거나 화면 크기가 바뀌면 다시 비켜요
+    toastWatch = true;
+    const again = () => placeToast();
+    document.addEventListener('scroll', again, { capture: true, passive: true });
+    window.addEventListener('resize', again);
+  }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), action ? Math.max(duration, 5000) : duration);
 }
@@ -95,7 +121,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
         <input inputmode="numeric" autocomplete="off" aria-label="금액" class="w-full bg-transparent text-title tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
         <span class="text-head">원</span></label>
       <p class="mt-1 h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>닫기</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const input = wrap.querySelector('input'), err = wrap.querySelector('[role=alert]');
     const done = (v) => { wrap.remove(); resolve(v); };
     input.addEventListener('input', () => {
@@ -105,7 +131,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
     wrap.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const n = Number(input.value.replace(/[^0-9]/g, '') || 0);
-      if (n > 100_000_000_000) { err.textContent = '1,000억 원까지 입력할 수 있어요.'; return; }
+      if (n > 100_000_000_000) { err.textContent = '1,000억 원까지 적을 수 있어요.'; return; }
       done(n);
     });
     wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-cancel]')) done(null); });
@@ -138,7 +164,7 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       <h2 id="fd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
       <div class="mt-4 flex flex-col gap-3">${fields.map(field).join('')}</div>
       <p class="mt-2 min-h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>닫기</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const form = wrap.querySelector('form'), err = wrap.querySelector('[role=alert]');
     const app = document.getElementById('app'), back = document.activeElement;
     const done = (v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); };
