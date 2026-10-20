@@ -50,6 +50,27 @@
     .app-main > .app-shell { padding-bottom: 32px; }
   }
   .view-grid { @apply flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start; }
+  /* 예산 요약: 하루 금액·남음/초과를 크기·색으로 구분. 폭이 좁거나 글자를 키워도 겹치지 않게 세로로 쌓고 필요하면 줄바꿈 */
+  .bud-summary { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 100%; min-width: 0; }
+  .bud-hero, .bud-chip { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; min-width: 0; box-sizing: border-box; padding: 12px 10px; border-radius: 20px; background: var(--surface-solid); }
+  .bud-hero { background: color-mix(in srgb, var(--primary) 14%, var(--surface-solid)); border: 1px solid color-mix(in srgb, var(--primary) 32%, transparent); }
+  .bud-hero.is-ok, .bud-chip.is-ok { background: color-mix(in srgb, var(--income) 16%, var(--surface-solid)); border: 1px solid color-mix(in srgb, var(--income) 36%, transparent); }
+  .bud-hero.is-over, .bud-chip.is-over { background: color-mix(in srgb, var(--expense) 14%, var(--surface-solid)); border: 1px solid color-mix(in srgb, var(--expense) 38%, transparent); }
+  .bud-kicker, .bud-sub, .bud-meta, .bud-fact-k { margin: 0; max-width: 100%; font-size: calc(13px * var(--fs, 1)); line-height: 1.35; font-weight: 600; color: var(--ink-sub); }
+  .bud-hero-num, .bud-chip-num { display: block; width: 100%; max-width: 100%; margin: 0; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; white-space: nowrap; overflow-wrap: normal; text-align: center; }
+  .bud-hero-num { font-size: min(calc(36px * var(--fs, 1)), 11vw); color: var(--primary); }
+  .bud-chip-num { font-size: min(calc(26px * var(--fs, 1)), 8.5vw); }
+  .bud-hero.is-ok .bud-hero-num, .bud-chip.is-ok .bud-chip-num { color: var(--income); }
+  .bud-hero.is-over .bud-hero-num, .bud-chip.is-over .bud-chip-num { color: var(--expense); }
+  .bud-use { display: flex; flex-wrap: wrap; align-items: center; justify-content: center; gap: 8px 12px; width: 100%; min-width: 0; }
+  .bud-ring { flex: 0 0 auto; }
+  .bud-ring svg { display: block; width: min(84px, 24vw); height: auto; }
+  .bud-facts { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; min-width: 0; flex: 1 1 10rem; }
+  .bud-fact { margin: 0; flex: 1 1 8rem; min-width: min(100%, 8rem); max-width: 100%; padding: 8px 10px; border-radius: 14px; background: var(--bg); line-height: 1.35; }
+  .bud-fact-num { font-weight: 800; color: var(--ink); font-size: calc(15px * var(--fs, 1)); }
+  .bud-env-row { display: flex; flex-wrap: wrap; align-items: baseline; column-gap: 8px; row-gap: 2px; width: 100%; min-width: 0; }
+  .bud-env-name { flex: 1 1 4.5em; min-width: 0; overflow-wrap: anywhere; }
+  .bud-env-amt { margin-left: auto; max-width: 100%; text-align: right; }
   /* 금액·날짜 숫자: 글자를 키우거나 칸이 좁아도 숫자 중간에서 쪼개지지 않게(공백에서는 줄바꿈 허용) */
   .tabular-nums { overflow-wrap: normal; }
   .num { white-space: nowrap; overflow-wrap: normal; flex-shrink: 0; }

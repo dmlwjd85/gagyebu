@@ -243,19 +243,40 @@ export function budgetView(m, ui) {
   const showEnv = ui.envelopes || Object.keys(byCat).length > 0;
   const spentBy = new Map(byCategory(m.periodTxs).map((c) => [c.categoryId, c.amount]));
   const w = m.weather;
+  // 하루 금액 계산은 기존과 같음: 남은 예산 ÷ 남은 일수(오늘 포함). 화면만 큰 숫자로 바꿈
+  const daily = m.viewYm === m.curYm && w.hasBudget && w.remaining > 0 ? Math.floor(w.remaining / w.daysLeft) : null;
+  const tone = over ? 'over' : 'ok';
+  const ink = over ? 'text-expense' : 'text-income';
+  const statusPhrase = over ? `${numSpan(formatWon(spent - total))} 넘쳤어요` : `${numSpan(formatWon(total - spent))} 남았어요`;
+  const statusWon = formatWon(over ? spent - total : total - spent);
+  const statusBlock = (numCls) => `<p class="sr-only">${statusPhrase}</p>
+        <p class="bud-kicker" aria-hidden="true">${over ? '예산보다' : '남은 돈'}</p>
+        <p data-fit class="${numCls}" aria-hidden="true">${statusWon}</p>
+        <p class="bud-sub ${ink}" aria-hidden="true">${over ? '넘쳤어요' : '남았어요'}</p>`;
+  const summary = daily != null
+    ? `<div class="bud-hero">
+        <p class="bud-kicker">하루</p>
+        <p data-fit class="bud-hero-num">${formatWon(daily)}</p>
+        <p class="bud-sub">씩 쓰면 딱 맞아요</p>
+        <p class="bud-meta">${w.daysLeft}일 남음</p>
+      </div>
+      <div class="bud-chip is-${tone}">${statusBlock('bud-chip-num')}</div>`
+    : `<div class="bud-hero is-${tone}">${statusBlock('bud-hero-num')}</div>`;
   return `<div class="flex flex-col gap-3"><h1 class="text-title">예산</h1>
    <div class="view-grid">
-    <section class="card-solid p-5 flex flex-col items-center text-center" aria-labelledby="bud-h">
+    <section class="card-solid p-4 flex flex-col items-stretch text-center" aria-labelledby="bud-h">
       <h2 id="bud-h" class="sr-only">월 총예산</h2>
-      ${total ? `<div class="relative">${ring(pct, { color: over ? 'var(--expense)' : 'var(--primary)' })}
-          <div class="absolute inset-0 grid place-items-center"><div><p class="text-title tabular-nums">${Math.round(pct * 100)}%</p><p class="text-caption text-ink-sub">사용</p></div></div></div>
-        <p class="mt-3 text-body text-ink-sub">${esc(monthLabel(m.viewYm, m.sd))} 예산</p>
-        <p data-fit class="text-title tabular-nums">${formatWon(total)}</p>
-        <p class="mt-1 text-body ${over ? 'text-expense font-semibold' : ''}">${over ? `${numSpan(formatWon(spent - total))} 넘쳤어요` : `${numSpan(formatWon(total - spent))} 남았어요`}</p>
-        ${budRefund ? `<p class="mt-1 text-caption text-income font-semibold">환불 +${numSpan(formatWon(budRefund))}이 지출보다 많아 사용 0원으로 봐요</p>` : ''}
-        ${m.viewYm === m.curYm && w.hasBudget && w.remaining > 0 ? `<p class="mt-2 glass px-4 py-2 text-body">하루 <b class="tabular-nums">${formatWon(Math.floor(w.remaining / w.daysLeft))}</b>씩 쓰면 딱 맞아요 · ${w.daysLeft}일 남음</p>` : ''}
-        <button class="btn-ghost mt-4" data-action="budget">예산 바꾸기</button>`
-      : `${empty('🌈', '한 달 예산을 정하면 돈 날씨가 떠요.')}<button class="btn-primary" data-action="budget">예산 정하기</button>`}
+      ${total ? `<div class="bud-summary">${summary}
+        <div class="bud-use">
+          <div class="bud-ring" aria-hidden="true">${ring(pct, { size: 84, stroke: 9, color: over ? 'var(--expense)' : 'var(--primary)' })}</div>
+          <div class="bud-facts">
+            <p class="bud-fact"><span class="bud-fact-num tabular-nums">${Math.round(pct * 100)}%</span> <span class="bud-fact-k">사용</span></p>
+            <p class="bud-fact"><span class="bud-fact-k">${esc(monthLabel(m.viewYm, m.sd))} 예산</span> <span class="bud-fact-num tabular-nums">${formatWon(total)}</span></p>
+          </div>
+        </div>
+        ${budRefund ? `<p class="bud-meta text-income font-semibold">환불 +${numSpan(formatWon(budRefund))}이 지출보다 많아 사용 0원으로 봐요</p>` : ''}
+        <button class="btn-ghost self-center" data-action="budget">예산 바꾸기</button></div>`
+      : `${empty('🌈', '한 달 예산을 정하면 돈 날씨가 떠요.')}<button class="btn-primary self-center" data-action="budget">예산 정하기</button>`}
     </section>
     <section class="card-solid p-4" aria-labelledby="env-h">
       <div class="flex items-center justify-between gap-2"><h2 id="env-h" class="text-head">나눠서 관리</h2>
@@ -264,8 +285,8 @@ export function budgetView(m, ui) {
       ${showEnv ? `<ul class="mt-3 flex flex-col gap-3">${m.categories.filter((c) => c.kind === 'expense' && !c.archived).map((c) => {
         const lim = byCat[c.id] ?? 0, sp = spentBy.get(c.id) ?? 0, e = envelope(sp, lim);
         return `<li><button class="w-full min-h-[44px] py-1 text-left" data-env="${esc(c.id)}">
-          <div class="flex items-center gap-2 text-body"><span aria-hidden="true">${esc(c.emoji)}</span><span class="flex-1 truncate">${esc(c.name)}</span>
-          <span class="tabular-nums text-caption ${e.over ? 'text-expense font-semibold' : 'text-ink-sub'}">${formatWon(e.used)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
+          <div class="bud-env-row text-body"><span aria-hidden="true">${esc(c.emoji)}</span><span class="bud-env-name">${esc(c.name)}</span>
+          <span class="bud-env-amt tabular-nums text-caption ${e.over ? 'text-expense font-semibold' : 'text-ink-sub'}">${formatWon(e.used)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
           <div class="mt-1.5 h-2 rounded-full bg-line overflow-hidden"><div class="h-2 rounded-full ${e.over ? 'bg-expense' : e.near ? 'bg-chart-3' : 'bg-primary'}" style="width:${e.width}%"></div></div>
           ${e.over ? `<p class="mt-1 text-caption text-expense font-semibold">${numSpan(formatWon(e.used - lim))} 넘쳤어요</p>` : e.near ? `<p class="mt-1 text-caption text-chart-3 font-semibold">한도의 ${e.pct}%예요</p>` : ''}
           ${e.refund ? `<p class="mt-1 text-caption text-income font-semibold">환불 +${numSpan(formatWon(e.refund))}이 더 많아 사용 0원으로 봐요</p>` : ''}</button></li>`;
