@@ -28,9 +28,13 @@ jobs:
         if: steps.mode.outputs.deploy == 'true'
         env: { SA: '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' }
         run: |
+          umask 077
           printf '%s' "$SA" > "$RUNNER_TEMP/sa.json"
           GOOGLE_APPLICATION_CREDENTIALS="$RUNNER_TEMP/sa.json" npx firebase deploy --only firestore:rules --project gagyebu-b44fc2 --non-interactive
-          rm -f "$RUNNER_TEMP/sa.json"
+      # (QA 5차 5-3) 배포가 실패하거나 취소돼도 키 파일을 꼭 지움
+      - name: 서비스 계정 키 파일 지우기
+        if: always()
+        run: rm -f "$RUNNER_TEMP/sa.json"
       - name: 규칙 배포 표시 확인(서비스 계정이 없을 때)
         if: steps.mode.outputs.deploy != 'true'
         run: |
