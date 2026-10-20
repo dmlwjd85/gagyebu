@@ -11,6 +11,9 @@ export const state = {
 const emit = () => listeners.forEach((fn) => fn(state));
 export const subscribe = (fn) => (listeners.add(fn), () => listeners.delete(fn));
 let writeErrorHandler = null;
+// Google 리다이렉트 결과가 처리되기 전에는 히스토리 센티널을 넣지 않기 위한 신호
+let redirectSettled = Promise.resolve();
+export const whenAuthRedirectSettled = () => redirectSettled;
 export const onWriteError = (fn) => (writeErrorHandler = fn);
 let loginErrorHandler = null;
 export const onLoginError = (fn) => (loginErrorHandler = fn);
@@ -37,7 +40,9 @@ export function initAuth() {
   // 리다이렉트로 로그인하고 돌아왔을 때만 결과 처리기를 불러옴(아이폰 홈 화면 앱, 또는 팝업이 막힌 경우)
   if (sessionStorage.getItem('authRedirect') || loginMode() === 'redirect') {
     sessionStorage.removeItem('authRedirect');
-    getRedirectResult(auth, browserPopupRedirectResolver).catch((e) => { console.error(e); loginErrorHandler?.(e); });
+    redirectSettled = Promise.resolve()
+      .then(() => getRedirectResult(auth, browserPopupRedirectResolver))
+      .catch((e) => { console.error(e); loginErrorHandler?.(e); });
   }
   onAuthStateChanged(auth, async (user) => {
     store?.stopAll();

@@ -15,6 +15,7 @@ import { toCSV } from './lib/csv.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
+import { createExitGuard, EXIT_CONFIRM_TITLE } from './lib/exitGuard.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
@@ -76,6 +77,7 @@ function gateView({ caption, card }) {
   $('main', app)?.removeAttribute('aria-busy');
 }
 function render() {
+  if (redirectDone) exitGuard.sync({ loggedIn: !!state.user });
   if (!isFirebaseConfigured) return gateView(setupView());
   if (!state.ready) return; // index.html 의 첫 화면(브랜드 카드)을 그대로 둠
   if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
@@ -187,7 +189,9 @@ function go(view, extra = {}) {
   if (ui.view === 'import' && view !== 'import') ui.imp = null; // 가져오기에서 나가면 읽은 파일을 메모리에서 버림
   if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
   Object.assign(ui, { view, emojiFor: null }, extra);
+  // 탭·뒤로(설정 등)는 히스토리를 쌓지 않음. push 하면 휴대폰 뒤로가기가 탭을 바꾸게 된다.
   history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
+  exitGuard.noteStay(location.href);
   render();
   $('#main')?.focus({ preventScroll: true });
   scrollMainTop();
@@ -647,7 +651,25 @@ const dayCheck = () => {
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
 setInterval(dayCheck, 60_000);
-window.addEventListener('hashchange', () => { if (hashView() !== ui.view) go(hashView()); });
+// 종료 확인: 로그인된 앱에만 센티널 히스토리를 하나 두고, 뒤로가기가 그 칸을 지우면 '종료할까요?'를 묻는다.
+// 시트·다른 대화상자는 그대로 버튼·Escape 로만 닫힌다. Google 리다이렉트가 끝나기 전에는 켜지 않는다.
+const exitGuard = createExitGuard({
+  history,
+  confirm: () => confirmDialog({ title: EXIT_CONFIRM_TITLE, ok: '종료', cancel: '취소' }),
+  closeWindow: () => window.close(),
+  isHidden: () => document.visibilityState === 'hidden',
+});
+let redirectDone = false;
+let suppressViewHash = false;
+window.addEventListener('popstate', () => {
+  if (exitGuard.willTrap() || exitGuard.isLeaving()) suppressViewHash = true;
+  exitGuard.onPopState();
+  queueMicrotask(() => { suppressViewHash = false; });
+});
+window.addEventListener('hashchange', () => {
+  if (suppressViewHash) return;
+  if (hashView() !== ui.view) go(hashView());
+});
 window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
 
@@ -705,6 +727,11 @@ if (isFirebaseConfigured) {
   data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);
   data.initAuth();
+  data.whenAuthRedirectSettled().then(() => {
+    redirectDone = true;
+    exitGuard.noteStay(location.href);
+    exitGuard.sync({ loggedIn: !!state.user });
+  });
   pickTip();
 }
 render();
