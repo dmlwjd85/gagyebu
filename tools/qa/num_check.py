@@ -66,7 +66,10 @@ with sync_playwright() as p:
         items = pg.evaluate(SCAN)
         R['views'][v] = {'n': len(items), 'not_tnum': [i for i in items if 'tabular-nums' not in i['fvn']], 'not_geo': len([i for i in items if i['tr'] != 'geometricprecision'])}
         if v == 'budget':
-            R['goal_lines'] = [i for i in items if any(w in i['text'] for w in ('한 달에', '목표일이 지났어요', '남았어요'))]
+            # 병합 구조(#9 numSpan): 목표 문장은 <p>, 금액만 그 안의 숫자 span. 문장마다 금액 span이 tabular-nums인지 봄(QA 6차 2)
+            R['goal_lines'] = pg.evaluate("""[...document.querySelectorAll('.goal p')].filter(p=>/한 달에|목표일이 지났어요|남았어요/.test(p.textContent)).map(p=>{
+              const nums=[...p.querySelectorAll('span')].filter(s=>/[0-9]/.test(s.textContent));
+              return {text:p.textContent.trim(), nums:nums.length, tnum:nums.every(s=>getComputedStyle(s).fontVariantNumeric.includes('tabular-nums'))}})""")
         if v in ('recurring', 'chart', 'budget', 'toast'): pg.screenshot(path=f'{SHOT}num-{v}-360.png')
         if v == 'sheet': pg.keyboard.press('Escape'); pg.wait_for_timeout(400)
     # ② 롤링 중 폭
@@ -92,8 +95,8 @@ miss = sum(len(v['not_tnum']) for v in R['views'].values()); total = sum(v['n'] 
 wobble = {k: {l: w for l, w in v['width_by_len'].items() if len(w) > 1} for k, v in R['roll'].items()}
 wobble = {k: v for k, v in wobble.items() if v}
 print(f'금액 글자 {total}곳 중 tabular-nums 빠짐 {miss}곳 · 롤링 폭 흔들림 {len(wobble)}건 · 숫자 폭 종류 {len(set(R["glyph"]["now"]))}')
-goal_n = len(R.get('goal_lines', []))
-print(f'저축 목표 카드 문장 검사 {goal_n}곳(3곳 기대)')
+goal_n = len([g for g in R.get('goal_lines', []) if g['nums'] and g['tnum']])
+print(f'저축 목표 카드 문장 중 금액 span이 tabular-nums인 곳 {goal_n}곳(3곳 기대)')
 ok = goal_n >= 3 and miss == 0 and not wobble and len(set(R['glyph']['now'])) == 1 and not errs
 print('결과:', '통과' if ok else '실패')
 sys.exit(0 if ok else 1)
