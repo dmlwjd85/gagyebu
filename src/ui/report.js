@@ -103,13 +103,13 @@ export async function openReport(m, { toast }) {
   const file = new File([blob], name, { type: 'image/png' });
   const canShare = navigator.canShare?.({ files: [file] });
   const wrap = document.createElement('div');
-  wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/50 p-4 fade-in';
-  wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="rp-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-4 shadow-glass my-auto">
-    <h2 id="rp-t" class="text-head">${d.month}월 리포트 카드</h2>
+  wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-4 fade-in';
+  wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="rp-t" class="dlg-card">
+    <h2 id="rp-t">${d.month}월 리포트 카드</h2>
     <img src="${url}" alt="${esc(`${d.month}월 리포트: 남긴 돈 ${formatWon(d.saved)}, 수입 ${formatWon(d.income)}, 지출 ${spendText(d.expense)}${d.top.length ? `, 많이 쓴 곳 ${d.top.map((t) => t.name).join(', ')}` : ''}`)}" class="mt-3 w-full rounded-2xl" width="1080" height="1350" />
     ${d.note ? `<p class="mt-2 text-caption">💡 ${esc(d.note)}</p>` : ''}
     <p class="mt-2 text-caption text-ink-sub">이 기기에서 만든 이미지예요. 공유하기 전에 숫자를 한 번 확인해 주세요.</p>
-    <div class="mt-3 flex gap-2 justify-end"><button class="btn-ghost" data-rp="close">닫기</button>
+    <div class="dlg-actions"><button class="btn-ghost" data-rp="close">닫기</button>
       ${canShare ? '<button class="btn-ghost" data-rp="save">저장</button><button class="btn-primary" data-rp="share">공유하기</button>' : '<button class="btn-primary" data-rp="save">이미지 저장</button>'}</div></div>`;
   const app = document.getElementById('app'), back = document.activeElement;
   const done = () => { wrap.remove(); URL.revokeObjectURL(url); document.removeEventListener('keydown', onKey); if (app) app.inert = false; back?.focus?.(); };
