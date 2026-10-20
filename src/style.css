@@ -364,3 +364,89 @@
 
 /* 화면에 안 보이는 읽기용 글자(sr-only)가 긴 줄 끝(오른쪽 밖)에 놓여 가로 스크롤을 만들지 않게 왼쪽 위에 고정(QA N3) */
 .sr-only:not(:focus):not(:focus-within) { left: 0; top: 0; }
+
+/* 확인·입력 대화상자.
+   카드 면(--surface-solid)이 앱 배경·목록 카드와 거의 같아서, 뒤는 어둡게 깔고
+   카드는 테두리·그림자로 띄운다. 글자 대비는 라이트·다크 모두 4.5:1 이상.
+   레이어 밖에 두어 bg-black/40·bg-surface-solid 유틸보다 이 모양이 이긴다. */
+.dlg-wrap {
+  background: rgba(15, 14, 26, 0.62);
+  padding-top: max(16px, env(safe-area-inset-top));
+  padding-right: max(16px, env(safe-area-inset-right));
+  padding-bottom: max(16px, env(safe-area-inset-bottom));
+  padding-left: max(16px, env(safe-area-inset-left));
+}
+html.dark .dlg-wrap { background: rgba(0, 0, 0, 0.78); }
+.dlg-card {
+  --dlg-surface: #FFFFFF;
+  box-sizing: border-box;
+  width: 100%;
+  max-width: min(24rem, 100%);
+  padding: 20px 18px;
+  border-radius: 20px;
+  background: var(--dlg-surface);
+  color: var(--ink);
+  border: 1.5px solid rgba(30, 27, 58, 0.55);
+  box-shadow: 0 18px 48px rgba(24, 12, 56, 0.34);
+  font-size: calc(15px * var(--content-scale, 1));
+  line-height: 1.45;
+}
+html.dark .dlg-card {
+  --dlg-surface: #3A3460;
+  background: #3A3460;
+  color: #F3F1FF;
+  border-color: #C8C2E4;
+  box-shadow: 0 0 0 1px rgba(243, 241, 255, 0.2), 0 22px 56px rgba(0, 0, 0, 0.72);
+}
+.dlg-card h2 {
+  margin: 0;
+  font-size: calc(22px * var(--content-scale, 1));
+  line-height: 1.35;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+html.dark .dlg-card h2 { color: #F3F1FF; }
+.dlg-copy {
+  margin: 8px 0 0;
+  font-size: calc(15px * var(--content-scale, 1));
+  line-height: 1.45;
+  color: #5B5775;
+  overflow-wrap: anywhere;
+}
+html.dark .dlg-copy { color: #D4D0EA; }
+.dlg-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: stretch;
+  gap: 8px;
+  margin-top: 20px;
+}
+.dlg-actions > button {
+  flex: 1 1 calc(7.5rem * var(--content-scale, 1));
+  min-width: 0;
+  min-height: max(44px, calc(44px * var(--content-scale, 1)));
+  height: auto;
+  padding: 8px 14px;
+  white-space: normal;
+  line-height: 1.25;
+  font-size: calc(15px * var(--content-scale, 1));
+}
+.dlg-card .btn-ghost {
+  background: #EEE9FF;
+  color: #1E1B3A;
+  border: 1.5px solid #5B5775;
+  font-weight: 700;
+}
+html.dark .dlg-card .btn-ghost {
+  background: #241F3A;
+  color: #F3F1FF;
+  border-color: #C8C2E4;
+}
+.dlg-card .btn-primary { font-weight: 800; }
+.dlg-card .btn-danger {
+  font-weight: 800;
+  background: transparent;
+  border-width: 1.5px;
+}

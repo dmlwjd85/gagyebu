@@ -55,11 +55,11 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
 export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
-    wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
-      <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
-      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
-      <div class="mt-5 flex gap-2 justify-end">
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
+    wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="dlg-card">
+      <h2 id="cd-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
+      ${typeToConfirm ? `<label class="mt-4 block">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
+      <div class="dlg-actions">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
     const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
@@ -88,14 +88,14 @@ export function toast(msg, { action, onAction, duration = 3500 } = {}) {
 export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
-    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass"><form>
-      <h2 id="pa-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
+    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="dlg-card"><form>
+      <h2 id="pa-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
       <label class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg px-4 h-14 focus-within:ring-2 focus-within:ring-primary">
-        <input inputmode="numeric" autocomplete="off" aria-label="금액" class="w-full bg-transparent text-title tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
-        <span class="text-head">원</span></label>
-      <p class="mt-1 h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+        <input inputmode="numeric" autocomplete="off" aria-label="금액" class="w-full bg-transparent tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
+        <span>원</span></label>
+      <p class="mt-1 h-5 text-expense" role="alert"></p>
+      <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const input = wrap.querySelector('input'), err = wrap.querySelector('[role=alert]');
     const done = (v) => { wrap.remove(); resolve(v); };
     input.addEventListener('input', () => {
@@ -123,7 +123,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
 export function formDialog({ title, body = '', fields, ok = '저장', validate = () => null }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-4 fade-in';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-4 fade-in';
     const inputCls = 'mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body';
     const field = (f) => {
       const id = `fd-${f.name}`;
@@ -134,11 +134,11 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       else ctrl = `<input id="${id}" name="${f.name}" type="${f.type === 'date' ? 'date' : 'text'}" class="${inputCls}" style="border-color:var(--line)" value="${esc(f.value ?? '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} autocomplete="off" />`;
       return `<div><label for="${id}" class="text-caption text-ink-sub">${esc(f.label)}</label>${ctrl}${f.hint ? `<p class="mt-1 text-caption text-ink-sub">${esc(f.hint)}</p>` : ''}</div>`;
     };
-    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="fd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass my-auto"><form>
-      <h2 id="fd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
+    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="fd-t" class="dlg-card"><form>
+      <h2 id="fd-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
       <div class="mt-4 flex flex-col gap-3">${fields.map(field).join('')}</div>
-      <p class="mt-2 min-h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+      <p class="mt-2 min-h-5 text-expense" role="alert"></p>
+      <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const form = wrap.querySelector('form'), err = wrap.querySelector('[role=alert]');
     const app = document.getElementById('app'), back = document.activeElement;
     const done = (v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); };
