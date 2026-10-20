@@ -1,7 +1,8 @@
 import { describe, test, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 import {
-  shouldArmExitGuard, planExitPop, viewChangeHistoryMode, leaveHistoryDelta, createExitGuard, EXIT_CONFIRM_TITLE,
+  shouldArmExitGuard, planExitPop, viewChangeHistoryMode, leaveHistoryDelta, createExitGuard,
+  isExitDismissGesture, EXIT_CONFIRM_TITLE,
 } from './exitGuard.js';
 
 const flush = async () => { for (let i = 0; i < 8; i++) await Promise.resolve(); };
@@ -29,6 +30,8 @@ function fakeHistory(url = 'http://app.local/gagyebu/') {
   };
 }
 
+const click = (target) => ({ type: 'click', target });
+
 describe('종료 확인 가드', () => {
   test('문구는 종료할까요?', () => {
     expect(EXIT_CONFIRM_TITLE).toBe('종료할까요?');
@@ -41,41 +44,125 @@ describe('종료 확인 가드', () => {
     expect(shouldArmExitGuard({ loggedIn: true })).toBe(true);
   });
 
-  test('탭 이동은 replace 만 하고, 모달은 이 가드가 닫지 않는다', () => {
+  test('탭 이동은 replace 만 하고, 센티널이 없으면 뒤로가기를 막지 않으며, 모달은 닫지 않는다', () => {
     expect(viewChangeHistoryMode()).toBe('replace');
-    expect(planExitPop({ armed: true, modalOpen: true }).closeModal).toBe(false);
-    expect(planExitPop({ armed: true, confirming: true })).toEqual({ trap: true, confirm: false, closeModal: false });
-    expect(planExitPop({ armed: true, redirectPending: true }).trap).toBe(false);
-    expect(planExitPop({ armed: false }).trap).toBe(false);
-    expect(leaveHistoryDelta({ repushedSentinel: true })).toBe(-2);
+    expect(planExitPop({ armed: true, pushed: true, modalOpen: true }).closeModal).toBe(false);
+    expect(planExitPop({ armed: true, pushed: true, confirming: true })).toEqual({ trap: true, confirm: false, closeModal: false });
+    expect(planExitPop({ armed: true, pushed: false }).trap).toBe(false);
+    expect(planExitPop({ armed: true, pushed: true, redirectPending: true }).trap).toBe(false);
+    expect(planExitPop({ armed: false, pushed: true }).trap).toBe(false);
+    expect(leaveHistoryDelta()).toBe(-1);
   });
 
-  test('뒤로가기면 센티널을 다시 쌓고 확인을 한 번만 연다', async () => {
+  test('취소·배경·Escape 만 다시 깔고, 종료 버튼은 다시 깔지 않는다', () => {
+    const cancel = { nodeType: 1, closest: (s) => (s === '[data-v="0"]' ? {} : null), classList: { contains: () => false } };
+    const ok = { nodeType: 1, closest: () => null, classList: { contains: () => false } };
+    const backdrop = { nodeType: 1, closest: () => null, classList: { contains: (c) => c === 'dlg-wrap' } };
+    const title = { nodeType: 1, closest: () => null, classList: { contains: () => false } };
+    expect(isExitDismissGesture(click(cancel))).toBe(true);
+    expect(isExitDismissGesture(click(backdrop))).toBe(true);
+    expect(isExitDismissGesture({ type: 'keydown', key: 'Escape' })).toBe(true);
+    expect(isExitDismissGesture(click(ok))).toBe(false);
+    expect(isExitDismissGesture(click(title))).toBe(false);
+    expect(isExitDismissGesture({ type: 'keydown', key: 'Enter' })).toBe(false);
+  });
+
+  test('로그인 직후에는 히스토리를 넣지 않고, 첫 제스처에서만 센티널을 넣는다', () => {
+    const history = fakeHistory();
+    const guard = createExitGuard({ history, confirm: () => Promise.resolve(false) });
+    guard.noteStay('http://app.local/gagyebu/#budget');
+    guard.sync({ loggedIn: true });
+    expect(history.length).toBe(1);
+    expect(guard.onUserGesture()).toBe(true);
+    expect(history.length).toBe(2);
+    expect(history.state).toEqual({ gagyebuExit: 1 });
+    expect(guard.onUserGesture()).toBe(false);
+    expect(history.length).toBe(2);
+  });
+
+  test('제스처 없이 뒤로가면 확인을 열지 않는다', () => {
     const history = fakeHistory();
     let asks = 0;
     const guard = createExitGuard({
       history,
       confirm: () => { asks += 1; return Promise.resolve(false); },
+    });
+    guard.noteStay('http://app.local/gagyebu/');
+    guard.sync({ loggedIn: true });
+    history.back();
+    expect(guard.onPopState()).toEqual({ trap: false, confirm: false, closeModal: false });
+    expect(asks).toBe(0);
+    expect(history.length).toBe(1);
+  });
+
+  test('제스처로 깐 센티널을 뒤로가면 확인을 한 번만 열고, 그 안에서 다시 넣지 않는다', async () => {
+    const history = fakeHistory();
+    let asks = 0;
+    const guard = createExitGuard({
+      history,
+      confirm: () => { asks += 1; return new Promise(() => {}); },
       closeWindow() { throw new Error('취소했는데 닫음'); },
       schedule(fn) { fn(); },
     });
     guard.noteStay('http://app.local/gagyebu/#budget');
     guard.sync({ loggedIn: true });
-    expect(history.length).toBe(2);
+    guard.onUserGesture();
     history.back();
     expect(guard.onPopState()).toMatchObject({ trap: true, confirm: true, closeModal: false });
-    expect(history.href).toBe('http://app.local/gagyebu/#budget');
-    expect(history.length).toBe(2);
+    expect(history.index).toBe(0);
+    expect(history.href).toBe('http://app.local/gagyebu/');
+    expect(guard.onUserGesture()).toBe(false);
+    expect(history.index).toBe(0);
+    expect(history.state).toBe(null);
+    history.back();
+    expect(guard.onPopState().trap).toBe(false);
+    await flush();
+    expect(asks).toBe(1);
+  });
+
+  test('취소를 그 클릭 안에서 다시 깔면 같은 화면으로 돌아오고, 종료 클릭은 한 칸만 나간다', async () => {
+    const history = fakeHistory('http://prev.example/a');
+    history.pushState(null, '', 'http://prev.example/b');
+    history.pushState(null, '', 'http://app.local/gagyebu/');
+    let closed = 0;
+    let decide = () => {};
+    const guard = createExitGuard({
+      history,
+      confirm: () => new Promise((resolve) => { decide = resolve; }),
+      closeWindow: () => { closed += 1; },
+      isHidden: () => false,
+      schedule(fn) { fn(); },
+    });
+    guard.noteStay('http://app.local/gagyebu/#home');
+    guard.sync({ loggedIn: true });
+    guard.onUserGesture();
     history.back();
     guard.onPopState();
     await flush();
-    expect(asks).toBe(1);
-    expect(history.href).toBe('http://app.local/gagyebu/#budget');
+    expect(guard.isConfirming()).toBe(true);
+    expect(guard.rearm()).toBe(true);
+    expect(history.href).toBe('http://app.local/gagyebu/#home');
+    expect(history.length).toBe(4);
+    decide(false);
+    await flush();
+    expect(guard.isConfirming()).toBe(false);
+    expect(closed).toBe(0);
+    expect(history.href).toBe('http://app.local/gagyebu/#home');
+
+    history.back();
+    guard.onPopState();
+    await flush();
+    expect(guard.onUserGesture()).toBe(false);
+    decide(true);
+    await flush();
+    expect(history.href).toBe('http://prev.example/b');
+    expect(closed).toBe(1);
+    expect(guard.isLeaving()).toBe(true);
+    expect(guard.onPopState().trap).toBe(false);
   });
 
-  test('종료를 고르면 두 칸 뒤로 가고, 아직 보이면 창 닫기를 시도한다', async () => {
-    const history = fakeHistory('http://prev.example/');
-    history.pushState(null, '', 'http://app.local/gagyebu/');
+  test('이전 페이지가 없으면 종료는 그 자리에 남고 창 닫기를 시도한다', async () => {
+    const history = fakeHistory('http://app.local/gagyebu/');
     let closed = 0;
     const guard = createExitGuard({
       history,
@@ -84,42 +171,61 @@ describe('종료 확인 가드', () => {
       isHidden: () => false,
       schedule(fn) { fn(); },
     });
-    guard.noteStay('http://app.local/gagyebu/#home');
+    guard.noteStay('http://app.local/gagyebu/');
     guard.sync({ loggedIn: true });
+    guard.onUserGesture();
     history.back();
     guard.onPopState();
     await flush();
-    expect(history.href).toBe('http://prev.example/');
+    expect(history.href).toBe('http://app.local/gagyebu/');
+    expect(history.index).toBe(0);
     expect(closed).toBe(1);
-    expect(guard.isLeaving()).toBe(true);
-    expect(guard.onPopState().trap).toBe(false);
   });
 
-  test('Google 리다이렉트가 끝나기 전에는 히스토리를 넣지 않는다', () => {
+  test('Google 리다이렉트가 끝나기 전에는 제스처로도 히스토리를 넣지 않는다', () => {
     const history = fakeHistory();
     const guard = createExitGuard({ history, confirm: () => Promise.resolve(false) });
     guard.sync({ loggedIn: true, redirectPending: true });
+    expect(guard.onUserGesture()).toBe(false);
     expect(history.length).toBe(1);
     expect(guard.onPopState().trap).toBe(false);
   });
 
-  test('화면 주소만 바꿀 때는 센티널을 더 쌓지 않는다', () => {
+  test('화면 주소만 바꿀 때는 센티널을 더 쌓지 않고, 바꿔 둔 칸도 뒤로가기에서 확인한다', async () => {
     const history = fakeHistory();
-    const guard = createExitGuard({ history, confirm: () => Promise.resolve(false) });
+    let asks = 0;
+    const guard = createExitGuard({
+      history,
+      confirm: () => { asks += 1; return new Promise(() => {}); },
+    });
     guard.noteStay('http://app.local/gagyebu/');
     guard.sync({ loggedIn: true });
-    const n = history.length;
+    guard.onUserGesture();
     guard.noteStay('http://app.local/gagyebu/#calendar');
     history.replaceState(null, '', 'http://app.local/gagyebu/#calendar');
-    expect(history.length).toBe(n);
+    expect(history.length).toBe(2);
+    expect(history.state).toBe(null);
+    history.back();
+    expect(guard.onPopState().trap).toBe(true);
+    await flush();
+    expect(asks).toBe(1);
     expect(viewChangeHistoryMode()).toBe('replace');
   });
 
-  test('앱은 replaceState·인앱 대화상자만 쓰고, 로그인 리다이렉트 뒤에 가드를 켠다', () => {
+  test('앱은 replaceState·인앱 대화상자만 쓰고, 제스처에서만 센티널을 깐다', () => {
     const main = readFileSync('src/main.js', 'utf8');
     const data = readFileSync('src/data.js', 'utf8');
+    const guardSrc = readFileSync('src/lib/exitGuard.js', 'utf8');
+    const syncFn = guardSrc.slice(guardSrc.indexOf('function sync'), guardSrc.indexOf('function onUserGesture'));
+    const popFn = guardSrc.slice(guardSrc.indexOf('function onPopState'), guardSrc.indexOf('function leave'));
+    expect(syncFn).not.toContain('pushSentinel');
+    expect(popFn).not.toContain('pushSentinel');
     expect(main).toContain('history.replaceState');
     expect(main).not.toMatch(/history\.pushState/);
+    expect(main).toContain('exitGuard.onUserGesture');
+    expect(main).toContain('exitGuard.rearm');
+    expect(main).toContain('isExitDismissGesture');
+    expect(main).toContain("addEventListener('pointerdown', () => { exitGuard.onUserGesture(); }, true)");
     expect(main).toContain('confirmDialog({ title: EXIT_CONFIRM_TITLE');
     expect(main).toContain('whenAuthRedirectSettled');
     expect(main).not.toMatch(/window\.confirm\s*\(/);

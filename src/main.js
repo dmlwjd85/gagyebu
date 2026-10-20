@@ -15,7 +15,7 @@ import { toCSV } from './lib/csv.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
-import { createExitGuard, EXIT_CONFIRM_TITLE } from './lib/exitGuard.js';
+import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
@@ -651,7 +651,9 @@ const dayCheck = () => {
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
 setInterval(dayCheck, 60_000);
-// 종료 확인: 로그인된 앱에만 센티널 히스토리를 하나 두고, 뒤로가기가 그 칸을 지우면 '종료할까요?'를 묻는다.
+// 종료 확인: 로그인된 뒤에, 사용자의 첫 입력에서만 센티널 히스토리를 하나 둔다.
+// 페이지 로드·로그인 콜백에서 pushState 하면 Chrome 이 그 기록을 뒤로가기에서 건너뛰고
+// Android 는 확인 없이 앱을 닫는다. 취소한 뒤에 다시 깔 때도 그 클릭·Escape 안에서 넣는다.
 // 시트·다른 대화상자는 그대로 버튼·Escape 로만 닫힌다. Google 리다이렉트가 끝나기 전에는 켜지 않는다.
 const exitGuard = createExitGuard({
   history,
@@ -659,10 +661,18 @@ const exitGuard = createExitGuard({
   closeWindow: () => window.close(),
   isHidden: () => document.visibilityState === 'hidden',
 });
+document.addEventListener('pointerdown', () => { exitGuard.onUserGesture(); }, true);
+document.addEventListener('keydown', (e) => {
+  exitGuard.onUserGesture();
+  if (exitGuard.isConfirming() && isExitDismissGesture(e)) exitGuard.rearm();
+}, true);
+document.addEventListener('click', (e) => {
+  if (exitGuard.isConfirming() && isExitDismissGesture(e)) exitGuard.rearm();
+}, true);
 let redirectDone = false;
 let suppressViewHash = false;
 window.addEventListener('popstate', () => {
-  if (exitGuard.willTrap() || exitGuard.isLeaving()) suppressViewHash = true;
+  if (exitGuard.willTrap() || exitGuard.isLeaving() || exitGuard.isConfirming()) suppressViewHash = true;
   exitGuard.onPopState();
   queueMicrotask(() => { suppressViewHash = false; });
 });
