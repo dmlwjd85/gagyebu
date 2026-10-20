@@ -264,6 +264,8 @@
   .sms-row { display: flex; flex-wrap: wrap; gap: 8px; }
   .sms-row > .sms-field { flex: 1 1 calc(140px * var(--fs, 1)); min-width: min(100%, calc(140px * var(--fs, 1))); }
   .sms-in, .sms-area { width: 100%; min-width: 0; max-width: 100%; min-height: 44px; border-radius: 16px; border: 1px solid var(--line); background: var(--bg); color: var(--ink); padding: 8px 12px; }
+  .sms-pick { position: relative; display: flex; align-items: center; cursor: pointer; }
+  .sms-pick:has(.date-overlay:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
   .sms-area { min-height: calc(140px * var(--fs, 1)); resize: vertical; }
   .sms-cats { display: flex; flex-wrap: wrap; gap: 8px; }
   .sms-chip { height: auto; white-space: normal; text-align: left; max-width: 100%; }

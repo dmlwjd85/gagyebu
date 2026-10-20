@@ -1,6 +1,7 @@
 // 빠른 입력의 '문자 붙여넣기'. 읽기·파싱은 이 기기 안에서만 하고, 저장은 사용자가 확인할 때만.
 import { esc } from './util.js';
 import { formatWon } from '../lib/money.js';
+import { parseYmd, WEEK } from '../lib/dates.js';
 import { suggestOrder } from '../lib/defaults.js';
 import { validateTx, MAX_MEMO } from '../lib/validate.js';
 import {
@@ -54,6 +55,12 @@ function pasteHtml(sms) {
   </div>`;
 }
 
+function longDate(d) {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return '날짜를 골라 주세요';
+  const x = parseYmd(d);
+  return `${x.getFullYear()}년 ${x.getMonth() + 1}월 ${x.getDate()}일 (${WEEK[x.getDay()]})`;
+}
+
 function statusNote(d) {
   if (d.status === 'cancel') return '카드 취소 · 이 달 지출에서 빼요';
   if (d.status === 'partial-cancel') return '부분 취소 · 이 금액만큼 지출에서 빼요';
@@ -92,9 +99,11 @@ function previewHtml(sms, st) {
         <input name="amount" inputmode="numeric" class="sms-in text-body tabular-nums" autocomplete="off" value="${esc(String(d.amount ?? '').replace(/[^\d]/g, ''))}" /></label>
       <div class="sms-row">
         <label class="sms-field"><span class="text-caption text-ink-sub">날짜</span>
-          <input type="date" name="date" lang="ko" class="sms-in text-body" value="${esc(d.date || '')}" max="2100-12-31" /></label>
+          <span class="sms-in sms-pick text-body"><span class="min-w-0">${esc(longDate(d.date))}</span>
+            <input type="date" name="date" lang="ko" class="date-overlay" value="${esc(d.date || '')}" max="2100-12-31" aria-label="날짜, ${esc(longDate(d.date))}" /></span></label>
         <label class="sms-field"><span class="text-caption text-ink-sub">시각</span>
-          <input type="time" name="time" class="sms-in text-body" value="${esc(d.time || '')}" /></label>
+          <span class="sms-in sms-pick text-body"><span class="min-w-0">${esc(d.time || '없음')}</span>
+            <input type="time" name="time" class="date-overlay" value="${esc(d.time || '')}" aria-label="시각${d.time ? `, ${esc(d.time)}` : ''}" /></span></label>
       </div>
       <label class="sms-field"><span class="text-caption text-ink-sub">가맹점 · 보낸 사람</span>
         <input name="merchant" class="sms-in text-body" maxlength="80" autocomplete="off" value="${esc(d.merchant || '')}" /></label>
