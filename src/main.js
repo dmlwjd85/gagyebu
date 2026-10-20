@@ -136,9 +136,11 @@ function pickTip() {
 function renderTip() {
   const slot = $('#tip-slot');
   if (!slot) return;
-  if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
-  // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
-  slot.innerHTML = `<div class="tip" role="note" aria-label="팁"><span class="py-1.5" aria-hidden="true">💡</span><p>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
+  slot.setAttribute('aria-live', 'polite'); // 스펙 7절: aria-live="polite", 앞에 💡 붙이지 않음(QA 6차 4)
+  const html = ui.view !== 'home' || !currentTip || isSheetOpen() ? ''
+    // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
+    : `<div class="tip"><p><span class="sr-only">팁: </span>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
+  if (slot.innerHTML !== html) slot.innerHTML = html; // 같은 팁을 다시 그려 화면 읽기가 되풀이하지 않게
 }
 
 // ── 동작 ───────────────────────────────────────────
