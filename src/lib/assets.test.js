@@ -141,7 +141,7 @@ describe('화면 문구', () => {
 describe('백업에 자산이 들어간다', () => {
   test('없는 값은 빈 목록, 서버 시각은 뺌', () => {
     const b = buildBackup({ transactions: [{ id: 't', amount: 1, createdAt: 'x' }] }, new Date('2026-10-20T00:00:00Z'));
-    expect(b.version).toBe(4);
+    expect(b.version).toBe(5);
     expect(b.settings).toBeNull();
     expect(b.assetAccounts).toEqual([]);
     expect(b.holdings).toEqual([]);

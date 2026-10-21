@@ -625,4 +625,19 @@ describe('거래·반복의 누구 돈', () => {
     await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/plain'), REC));
     await assertFails(setDoc(doc(alice(), 'users/alice/recurring/bad'), { ...REC, owner: 'friend' }));
   });
+  test('owner가 있는 거래를 예전 앱처럼 빼 덮으면 거부한다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, owner: '배우자' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, memo: '수정' }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/transactions/tsp2'), { memo: '메모만' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, memo: '나로', owner: '나' }));
+  });
+  test('owner가 없는 거래는 예전 앱이 그대로 고친다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/told2'), TX));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/told2'), { ...TX, memo: '그대로' }));
+  });
+  test('owner가 있는 반복을 빼 덮으면 거부하고, 다른 칸만 고치는 것은 된다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/rent2'), { ...REC, owner: '공동' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/rent2'), REC));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/recurring/rent2'), { lastPosted: '2026-10' }));
+  });
 });

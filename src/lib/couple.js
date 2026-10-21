@@ -25,12 +25,16 @@ export function ownerToWrite(value) {
 /**
  * 시트에서 고른 값을 저장 필드로.
  * 기능이 꺼져 있으면 고른 값을 무시하고, 원래 문서에 있던 배우자·공동·나만 유지한다.
+ * 기능이 켜져 있고 '나'를 골랐을 때: 문서에 owner가 없으면 필드를 만들지 않는다.
+ * 이미 있으면 '나'를 적어 둔다. 필드를 지우면 예전 앱의 통째 덮어쓰기와 같아져,
+ * 규칙이 그 쓰기를 거부하거나 배우자·공동이 사라진다.
  */
 export function ownerForSave(picked, original, enabled) {
-  if (enabled) return ownerToWrite(picked);
   const prev = original?.owner;
-  if (prev === '배우자' || prev === '공동' || prev === '나') return prev;
-  return undefined;
+  const had = prev === '배우자' || prev === '공동' || prev === '나';
+  if (!enabled) return had ? prev : undefined;
+  if (picked === '배우자' || picked === '공동') return picked;
+  return had ? '나' : undefined;
 }
 
 export function spouseLabel(settings) {

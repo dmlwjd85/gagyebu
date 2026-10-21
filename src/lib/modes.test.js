@@ -183,11 +183,11 @@ describe('카테고리 한도 경고', () => {
   });
 });
 
-describe('백업 version 4', () => {
+describe('백업 version 5', () => {
   test('설정이 없으면 null, 예전 키는 그대로', () => {
     const b = buildBackup({ transactions: [{ id: 't', amount: 1, createdAt: 'x' }], profile: { monthStartDay: 25 } }, new Date('2026-10-21T00:00:00Z'));
     expect(b.version).toBe(BACKUP_VERSION);
-    expect(b.version).toBe(4);
+    expect(b.version).toBe(5);
     expect(b.settings).toBeNull();
     expect(b.profile).toEqual({ monthStartDay: 25 });
     expect(b.transactions[0]).toEqual({ id: 't', amount: 1 });

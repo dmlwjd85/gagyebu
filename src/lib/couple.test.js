@@ -23,13 +23,14 @@ describe('누구 돈 읽기·저장', () => {
     expect(row.owner).toBeUndefined();
     expect(Object.keys(row)).toEqual(['amount', 'kind', 'date', 'categoryId', 'id']);
   });
-  test('저장은 배우자·공동만 적고 나는 필드를 만들지 않는다', () => {
+  test('새 기록의 나는 필드를 만들지 않고, 있던 owner를 나로 바꿀 때는 나라고 적는다', () => {
     expect(ownerToWrite('나')).toBeUndefined();
     expect(ownerToWrite(undefined)).toBeUndefined();
     expect(ownerToWrite('배우자')).toBe('배우자');
     expect(ownerToWrite('공동')).toBe('공동');
     expect(ownerToWrite('friend')).toBeUndefined();
-    expect(ownerForSave('나', { owner: '배우자' }, true)).toBeUndefined();
+    expect(ownerForSave('나', {}, true)).toBeUndefined();
+    expect(ownerForSave('나', { owner: '배우자' }, true)).toBe('나');
     expect(ownerForSave('공동', { owner: '배우자' }, true)).toBe('공동');
     expect(ownerForSave('나', { owner: '배우자' }, false)).toBe('배우자');
     expect(ownerForSave('공동', {}, false)).toBeUndefined();
@@ -120,8 +121,28 @@ describe('백업의 owner', () => {
     expect(p.transactions[0].owner).toBe('배우자');
     expect('owner' in p.transactions[1]).toBe(false);
     expect(p.recurring[0].owner).toBe('공동');
+    expect(b.version).toBe(5);
     expect(p.settings.spouseName).toBe('민지');
     expect(p.settings.splitMe).toBe(60);
+  });
+  test('version 4 백업은 읽고, 이름·비율·없는 owner는 만들지 않는다', () => {
+    const old = {
+      app: 'gagyebu', version: 4, profile: { monthStartDay: 1 },
+      settings: { mode: 'couple', features: { txOwner: true } },
+      transactions: [{ id: 't1', amount: 12, createdAt: 'x' }, { id: 't2', amount: 9, owner: '배우자' }],
+      recurring: [{ id: 'r', name: '월세', owner: '공동' }],
+      categories: [],
+    };
+    const p = parseBackup(old);
+    expect(p.version).toBe(4);
+    expect(p.hasSettings).toBe(true);
+    expect(p.settings.mode).toBe('couple');
+    expect(p.settings.spouseName).toBeUndefined();
+    expect(p.settings.splitMe).toBeUndefined();
+    expect(p.transactions[0]).toEqual({ id: 't1', amount: 12 });
+    expect(p.transactions[1].owner).toBe('배우자');
+    expect(p.recurring[0].owner).toBe('공동');
+    expect(() => parseBackup({ app: 'gagyebu', version: 6, transactions: [] })).toThrow(/버전/);
   });
   test('version 3 백업은 owner를 만들지 않고 거래를 그대로 읽는다', () => {
     const old = { app: 'gagyebu', version: 3, profile: { monthStartDay: 25 }, transactions: [{ id: 't1', amount: 12, createdAt: 'x' }], categories: [] };
@@ -178,6 +199,7 @@ describe('부부 화면', () => {
     expect(html).toContain('6,000원');
     expect(html).toContain('4,000원');
     expect(html).toContain('민지가 나에게 4,000원');
+    expect(html).toContain('민지 입금과 공동 수입은 정산에 넣지 않아요');
     expect(html).toContain('0.5원');
     expect(html).not.toContain('다음 업데이트');
   });

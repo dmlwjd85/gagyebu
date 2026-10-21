@@ -24,6 +24,7 @@ import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup, parseBackup } from './lib/backup.js';
 import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, effectiveStartDay } from './lib/modes.js';
 import { ownerToWrite, spouseLabel } from './lib/couple.js';
+import { installUpdatePrompt } from './lib/pwaUpdate.js';
 import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
@@ -34,6 +35,7 @@ import { assetsView, taxView } from './ui/assetsView.js';
 import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
 
 initTheme();
+installUpdatePrompt();
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
 const app = $('#app');

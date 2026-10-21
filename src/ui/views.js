@@ -59,6 +59,7 @@ function settleCard(m) {
     : s.owes.from === '배우자' ? `${esc(josa(who, '이가'))} 나에게 ${formatWon(s.owes.amount)}`
     : `내가 ${esc(who)}에게 ${formatWon(s.owes.amount)}`;
   return `<section class="card-solid p-4" aria-labelledby="settle-h"><h2 id="settle-h" class="text-head">공동 지출 정산</h2>
+    <p class="mt-1 text-caption text-ink-sub break-words">${esc(who)} 입금과 공동 수입은 정산에 넣지 않아요.</p>
     <p class="mt-1 text-body break-words">공동 지출 ${formatWon(s.joint)} · 나 ${s.splitMe}% · ${esc(who)} ${s.splitSpouse}%</p>
     <div class="who-list mt-2">
       <p class="who-row"><span class="who-name">나 부담</span><span class="who-amt tabular-nums font-semibold">${formatWon(s.me)}</span></p>

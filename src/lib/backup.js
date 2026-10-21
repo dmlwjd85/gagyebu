@@ -1,13 +1,15 @@
 // JSON 백업(내 데이터는 내 것): 앱이 저장하는 모든 컬렉션을 담음. 서버 시각(createdAt·updatedAt·at)은 뺌
 // version 3: 주식·연금(assetAccounts·holdings·contributions·assetPrefs)을 더함. 기존 키는 그대로.
 // version 4: 쓰는 방식(settings)을 더함. 없으면 null. 1~3 백업은 settings 키가 없어도 읽힌다.
+// version 5: 배우자 표시 이름·공동 비율·거래 owner. 4 이하 앱은 version > 자기 상한을 거절하므로
+// 이름·비율을 조용히 버리지 않는다. 이 앱은 1~4도 그대로 읽는다.
 import { clampStartDay } from './dates.js';
 import { normalizeSettings } from './modes.js';
 import { sanitizeOwnerRow } from './couple.js';
 
 const strip = (o) => { const { createdAt, updatedAt, at, ...r } = o ?? {}; return r; };
 const owned = (row) => sanitizeOwnerRow(strip(row));
-export const BACKUP_VERSION = 4;
+export const BACKUP_VERSION = 5;
 export function buildBackup({ profile = {}, categories = [], accounts = [], transactions = [], budgets = [], rules = [], recurring = [], goals = [], imports = [], assetAccounts = [], holdings = [], contributions = [], assetPrefs = null, settings = null }, now = new Date()) {
   const prefs = settings ? normalizeSettings(settings) : null;
   return {
