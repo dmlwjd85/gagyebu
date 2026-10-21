@@ -319,7 +319,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && docId == 'prefs'
-          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'spouseName', 'splitMe', 'updatedAt'])
+          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'spouseName', 'splitMe', 'mood', 'font', 'decor', 'updatedAt'])
           && (!('mode' in d()) || d().mode in ['single', 'couple', 'student'])
           && optBool('askMode')
           && (!('features' in d()) || featuresOk(d().features))
@@ -329,6 +329,9 @@ service cloud.firestore {
           && optInt('allowanceDay', 1, 28)
           && (!('spouseName' in d()) || str(d().spouseName, 1, 20))
           && optInt('splitMe', 0, 100)
+          && (!('mood' in d()) || d().mood in ['default', 'sakura', 'ocean', 'maple', 'snow', 'retro'])
+          && (!('font' in d()) || d().font in ['system', 'pretendard', 'gaegu'])
+          && optBool('decor')
           && optTs('updatedAt');
       }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부

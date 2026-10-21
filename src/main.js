@@ -1,8 +1,7 @@
 import './style.css';
-// 글꼴 CSS(@font-face 92개, 약 49kB)는 화면 그리기를 막지 않게 따로 불러옴
-import('./fonts.css');
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, themeBannerHtml } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -35,6 +34,7 @@ import { assetsView, taxView } from './ui/assetsView.js';
 import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
 
 initTheme();
+initLook();
 installUpdatePrompt();
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
@@ -67,7 +67,7 @@ function model() {
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine, contentScale,
+    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale,
     mode: state.mode ?? null, legacyMode: state.legacyMode !== false && !state.mode, features: state.features, settings: state.settings ?? null,
   };
 }
@@ -86,13 +86,25 @@ function gateView({ caption, card }) {
   $('#boot-card').innerHTML = card;
   $('main', app)?.removeAttribute('aria-busy');
 }
+function pushLook(partial) {
+  const next = applyLook(writeLook({ ...readLook(), ...partial }));
+  ensureFont(next.font)?.then?.(() => { if ($('#main')) fitNums(); });
+  if (state.user && data?.saveSettings) {
+    const patch = { mood: next.mood, font: next.font, decor: next.decor };
+    if (state.settings) state.settings = { ...state.settings, ...patch };
+    data.saveSettings(patch);
+  }
+  render();
+}
 function render() {
+  if (state.user && state.settingsLoaded) adoptCloudLook(state.settings);
   if (redirectDone) exitGuard.sync({ loggedIn: !!state.user });
   if (!isFirebaseConfigured) return gateView(setupView());
   if (!state.ready) return; // index.html 의 첫 화면(브랜드 카드)을 그대로 둠
   if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
   const m = model();
   data.watchMonth(m.viewYm);
+  const banner = ui.view === 'home' ? '' : themeBannerHtml(m.look);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
   const scrollY = $('#main') ? scroller().scrollTop : 0;
   const mainFocused = document.activeElement?.id === 'main'; // 다시 그려도 본문 포커스 유지(PageDown·스페이스 스크롤)
@@ -109,7 +121,7 @@ function render() {
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-frame ${nav ? 'has-nav' : ''}">
       <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
-      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
+      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${banner}${body}</div></main>
       ${nav ? tabBar() : ''}
     </div>`;
   // 홈 숫자 롤링
@@ -578,6 +590,8 @@ app.addEventListener('click', async (e) => {
   if (d.clearFilter !== undefined) { ui.catFilter = null; return render(); }
   if (d.filterCat) return go('calendar', { mode: 'list', catFilter: d.filterCat });
   if (d.theme) { setThemeMode(d.theme); return render(); }
+  if (d.mood) return pushLook({ mood: d.mood });
+  if (d.fontPick) return pushLook({ font: d.fontPick });
   if (d.catKind) { ui.catKind = d.catKind; ui.emojiFor = null; return render(); }
   if (d.accEmoji) { ui.accEmojiFor = ui.accEmojiFor === d.accEmoji ? null : d.accEmoji; return render(); }
   if (d.accPick) { const a = state.accounts.find((x) => x.id === ui.accEmojiFor); ui.accEmojiFor = null; if (a) data.saveAccount({ ...a, emoji: d.accPick }); return render(); }
@@ -737,6 +751,7 @@ app.addEventListener('change', (e) => {
   }
   if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
+  if (t.dataset.decor !== undefined && t.type === 'checkbox') return pushLook({ decor: t.checked });
   // 가져오기
   if (t.dataset.impFile !== undefined) { impFile(t.files?.[0]); t.value = ''; return; }
   if (t.dataset.impCol && ui.imp) { IMP.setCol(ui.imp, Number(t.dataset.impCol), t.value); return render(); }

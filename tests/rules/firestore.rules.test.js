@@ -598,6 +598,19 @@ describe('쓰는 방식 settings/prefs', () => {
     await assertFails(getDoc(doc(anon(), 'users/alice/settings/prefs')));
     await assertFails(setDoc(doc(anon(), 'users/alice/settings/prefs'), { askMode: true }));
   });
+  test('분위기·글꼴·꾸미기는 설정에만 더하고 거래 필드는 그대로다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'single', askMode: false, mood: 'ocean', font: 'gaegu', decor: false }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { mood: 'maple', font: 'system', decor: true }));
+    const saved = await getDoc(doc(alice(), 'users/alice/settings/prefs'));
+    expect(saved.data()).toMatchObject({ mode: 'single', askMode: false, mood: 'maple', font: 'system', decor: true });
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mood: 'oceanx' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { font: 'comic' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { decor: 'yes' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-mood'), { ...TX, mood: 'sakura' }));
+    const tx = await getDoc(doc(alice(), 'users/alice/transactions/t1'));
+    expect(tx.data().mood).toBeUndefined();
+    expect(tx.data()).toMatchObject({ amount: 1000, kind: 'expense', categoryId: 'food' });
+  });
   test('배우자 이름·공동 비율', async () => {
     await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'couple', spouseName: '민지', splitMe: 60 }));
     await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 0 }));

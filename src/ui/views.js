@@ -13,6 +13,7 @@ import { josa } from '../lib/classify.js';
 import { weekDailyLeft, spentByDateFrom } from '../lib/pace.js';
 import { allowanceStatus } from '../lib/allowance.js';
 import { limitWarnings } from '../lib/budget.js';
+import { sanitizeLook, MOOD_OPTIONS, FONT_OPTIONS, heroArtHtml } from '../lib/look.js';
 
 const feat = (m, id) => featureOn(m.features, id);
 
@@ -142,9 +143,10 @@ export function homeView(m) {
   }
   const recent = m.periodTxs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)).slice(0, m.wide ? 6 : 3);
   const top3 = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3);
+  const art = heroArtHtml(m.look);
   return `<h1 class="sr-only">홈</h1><div class="view-grid">
     <div class="flex flex-col gap-3">
-      <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
+      <section class="hero-card ${art ? 'has-art' : 'px-5 pt-[18px]'} pb-4" aria-label="요약">${art}${art ? '<div class="hero-copy px-5 pt-3">' : ''}${hero}${art ? '</div>' : ''}</section>
       <section class="stat-grid" aria-label="이번 달 통계">
         ${spendStat(m.tot.expense)}
         ${stat('수입', (m.tot.income ? '+' : '') + compactWon(m.tot.income), formatWon(m.tot.income), 'text-income')}
@@ -440,6 +442,22 @@ const scaleControl = (v) => {
     </div>`;
 };
 
+function lookControls(m) {
+  const look = sanitizeLook(m.look);
+  const swatch = (colors) => colors.map((c, i) => `--sw${i + 1}:${c}`).join(';');
+  return `<div class="flex flex-col gap-2 min-w-0">
+      <p id="s-mood" class="text-body">분위기</p>
+      <div class="look-grid" role="radiogroup" aria-labelledby="s-mood">${MOOD_OPTIONS.map((o) => `<button type="button" class="look-pick" role="radio" aria-checked="${look.mood === o.id}" data-mood="${o.id}">
+        <span class="look-swatch" style="${swatch(o.sw)}" aria-hidden="true"></span><span class="look-name">${o.label}</span></button>`).join('')}</div>
+      <p id="s-font" class="text-body">글꼴</p>
+      <div class="look-grid" role="radiogroup" aria-labelledby="s-font">${FONT_OPTIONS.map((o) => `<button type="button" class="look-pick" role="radio" aria-checked="${look.font === o.id}" data-font-pick="${o.id}"><span class="look-name">${o.label}</span></button>`).join('')}</div>
+      <p class="text-caption text-ink-sub">시스템 기본은 이 기기 글꼴이에요. Pretendard와 손글씨(Gaegu)는 SIL OFL 1.1이라 앱에 실어 배포해요.</p>
+      <div class="opt-row"><span id="s-decor" class="opt-k">꾸미기 보기</span>
+        <label class="switch"><input type="checkbox" data-decor ${look.decor ? 'checked' : ''} aria-labelledby="s-decor"><span></span></label></div>
+      <p class="text-caption text-ink-sub">끄면 색만 남고 머리 그림은 숨겨요.</p>
+    </div>`;
+}
+
 export function settingsView(m, ui) {
   const kind = ui.catKind ?? 'expense';
   const list = m.categories.filter((c) => c.kind === kind);
@@ -454,6 +472,7 @@ export function settingsView(m, ui) {
       <button class="btn-ghost self-start" data-action="logout">로그아웃</button></section>
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-view"><h2 id="s-view" class="text-head">화면</h2>
       <div class="seg self-start" role="radiogroup" aria-label="테마">${[['system', '시스템'], ['light', '라이트'], ['dark', '다크']].map(([v, l]) => `<button role="radio" aria-checked="${m.themeMode === v}" data-theme="${v}">${l}</button>`).join('')}</div>
+      ${lookControls(m)}
       ${feat(m, 'monthStart') ? `<label class="opt-row"><span class="opt-k">한 달 시작일 (월급날)</span>
         <select class="select" data-start-day aria-label="한 달 시작일">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${(m.storedStart ?? m.sd) === i + 1 ? 'selected' : ''}>${i + 1}일</option>`).join('')}</select></label>` : ''}
       <label class="flex items-center justify-between gap-2 text-body">진동 피드백<label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동 피드백"><span></span></label></label>

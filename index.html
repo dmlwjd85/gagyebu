@@ -13,8 +13,18 @@
   <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
   <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
   <script>
-    // 첫 화면 깜빡임 방지: 렌더 전에 다크 클래스 결정
-    try { var t = localStorage.getItem('theme'); if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark'); } catch (e) {}
+    // 첫 화면 깜빡임 방지: 렌더 전에 다크 클래스·분위기·글꼴을 정함 (src/lib/theme.js, src/lib/look.js 와 같은 키)
+    try {
+      var t = localStorage.getItem('theme');
+      if (t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('dark');
+      var moods = { default: 1, sakura: 1, ocean: 1, maple: 1, snow: 1, retro: 1 };
+      var m = localStorage.getItem('mood');
+      document.documentElement.dataset.theme = moods[m] ? m : 'default';
+      var fonts = { system: 1, pretendard: 1, gaegu: 1 };
+      var f = localStorage.getItem('font');
+      document.documentElement.dataset.font = fonts[f] ? f : 'pretendard';
+      document.documentElement.dataset.decor = localStorage.getItem('decor') === 'off' ? 'off' : 'on';
+    } catch (e) {}
   </script>
 </head>
 <body>
