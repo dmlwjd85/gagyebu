@@ -53,9 +53,13 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,svg,png}'],
+        // 좁은 화면용 480 그림만 설치 캐시(합계 약 45KB). 960은 본 뒤에 CacheFirst.
+        globPatterns: ['**/*.{js,css,html,svg,png}', 'themes/*-480.webp'],
         // 폰트 조각(92개)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
-        runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
+        runtimeCaching: [
+          { urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } },
+          { urlPattern: ({ url }) => /\/themes\/[^/]+-960\.webp$/.test(url.pathname), handler: 'CacheFirst', options: { cacheName: 'theme-art', expiration: { maxEntries: 8, maxAgeSeconds: 31536000 } } },
+        ],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
       },
