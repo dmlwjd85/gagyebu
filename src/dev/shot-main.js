@@ -7,7 +7,7 @@ import { fitNums } from '../ui/util.js';
 import { period, periodOf } from '../lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather } from '../lib/stats.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../lib/defaults.js';
-import { topBar, homeView, chartView, budgetView, settingsView, onboardingView } from '../ui/views.js';
+import { topBar, homeView, calendarView, chartView, budgetView, settingsView, onboardingView } from '../ui/views.js';
 import { resolveMode, settingsForMode } from '../lib/modes.js';
 
 const q = new URLSearchParams(location.search);
@@ -33,6 +33,13 @@ const txs = [
 const categories = DEFAULT_CATEGORIES;
 const catMap = new Map(categories.map((c) => [c.id, c]));
 const accounts = DEFAULT_ACCOUNTS;
+const mode = q.get('mode');
+if (mode === 'couple') {
+  txs[0].owner = '공동';
+  txs[2].owner = '배우자';
+  txs.push({ id: 'h', date: '2026-10-03', amount: 2400000, kind: 'income', categoryId: 'salary', memo: '월급', accountId: 'bank', owner: '배우자' });
+  txs.push({ id: 'i', date: '2026-10-16', amount: 32000, kind: 'expense', categoryId: 'living', memo: '장보기', accountId: 'card', owner: '공동' });
+}
 const periodTxs = filterPeriod(txs, p);
 const tot = totals(periodTxs);
 const budget = { total: 1500000, byCategory: { food: 300000, cafe: 50000, housing: 600000 } };
@@ -51,9 +58,8 @@ const m = {
   streak: 2, noSpend: 4, insight: null,
   wide: false, dark: currentTheme() === 'dark', themeMode: 'light', offline: false, contentScale: scale, storedStart: sd,
 };
-const mode = q.get('mode');
 const settings = (mode === 'single' || mode === 'student' || mode === 'couple')
-  ? { ...settingsForMode(mode), allowanceAmount: 800000, allowanceCycle: 'month', allowanceDay: 1 }
+  ? { ...settingsForMode(mode), allowanceAmount: 800000, allowanceCycle: 'month', allowanceDay: 1, ...(mode === 'couple' ? { spouseName: '민지', splitMe: 60 } : {}) }
   : null;
 const info = resolveMode(settings);
 m.mode = info.mode;
@@ -74,6 +80,7 @@ const body = screen === 'onboard' ? onboardingView() : ({
   settings: () => settingsView(m, ui),
   budget: () => budgetView(m, ui),
   chart: () => chartView(m, ui),
+  list: () => calendarView(m, { mode: 'list', ownerFilter: q.get('who') || null }),
 }[screen]?.() ?? homeView(m));
 
 document.body.classList.add('has-frame');

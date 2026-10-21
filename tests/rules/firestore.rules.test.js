@@ -598,4 +598,46 @@ describe('쓰는 방식 settings/prefs', () => {
     await assertFails(getDoc(doc(anon(), 'users/alice/settings/prefs')));
     await assertFails(setDoc(doc(anon(), 'users/alice/settings/prefs'), { askMode: true }));
   });
+  test('배우자 이름·공동 비율', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'couple', spouseName: '민지', splitMe: 60 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 0 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 100, spouseName: '가'.repeat(20) }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { spouseName: '' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { spouseName: '가'.repeat(21) }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 101 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 50.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: -1 }));
+  });
+});
+
+describe('거래·반복의 누구 돈', () => {
+  test('나·배우자·공동만 허용하고, 없는 예전 거래는 그대로', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-me'), { ...TX, owner: '나' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-sp'), { ...TX, kind: 'income', categoryId: 'salary', owner: '배우자', memo: '배우자 월급' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-sh'), { ...TX, owner: '공동' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-old'), TX));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/transactions/t1'), { memo: '그대로' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-bad'), { ...TX, owner: 'bob' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-bad2'), { ...TX, owner: 'me' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-bad3'), { ...TX, owner: '' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/rent'), { ...REC, owner: '공동' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/pay'), { ...REC, kind: 'income', categoryId: 'salary', name: '배우자 월급', owner: '배우자' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/plain'), REC));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/bad'), { ...REC, owner: 'friend' }));
+  });
+  test('owner가 있는 거래를 예전 앱처럼 빼 덮으면 거부한다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, owner: '배우자' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, memo: '수정' }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/transactions/tsp2'), { memo: '메모만' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, memo: '나로', owner: '나' }));
+  });
+  test('owner가 없는 거래는 예전 앱이 그대로 고친다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/told2'), TX));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/told2'), { ...TX, memo: '그대로' }));
+  });
+  test('owner가 있는 반복을 빼 덮으면 거부하고, 다른 칸만 고치는 것은 된다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/rent2'), { ...REC, owner: '공동' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/rent2'), REC));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/recurring/rent2'), { lastPosted: '2026-10' }));
+  });
 });

@@ -322,6 +322,23 @@
   /* 라벨은 1행, 금액은 2행. 한쪽 라벨이 줄바꿈돼도 옆 칸 금액과 같은 높이에 둔다. */
   .pace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: start; }
   .pace-grid > * { min-width: 0; overflow-wrap: anywhere; }
+  .owner-picks { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+  .owner-picks > .chip { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+  /* 360px·글자 160%에서도 네 칸이 한 줄. 긴 배우자 이름만 말줄임 */
+  .owner-seg { display: flex; flex-wrap: nowrap; width: 100%; }
+  .owner-seg > button { flex: 1 1 0; min-width: 0; height: auto; min-height: 44px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-left: 0.25rem; padding-right: 0.25rem; }
+  .who-list { display: flex; flex-direction: column; gap: 8px; }
+  .who-row { display: flex; flex-wrap: wrap; align-items: baseline; justify-content: space-between; gap: 2px 12px; min-width: 0; }
+  .who-name { flex: 1 1 auto; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+  /* 금액은 숫자 중간에서 쪼개지 않음. 칸이 좁으면 금액 전체가 다음 줄로 내려감 */
+  .who-amt { flex: 1 0 auto; margin-left: auto; max-width: 100%; white-space: nowrap; overflow-wrap: normal; text-align: right; }
+  .update-banner { position: fixed; z-index: 80; left: max(12px, env(safe-area-inset-left)); right: max(12px, env(safe-area-inset-right)); top: max(8px, env(safe-area-inset-top));
+    display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+  .update-banner p { margin: 0; flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
+  .update-banner button { flex: 0 0 auto; white-space: nowrap; }
+  .owner-chip { display: inline-block; max-width: 100%; margin-top: 2px; padding: 0 0.45rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.75em; line-height: 1.45; overflow-wrap: anywhere; }
+  .owner-chip.is-deposit { font-weight: 700; color: var(--income); border-color: var(--income); background: color-mix(in srgb, var(--income) 14%, transparent); }
+  .owner-chip.is-shared { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
   .mode-later { width: 100%; height: auto; white-space: normal; text-align: center; line-height: 1.4; }
 }
 

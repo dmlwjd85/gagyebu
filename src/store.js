@@ -1,12 +1,13 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache, getDoc, getDocFromCache } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, deleteField, writeBatch, serverTimestamp, getDocs, getDocsFromCache, getDoc, getDocFromCache } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
 import { resolveMode, STUDENT_INCOME, effectiveStartDay } from './lib/modes.js';
+import { ownerToWrite } from './lib/couple.js';
 import { ackOrTimeout, RESTORE_ACK_MS } from './lib/restoreWait.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
@@ -101,7 +102,7 @@ export function postRecurring(today) {
     const due = dueOccurrences(r, today);
     if (!due.length) continue;
     for (const o of due) {
-      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: r.id, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: r.id, owner: ownerToWrite(r.owner), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), { merge: true });
       n++;
     }
     b.update(u('recurring', r.id), { lastPosted: due[due.length - 1].ym, updatedAt: serverTimestamp() });
@@ -146,15 +147,25 @@ export function watchMonth(ym) {
 }
 
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ''));
-const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4 }) =>
-  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4 });
+const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4, owner }) =>
+  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4, owner: owner === '나' ? '나' : ownerToWrite(owner) });
+// 고칠 때 비울 수 있는 칸. owner는 넣지 않는다(없으면 서버 값을 남김).
+const TX_CLEAR = ['accountId', 'memo', 'tags', 'importHash', 'importBatch', 'recurringId', 'card4'];
+const cleared = (data, keys) => {
+  const out = { ...data };
+  for (const k of keys) if (!(k in out)) out[k] = deleteField();
+  return out;
+};
 export const tagsOf = (memo = '') => [...new Set((memo.match(/#[^\s#]{1,20}/g) || []).map((t) => t.slice(1)))].slice(0, 20);
 
 export function saveTx(tx) {
   const ref = tx.id ? u('transactions', tx.id) : doc(col('transactions'));
   const data = { ...txFields({ ...tx, tags: tagsOf(tx.memo) }), updatedAt: serverTimestamp(), ...(tx.id ? {} : { createdAt: serverTimestamp() }) };
   if (tx.id && tx.createdAt) data.createdAt = tx.createdAt;
-  fire(setDoc(ref, data), writeErrorHandler);
+  // 고치기: 아는 칸만 합친다. 이 버전이 모르는 칸과, 빠뜨린 owner는 서버에 남는다.
+  // 비운 메모·결제수단 등은 지운다. 새 기록은 통째로 만든다.
+  if (tx.id) fire(setDoc(ref, cleared(data, TX_CLEAR), { merge: true }), writeErrorHandler);
+  else fire(setDoc(ref, data), writeErrorHandler);
   return ref.id;
 }
 // 여러 건 한 번에 저장 (400건씩 묶음)
@@ -169,6 +180,8 @@ export async function saveTxBatch(list) {
 export function restoreTx(tx) {
   const { id, ...rest } = tx;
   const data = { ...txFields(rest), ...(rest.createdAt ? { createdAt: rest.createdAt } : {}), updatedAt: serverTimestamp() };
+  // 스냅샷에 owner가 없으면 '나'. 필드를 빼면 규칙이 덮어쓰기를 거부한다. 읽는 값은 나와 같다.
+  if (!data.owner) data.owner = '나';
   const p = setDoc(u('transactions', id), data).catch(async (e) => {
     if (e?.code !== 'permission-denied') throw e;
     const ref = doc(col('transactions'));
@@ -218,7 +231,12 @@ export function setProfile(patch) {
   fire(setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
 }
 export function saveSettings(patch) {
-  fire(setDoc(u('settings', 'prefs'), clean({ ...patch, updatedAt: serverTimestamp() }), { merge: true }), writeErrorHandler);
+  const data = { updatedAt: serverTimestamp() };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) data[k] = deleteField();
+    else if (v !== undefined && v !== '') data[k] = v;
+  }
+  fire(setDoc(u('settings', 'prefs'), data, { merge: true }), writeErrorHandler);
 }
 // 알바·심부름. 이미 있는 카테고리는 이름·이모지를 덮지 않는다.
 export async function ensureStudentIncome() {
@@ -241,8 +259,13 @@ export const deleteRule = (id) => fire(deleteDoc(u('rules', id)), writeErrorHand
 
 export function saveRecurring(r) {
   const ref = r.id ? u('recurring', r.id) : doc(col('recurring'));
-  fire(setDoc(ref, clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) })), writeErrorHandler);
+  const data = clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, owner: r.owner === '나' ? '나' : ownerToWrite(r.owner),
+    updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) });
+  if (r.id) {
+    if (!('accountId' in data)) data.accountId = deleteField();
+    fire(setDoc(ref, data, { merge: true }), writeErrorHandler);
+  } else fire(setDoc(ref, data), writeErrorHandler);
   return ref.id;
 }
 export const deleteRecurring = (id) => fire(deleteDoc(u('recurring', id)), writeErrorHandler);

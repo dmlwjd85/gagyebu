@@ -28,8 +28,11 @@ export default defineConfig({
   plugins: [
     preloadMainFonts(),
     VitePWA({
-      registerType: 'autoUpdate',
-      injectRegister: 'script-defer',
+      // prompt: 새 워커가 기다리면 앱이 '새 버전으로 업데이트해 주세요'를 한 번 띄운다.
+      // skipWaiting: 이미 깔린 예전 앱(autoUpdate)이 activated 때 새로고침하도록 워커는 바로 활성화.
+      registerType: 'prompt',
+      injectRegister: false,
+
       includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
         name: '쓱 가계부',
@@ -48,6 +51,8 @@ export default defineConfig({
         ],
       },
       workbox: {
+        skipWaiting: true,
+        clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png}'],
         // 폰트 조각(92개)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
         runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],

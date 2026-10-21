@@ -6,6 +6,7 @@ import { nextDue, monthlyFixed, detectSubscriptions } from '../lib/recurring.js'
 import { goalProgress } from '../lib/goals.js';
 import { ring } from './charts.js';
 import { txRow } from './views.js';
+import { spouseLabel } from '../lib/couple.js';
 
 const back = (to, label) => `<button class="icon-btn" data-nav="${to}" aria-label="${label}">‹</button>`;
 /** 기간 고르기 → { from, to } (to 포함) */
@@ -69,7 +70,7 @@ export function recurringView(m) {
           <button class="flex-1 min-w-[min(100%,7em)] text-left min-h-[44px]" data-rec-edit="${esc(r.id)}">
             <span class="block text-body font-semibold break-words">${esc(r.name)}</span>
             <span class="block text-body font-semibold tabular-nums ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span>
-            <span class="block text-caption text-ink-sub">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}</span><span class="sr-only">, 고치기</span></button>
+            <span class="block text-caption text-ink-sub break-words">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}${r.owner === '배우자' || r.owner === '공동' ? ` · ${esc(r.owner === '배우자' ? spouseLabel(m.settings) : '공동')}` : ''}</span><span class="sr-only">, 고치기</span></button>
           <label class="switch"><input type="checkbox" data-rec-active="${esc(r.id)}" ${r.active ? 'checked' : ''} aria-label="${esc(r.name)} 자동 기록" /><span></span></label>
           <button class="icon-btn" data-rec-del="${esc(r.id)}" aria-label="${esc(r.name)} 삭제">🗑️</button></li>`;
       }).join('')}</ul>` : '<div class="py-6 text-center"><p class="text-4xl" aria-hidden="true">🔁</p><p class="mt-2 text-body text-ink-sub">아직 반복 거래가 없어요.</p></div>'}

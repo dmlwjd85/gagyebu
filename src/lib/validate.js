@@ -1,4 +1,5 @@
 import { isYmd } from './dates.js';
+import { OWNERS } from './couple.js';
 export const MAX_AMOUNT = 1_000_000_000;
 export const MAX_MEMO = 200;
 // 저장 전 클라이언트 검증 (firestore.rules 와 같은 기준)
@@ -10,6 +11,7 @@ export function validateTx(t) {
   if (!t.categoryId) return '카테고리를 골라 주세요.';
   if (!isYmd(t.date)) return '날짜가 올바르지 않아요.';
   if ((t.memo ?? '').length > MAX_MEMO) return `메모는 ${MAX_MEMO}자까지 쓸 수 있어요.`;
+  if (t.owner != null && t.owner !== '' && !OWNERS.includes(t.owner)) return '누구 돈은 나, 배우자, 공동 중에서 골라 주세요.';
   return null;
 }
 export function validateCategory(c) {

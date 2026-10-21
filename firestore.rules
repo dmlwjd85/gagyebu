@@ -107,13 +107,14 @@ service cloud.firestore {
         && optBool('seeded') && optTs('createdAt') && optTs('updatedAt');
 
       // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
+      // 업데이트에 owner가 이미 있으면 요청에도 있어야 한다. 예전 앱의 set()은 그 칸을 몰라 통째로 지운다.
       match /transactions/{docId} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create: if isOwner(uid)
           && txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
-                                 'importHash', 'importBatch', 'recurringId', 'card4'])
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner'])
           && d().amount is int && d().amount <= 1000000000
           && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
           && d().kind in ['expense', 'income']
@@ -126,6 +127,26 @@ service cloud.firestore {
           && (!('importBatch' in d()) || batchId(d().importBatch))
           && (!('recurringId' in d()) || id(d().recurringId))
           && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && optTs('createdAt') && optTs('updatedAt');
+        allow update: if isOwner(uid)
+          && txDocId(docId)
+          && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
+          && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner'])
+          && d().amount is int && d().amount <= 1000000000
+          && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
+          && d().kind in ['expense', 'income']
+          && ymd(d().date)
+          && id(d().categoryId)
+          && (!('accountId' in d()) || id(d().accountId)) && optStr('memo', 200)
+          && (!('tags' in d()) || tagsOk(d().tags))
+          && (!('importHash' in d()) || (d().importHash is string && d().importHash.matches('^[0-9a-f]{16}$')))
+          && (!('importBatch' in d()) || batchId(d().importBatch))
+          && (!('recurringId' in d()) || id(d().recurringId))
+          && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && (!('owner' in resource.data) || 'owner' in d())
           && optTs('createdAt') && optTs('updatedAt');
       }
 
@@ -177,12 +198,13 @@ service cloud.firestore {
       }
 
       // 반복 거래(월세·구독): 매달 dayOfMonth일에 자동 기록
+      // 거래와 같이, 이미 있는 owner를 업데이트에서 빼면 거부한다.
       match /recurring/{docId} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create: if isOwner(uid)
           && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
-          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'owner', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
@@ -190,6 +212,21 @@ service cloud.firestore {
           && d().active is bool
           && ym(d().startYm)
           && (!('lastPosted' in d()) || ym(d().lastPosted))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && optTs('createdAt') && optTs('updatedAt');
+        allow update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'owner', 'createdAt', 'updatedAt'])
+          && str(d().name, 1, 30)
+          && d().amount is int && d().amount > 0 && d().amount <= 1000000000
+          && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
+          && d().dayOfMonth is int && d().dayOfMonth >= 1 && d().dayOfMonth <= 31
+          && d().active is bool
+          && ym(d().startYm)
+          && (!('lastPosted' in d()) || ym(d().lastPosted))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && (!('owner' in resource.data) || 'owner' in d())
           && optTs('createdAt') && optTs('updatedAt');
       }
 
@@ -282,7 +319,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && docId == 'prefs'
-          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'updatedAt'])
+          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'spouseName', 'splitMe', 'updatedAt'])
           && (!('mode' in d()) || d().mode in ['single', 'couple', 'student'])
           && optBool('askMode')
           && (!('features' in d()) || featuresOk(d().features))
@@ -290,6 +327,8 @@ service cloud.firestore {
           && (!('allowanceCycle' in d()) || d().allowanceCycle in ['week', 'month'])
           && optInt('allowanceWeekday', 0, 6)
           && optInt('allowanceDay', 1, 28)
+          && (!('spouseName' in d()) || str(d().spouseName, 1, 20))
+          && optInt('splitMe', 0, 100)
           && optTs('updatedAt');
       }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부

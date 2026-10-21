@@ -1,11 +1,11 @@
 // 쓰는 방식(1인 가구·부부·학생)과 기능 스위치.
 // 모드 문서가 없는 기존 사용자는 지금 보이는 메뉴를 그대로 둔다.
-// 부부 '거래 주인'은 자리만 둔다. 거래 문서에는 이 PR에서 필드를 붙이지 않는다.
+// 부부 거래 주인(owner)은 선택 필드다. 없는 거래는 '나'로 읽고, 여기에서는 문서를 고치지 않는다.
 import { clampStartDay } from './dates.js';
 
 export const MODES = [
   { id: 'single', label: '1인 가구', emoji: '🏠', blurb: '월세·구독, 월급날, 오늘·이번 주 몫' },
-  { id: 'couple', label: '부부', emoji: '💑', blurb: '함께 보는 가계부. 누가 썼는지는 곧 나와요.' },
+  { id: 'couple', label: '부부', emoji: '💑', blurb: '나·배우자·공동과 비율 정산' },
   { id: 'student', label: '학생', emoji: '🎓', blurb: '용돈, 저금통, 한도, 알바·심부름' },
 ];
 
@@ -19,7 +19,7 @@ export const FEATURES = [
   { id: 'categoryLimits', label: '카테고리 한도', hint: '한도에 가까우면 알려요', group: 'student' },
   { id: 'studentIncome', label: '알바·심부름', hint: '수입 카테고리', group: 'student' },
   { id: 'monthShare', label: '월간 요약 공유', hint: '글과 이미지로 공유', group: 'student' },
-  { id: 'txOwner', label: '거래별 누구 돈', hint: '다음 업데이트에서 기록에 붙여요', group: 'couple', implemented: false },
+  { id: 'txOwner', label: '거래별 누구 돈', hint: '나·배우자·공동. 공동 지출은 비율로 정산해요', group: 'couple' },
 ];
 
 export const FEATURE_IDS = FEATURES.map((f) => f.id);
@@ -45,12 +45,13 @@ export const LEGACY_FEATURES = {
   txOwner: false,
 };
 
-/** PR2가 거래에 붙일 필드 이름. 지금은 구현하지 않는다. */
+/** 거래에 붙이는 선택 필드. 값은 '나' | '배우자' | '공동'. 없으면 '나'로 읽는다. */
 export const COUPLE_OWNER_FIELD = 'owner';
-export const COUPLE_OWNER_IMPLEMENTED = false;
+export const COUPLE_OWNER_IMPLEMENTED = true;
 
 export function coupleOwnerHook(tx = null) {
-  return { field: COUPLE_OWNER_FIELD, implemented: COUPLE_OWNER_IMPLEMENTED, tx };
+  const owner = tx?.owner === '배우자' || tx?.owner === '공동' || tx?.owner === '나' ? tx.owner : '나';
+  return { field: COUPLE_OWNER_FIELD, implemented: COUPLE_OWNER_IMPLEMENTED, tx, owner };
 }
 
 export const STUDENT_INCOME = [
@@ -118,6 +119,11 @@ export function normalizeSettings(raw) {
   if (raw.allowanceCycle === 'week' || raw.allowanceCycle === 'month') out.allowanceCycle = raw.allowanceCycle;
   if (Number.isInteger(raw.allowanceWeekday) && raw.allowanceWeekday >= 0 && raw.allowanceWeekday <= 6) out.allowanceWeekday = raw.allowanceWeekday;
   if (Number.isInteger(raw.allowanceDay) && raw.allowanceDay >= 1 && raw.allowanceDay <= 28) out.allowanceDay = raw.allowanceDay;
+  if (typeof raw.spouseName === 'string') {
+    const name = raw.spouseName.trim();
+    if (name.length >= 1 && name.length <= 20 && !/[\n\r]/.test(name)) out.spouseName = name;
+  }
+  if (Number.isInteger(raw.splitMe) && raw.splitMe >= 0 && raw.splitMe <= 100) out.splitMe = raw.splitMe;
   return out;
 }
 

@@ -180,7 +180,7 @@ describe('N13 긴 이름(공백 없는 20자) 넘침 방지 구조', () => {
   test('라벨+select 줄은 모두 opt-row(가져오기 결제수단·금액 부호, 설정 시작일)', () => {
     const src = ['src/ui/importer.js', 'src/ui/views.js'].map((f) => readFileSync(f, 'utf8')).join('\n');
     expect(src).not.toMatch(/<label class="flex items-center justify-between[^"]*">[^<]+<select/);
-    expect(src.match(/<label class="opt-row"><span class="opt-k">/g).length).toBe(3);
+    expect(src.match(/<label class="opt-row"><span class="opt-k">/g).length).toBe(4);
   });
   test('반복 목록: 금액을 이름 아랫줄로(이름 칸이 금액에 눌리지 않음)', () => {
     const html = recurringView(model('2026-10', { extra: { recurring: [{ id: 'r', name: '가'.repeat(30), amount: 17000, kind: 'expense', categoryId: 'food', dayOfMonth: 5, active: true, startYm: '2026-10' }] } }));

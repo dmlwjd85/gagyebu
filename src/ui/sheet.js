@@ -10,6 +10,8 @@ import {
   smsPasteRow, smsHtml, blankSms, fillFromClipboard, applySmsText, setSmsStatus,
   applySmsInput, smsTx, advanceSms,
 } from './smsSheet.js';
+import { ownerPickHtml } from './views.js';
+import { ownerOf, ownerForSave, spouseLabel } from '../lib/couple.js';
 
 let el, ctx, s, lastFocus, longPressAt = 0;
 const recentKey = 'recentCats';
@@ -44,8 +46,8 @@ export function openSheet(tx = null, { date } = {}) {
   lastFocus = document.activeElement;
   const lastAcc = localStorage.getItem('lastAccount');
   s = tx
-    ? { id: tx.id, orig: tx, refund: tx.amount < 0, createdAt: tx.createdAt, kind: tx.kind, digits: String(Math.abs(tx.amount)), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', more: false, showOpts: true, error: '' }
-    : { kind: 'expense', digits: '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', more: false, showOpts: false, error: '' };
+    ? { id: tx.id, orig: tx, refund: tx.amount < 0, createdAt: tx.createdAt, kind: tx.kind, digits: String(Math.abs(tx.amount)), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', owner: ownerOf(tx), more: false, showOpts: true, error: '' }
+    : { kind: 'expense', digits: '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', owner: '나', more: false, showOpts: false, error: '' };
   render();
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
@@ -103,6 +105,8 @@ function render() {
         ${list.length > 8 && !s.more ? `<button class="cat-chip" data-more><span class="text-2xl leading-none" aria-hidden="true">⋯</span><span class="cat-name">더보기</span></button>` : ''}
       </div>
     </div>
+    ${st.features?.txOwner ? `<div class="px-5 pt-3 flex flex-col gap-2 min-w-0">${ownerPickHtml(s.owner, spouseLabel(st.settings))}
+      <p class="text-caption text-ink-sub break-words">${s.kind === 'income' ? '배우자 입금이면 배우자를 고르세요. ' : ''}같이 쓴 지출은 공동이에요. 나는 기록에 누구 돈을 적지 않아요.</p></div>` : ''}
     ${s.showOpts ? `<div class="px-5 pt-3 grid gap-2">
         <label class="opt-row relative"><span aria-hidden="true">📅</span>
           <span class="flex-1 text-body" aria-hidden="true">${esc(longDate(s.date, today))}</span><span class="text-caption text-ink-sub font-semibold" aria-hidden="true">바꾸기 ›</span>
@@ -143,7 +147,11 @@ function press(k) {
 async function save() {
   // 카드 환불(음수 지출)은 고쳐도 환불로 남김. 가져오기 지문·묶음 id·카드 끝 4자리·반복 id도 그대로 둠
   const refund = s.refund && s.kind === 'expense';
-  const tx = withKeptFields({ id: s.id, createdAt: s.createdAt, kind: s.kind, amount: refund ? -amount() : amount(), categoryId: s.categoryId, date: s.date, accountId: s.accountId || undefined, memo: s.memo.trim() }, s.orig);
+  const stNow = ctx.getState();
+  const base = { id: s.id, createdAt: s.createdAt, kind: s.kind, amount: refund ? -amount() : amount(), categoryId: s.categoryId, date: s.date, accountId: s.accountId || undefined, memo: s.memo.trim() };
+  const owner = ownerForSave(s.owner, s.orig, !!stNow.features?.txOwner);
+  if (owner) base.owner = owner;
+  const tx = withKeptFields(base, s.orig);
   const err = validateTx(tx);
   if (err) { s.error = err; s.shake = true; haptic(20); render(); return; }
   if (!s.id) {
@@ -193,6 +201,7 @@ function onSmsClick(t) {
   }
   if (t.dataset.smsStatus && s.sms.draft) { setSmsStatus(s.sms.draft, t.dataset.smsStatus, ctx.getState()); return render(); }
   if (t.dataset.smsCat && s.sms.draft) { s.sms.draft.categoryId = t.dataset.smsCat; s.sms.draft.catTouched = true; s.sms.draft.error = ''; return render(); }
+  if (t.dataset.smsOwner && s.sms.draft) { s.sms.draft.owner = t.dataset.smsOwner; return render(); }
   if (t.dataset.smsAcc && s.sms.draft) {
     s.sms.draft.accountId = s.sms.draft.accountId === t.dataset.smsAcc ? '' : t.dataset.smsAcc;
     s.sms.draft.accTouched = true;
@@ -234,6 +243,7 @@ function onClick(e) {
   if (t.dataset.cat) { s.categoryId = t.dataset.cat; s.error = ''; haptic(); render(); $(`[data-cat="${CSS.escape(s.categoryId)}"]`, el)?.classList.add('pop'); return; }
   if (t.hasAttribute('data-more')) { s.more = true; return render(); }
   if (t.hasAttribute('data-opts')) { s.showOpts = true; render(); return $('[data-acc]', el)?.focus(); }
+  if (t.dataset.owner) { s.owner = t.dataset.owner; haptic(); return render(); }
   if (t.dataset.acc) { s.accountId = s.accountId === t.dataset.acc ? '' : t.dataset.acc; return render(); }
   if (t.hasAttribute('data-repeat')) { s.repeat = !s.repeat; haptic(); return render(); }
   if (t.hasAttribute('data-save')) { if (Date.now() - longPressAt < 400) return; return save(); }
