@@ -6,6 +6,8 @@ import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
+import { resolveMode, STUDENT_INCOME, effectiveStartDay } from './lib/modes.js';
+import { ackOrTimeout, RESTORE_ACK_MS } from './lib/restoreWait.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
@@ -56,6 +58,12 @@ export function startUser() {
     state.goals = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     emit();
   }));
+  unsubs.push(onSnapshot(u('settings', 'prefs'), (s) => {
+    state.settings = s.exists() ? { id: s.id, ...s.data() } : null;
+    state.settingsLoaded = true;
+    applyMode(state.settings);
+    emit();
+  }));
   let posted = false;
   const byOrder = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
   unsubs.push(onSnapshot(col('assetAccounts'), (s) => { state.assetAccounts = byOrder(s); emit(); }));
@@ -77,7 +85,17 @@ export function startUser() {
 }
 
 // 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
+function applyMode(settings) {
+  const info = resolveMode(settings);
+  state.mode = info.mode;
+  state.legacyMode = info.legacy;
+  state.features = info.features;
+  state.askMode = info.askMode;
+}
+
 export function postRecurring(today) {
+  // 설정을 받기 전에는 기존과 같이 기록(모드 없는 사용자). 기능을 끄면 새 기록만 멈춘다. 이미 있는 거래는 그대로.
+  if (state.settingsLoaded && state.features && !state.features.recurring) return 0;
   const b = writeBatch(db); let n = 0;
   for (const r of state.recurring) {
     const due = dueOccurrences(r, today);
@@ -99,12 +117,14 @@ async function seedDefaults() {
   DEFAULT_ACCOUNTS.forEach(({ id, ...a }, order) => b.set(u('accounts', id), { ...a, order }));
   b.set(u(), { displayName: state.user.displayName ?? '', currency: 'KRW', monthStartDay: 1, seeded: true, createdAt: serverTimestamp() });
   fire(b.commit(), writeErrorHandler);
+  // 첫 시작 안내. 규칙이 아직 없으면 실패해도 기본 데이터는 남고, 메뉴는 지금과 같이 모두 보인다.
+  fire(setDoc(u('settings', 'prefs'), { askMode: true, updatedAt: serverTimestamp() }), () => {});
 }
 
 // 보고 있는 달 기준 6개 기간 거래 구독(차트 추이용)
 export function watchMonth(ym) {
   if (!state.user) return;
-  const sd = state.profile?.monthStartDay ?? 1;
+  const sd = effectiveStartDay(state.profile?.monthStartDay ?? 1, state.features);
   const start = period(shiftYm(ym, -5), sd).start, end = period(ym, sd).end;
   const key = `${start}~${end}`;
   if (state.txWindow !== key) {
@@ -196,6 +216,20 @@ export function setBudget(ym, total, byCategory) {
 }
 export function setProfile(patch) {
   fire(setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
+}
+export function saveSettings(patch) {
+  fire(setDoc(u('settings', 'prefs'), clean({ ...patch, updatedAt: serverTimestamp() }), { merge: true }), writeErrorHandler);
+}
+// 알바·심부름. 이미 있는 카테고리는 이름·이모지를 덮지 않는다.
+export async function ensureStudentIncome() {
+  for (const c of STUDENT_INCOME) {
+    const ref = u('categories', c.id);
+    let exists = state.categories?.some((x) => x.id === c.id);
+    if (!exists) {
+      try { exists = (await readDoc(ref)).exists(); } catch { exists = false; }
+    }
+    if (!exists) fire(setDoc(ref, { name: c.name, emoji: c.emoji, kind: c.kind, order: c.order }), writeErrorHandler);
+  }
 }
 // ── M2 ──
 export function saveRule(r) {
@@ -333,8 +367,58 @@ export async function allTransactions() {
   return s.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 // 모든 기록 삭제(계정 삭제 포함)
+const dropStamp = (row) => { const { id, ym, createdAt, updatedAt, at, ...rest } = row ?? {}; return rest; };
+// 오프라인이거나 서버 답이 없으면 기다리지 않고 로컬에 넣는다. 한 번 막히면 나머지는 바로 큐에 넣는다.
+async function commitTracked(promise, flags) {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  if (flags.queued || offline) {
+    fire(promise);
+    flags.queued = true;
+    return;
+  }
+  const result = await ackOrTimeout(promise, RESTORE_ACK_MS);
+  if (result === 'timeout') flags.queued = true;
+}
+// 백업에 있는 문서만 같은 id로 합친다. 파일에 없는 기록·예전 백업에 없는 컬렉션은 지우지 않는다.
+export async function restoreBackup(parsed) {
+  const flags = { queued: false };
+  const writeList = async (name, items, idOf) => {
+    const rows = (items ?? []).filter((x) => idOf(x));
+    for (let i = 0; i < rows.length; i += 400) {
+      const b = writeBatch(db);
+      rows.slice(i, i + 400).forEach((x) => {
+        const data = clean(dropStamp(x));
+        if (name === 'imports' && !data.at) data.at = serverTimestamp();
+        b.set(u(name, idOf(x)), data, { merge: true });
+      });
+      await commitTracked(b.commit(), flags);
+    }
+  };
+  if (Number.isInteger(parsed.profile?.monthStartDay)) {
+    await commitTracked(setDoc(u(), { monthStartDay: parsed.profile.monthStartDay, updatedAt: serverTimestamp() }, { merge: true }), flags);
+  }
+  await writeList('categories', parsed.categories, (x) => x.id);
+  await writeList('accounts', parsed.accounts, (x) => x.id);
+  await writeList('transactions', parsed.transactions, (x) => x.id);
+  await writeList('budgets', parsed.budgets, (x) => x.ym || x.id);
+  await writeList('rules', parsed.rules, (x) => x.id);
+  await writeList('recurring', parsed.recurring, (x) => x.id);
+  await writeList('goals', parsed.goals, (x) => x.id);
+  await writeList('imports', parsed.imports, (x) => x.id);
+  if (parsed.hasAssets) {
+    await writeList('assetAccounts', parsed.assetAccounts, (x) => x.id);
+    await writeList('holdings', parsed.holdings, (x) => x.id);
+    await writeList('contributions', parsed.contributions, (x) => x.id);
+    if (parsed.assetPrefs) await commitTracked(setDoc(u('assetPrefs', 'tax'), clean(dropStamp(parsed.assetPrefs)), { merge: true }), flags);
+  }
+  if (parsed.hasSettings && parsed.settings && Object.keys(parsed.settings).length) {
+    await commitTracked(setDoc(u('settings', 'prefs'), { ...parsed.settings, updatedAt: serverTimestamp() }, { merge: true }), flags);
+  }
+  return { queued: flags.queued, online: typeof navigator === 'undefined' || navigator.onLine !== false };
+}
+
 export async function deleteEverything() {
-  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports', 'assetAccounts', 'holdings', 'contributions', 'assetPrefs']) {
+  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports', 'assetAccounts', 'holdings', 'contributions', 'assetPrefs', 'settings']) {
     const s = await getDocs(col(name));
     for (let i = 0; i < s.docs.length; i += 400) {
       const b = writeBatch(db);

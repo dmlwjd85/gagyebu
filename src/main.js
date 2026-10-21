@@ -21,12 +21,14 @@ let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
-import { buildBackup } from './lib/backup.js';
+import { buildBackup, parseBackup } from './lib/backup.js';
+import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, effectiveStartDay } from './lib/modes.js';
+import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
-import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
+import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
 import { assetsView, taxView } from './ui/assetsView.js';
 import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
 
@@ -42,7 +44,8 @@ const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilt
 const today = () => ymd(new Date());
 
 function model() {
-  const sd = state.profile?.monthStartDay ?? 1;
+  const storedStart = state.profile?.monthStartDay ?? 1;
+  const sd = effectiveStartDay(storedStart, state.features);
   const t = today();
   const curYm = periodOf(t, sd);
   const viewYm = ui.viewYm ?? curYm;
@@ -51,7 +54,7 @@ function model() {
   const tot = totals(periodTxs);
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
-    sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
+    sd, storedStart, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
     categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
     assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
@@ -62,6 +65,7 @@ function model() {
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
     wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine, contentScale,
+    mode: state.mode ?? null, legacyMode: state.legacyMode !== false && !state.mode, features: state.features, settings: state.settings ?? null,
   };
 }
 
@@ -91,9 +95,10 @@ function render() {
   const mainFocused = document.activeElement?.id === 'main'; // 다시 그려도 본문 포커스 유지(PageDown·스페이스 스크롤)
   if (ui.view === 'import' && !IMP) loadImp().then(render);
   if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
-  const body = ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
+  const ask = !!(state.askMode && state.settingsLoaded && ui.view === 'home');
+  const body = ask ? onboardingView() : ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
     : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView, assets: assetsView, tax: taxView }[ui.view](m, ui);
-  const nav = !NO_NAV.has(ui.view);
+  const nav = !ask && !NO_NAV.has(ui.view);
   // 위 메뉴 / 본문(여기만 스크롤, 글자 배율 적용) / 아래 메뉴 3줄 틀 — style.css '.app-frame'
   document.body.classList.add('has-frame');
   app.innerHTML = `
@@ -233,11 +238,38 @@ async function editRecurring(r) {
   toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요.');
 }
 const GOAL_EMOJI = ['🎯', '✈️', '🏠', '🚗', '💍', '🎓', '🛟', '💻', '🎁', '🐷'];
-async function editGoal(g) {
+function applyModeChoice(mode) {
+  const next = settingsForMode(mode);
+  data.saveSettings(next);
+  if (next.features.studentIncome) data.ensureStudentIncome();
+  if (next.features.recurring) setTimeout(() => data.postRecurring(today()), 300);
+  if (ui.view === 'recurring' && !next.features.recurring) ui.view = 'settings';
+  const label = MODES.find((x) => x.id === mode)?.label ?? '';
+  toast(`${label}에 맞춰 메뉴를 골랐어요. 설정에서 기능을 더 켜고 끌 수 있어요.`);
+  render();
+}
+async function editAllowance() {
+  const a = allowanceFrom(state.settings);
   const v = await formDialog({
-    title: g ? '저축 목표 고치기' : '저축 목표 추가',
+    title: '용돈', body: '다음 용돈날까지 남은 돈을 남은 일수로 나눈 하루 몫이에요. 홈의 큰 숫자와는 계산이 달라요.',
     fields: [
-      { name: 'emoji', label: '아이콘', type: 'select', value: g?.emoji ?? '🎯', options: GOAL_EMOJI.map((e) => [e, e]) },
+      { name: 'amount', label: '한 번에 받는 용돈', type: 'amount', value: a.amount },
+      { name: 'cycle', label: '주기', type: 'select', value: a.cycle, options: [['month', '매달'], ['week', '매주']] },
+      { name: 'day', label: '매달 며칠 (1~28일)', type: 'select', value: a.day, options: Array.from({ length: 28 }, (_, i) => [i + 1, `${i + 1}일`]) },
+      { name: 'weekday', label: '매주 요일', type: 'select', value: a.weekday, options: ['일', '월', '화', '수', '목', '금', '토'].map((l, i) => [i, `${l}요일`]) },
+    ],
+    validate: (x) => (x.amount > 10_000_000_000 ? '100억 원까지예요.' : null),
+  });
+  if (!v) return;
+  data.saveSettings({ allowanceAmount: v.amount, allowanceCycle: v.cycle === 'week' ? 'week' : 'month', allowanceDay: Number(v.day) || 1, allowanceWeekday: Number(v.weekday) || 0 });
+  toast('용돈을 정했어요.');
+}
+async function editGoal(g) {
+  const piggy = !!(state.mode && state.features?.piggy);
+  const v = await formDialog({
+    title: piggy ? (g ? '저금통 고치기' : '저금통에 넣기') : (g ? '저축 목표 고치기' : '저축 목표 추가'),
+    fields: [
+      { name: 'emoji', label: '아이콘', type: 'select', value: g?.emoji ?? (piggy ? '🐷' : '🎯'), options: GOAL_EMOJI.map((e) => [e, e]) },
       { name: 'name', label: '이름', value: g?.name ?? '', maxlength: 30, hint: '예: 제주 여행, 비상금' },
       { name: 'target', label: '목표 금액', type: 'amount', value: g?.target ?? 0 },
       { name: 'saved', label: '지금까지 모은 돈', type: 'amount', value: g?.saved ?? 0 },
@@ -409,6 +441,18 @@ async function impLoad(bytes, name, enc) {
   await IMP.loadFile(imp, bytes, name, enc);
   render(); $('#main')?.focus({ preventScroll: true });
 }
+async function restoreFile(file) {
+  if (!file) return;
+  let parsed;
+  try { parsed = parseBackup(JSON.parse(await file.text())); }
+  catch (e) { return toast(e?.message || '백업 파일을 읽지 못했어요.'); }
+  const ok = await confirmDialog({ title: '백업을 더할까요?', body: '파일에 있는 기록만 같은 칸에 넣어요. 파일에 없는 기록은 지우지 않아요. 예전 백업에 없는 항목도 그대로 둡니다.', ok: '더하기' });
+  if (!ok) return;
+  try {
+    const result = await data.restoreBackup(parsed);
+    toast(restoreMessage({ online: navigator.onLine, queued: !!result?.queued }));
+  } catch { toast('복원하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+}
 async function impFile(file) {
   if (!file) return;
   await loadImp();
@@ -481,6 +525,16 @@ app.addEventListener('click', async (e) => {
   if (d.searchTry) { ui.search.q = d.searchTry; render(); return $('[data-search-q]')?.focus(); }
   // 반복 거래
   if (d.recEdit) return editRecurring(state.recurring.find((r) => r.id === d.recEdit));
+  if (d.pickMode) return applyModeChoice(d.pickMode);
+  if (d.modeLater !== undefined) { data.saveSettings({ askMode: false }); return toast('지금 메뉴를 그대로 둘게요. 설정에서 언제든 고를 수 있어요.'); }
+  if (d.setMode) return applyModeChoice(d.setMode);
+  if (d.recPreset === 'rent' || d.recPreset === 'sub') {
+    const housing = state.categories.some((c) => c.id === 'housing') ? 'housing' : 'etc';
+    const telecom = state.categories.some((c) => c.id === 'telecom') ? 'telecom' : 'etc';
+    return editRecurring(d.recPreset === 'rent'
+      ? { name: '월세', amount: 0, kind: 'expense', categoryId: housing, dayOfMonth: state.profile?.monthStartDay || 1, active: true }
+      : { name: '구독', amount: 0, kind: 'expense', categoryId: telecom, dayOfMonth: 1, active: true });
+  }
   if (d.recFrom) {
     const ids = new Set(state.categories.map((x) => x.id));
     const categoryId = ids.has(d.cat) ? d.cat : classify({ desc: d.recFrom, kind: 'expense' }, state.rules, ids).categoryId;
@@ -569,6 +623,30 @@ app.addEventListener('click', async (e) => {
     case 'add-rec': return editRecurring(null);
     case 'add-goal': return editGoal(null);
     case 'add-rule': return editRule();
+    case 'allowance': return editAllowance();
+    case 'share-text':
+      try {
+        const { reportData, drawReport } = await import('./ui/report.js');
+        const { monthSummaryText, shareSummary } = await import('./lib/shareSummary.js');
+        const d = reportData(m);
+        const text = monthSummaryText(d);
+        const blob = await drawReport(d, { dark: m.dark });
+        const file = new File([blob], `쓱가계부_${d.ym}_요약.png`, { type: 'image/png' });
+        const r = await shareSummary({ text, file, title: `${d.month}월 요약` });
+        if (r === 'shared') toast('요약을 공유했어요.');
+        else if (r === 'copied') toast('글을 복사하고 이미지를 저장했어요.');
+        else if (r === 'downloaded') toast('이미지를 저장했어요.');
+        else if (r !== 'abort') toast('공유하지 못했어요.');
+      } catch (err) { console.error(err); toast('요약을 만들지 못했어요.'); }
+      return;
+    case 'json-in': {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json,.json';
+      input.onchange = () => restoreFile(input.files?.[0]);
+      input.click();
+      return;
+    }
     case 'report':
       try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
       return;
@@ -601,7 +679,7 @@ app.addEventListener('click', async (e) => {
       try {
         // 규칙·반복·목표·모든 달 예산·가져오기 기록까지(QA M4)
         const [txs, budgets, assets] = await Promise.all([data.allTransactions(), data.allBudgets(), data.assetExport()]);
-        const b = buildBackup({ profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, ...assets });
+        const b = buildBackup({ profile: { monthStartDay: m.storedStart ?? state.profile?.monthStartDay ?? 1 }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, settings: state.settings, ...assets });
         download(`쓱가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
@@ -627,6 +705,18 @@ app.addEventListener('change', (e) => {
     if (a && a.name !== name) data.saveAccount({ ...a, name });
   }
   if (t.dataset.accType) { const a = state.accounts.find((x) => x.id === t.dataset.accType); if (a) data.saveAccount({ ...a, type: t.value }); }
+  if (t.dataset.feat) {
+    const id = t.dataset.feat;
+    if (!state.mode && LEGACY_FEATURES[id] && !t.checked) {
+      t.checked = true;
+      return toast('방식을 고르기 전에는 지금 메뉴를 끄지 않아요.');
+    }
+    const features = { ...(state.features ?? {}), [id]: t.checked };
+    data.saveSettings(state.mode ? { mode: state.mode, features } : { features });
+    if (id === 'studentIncome' && t.checked) data.ensureStudentIncome();
+    if (id === 'recurring' && t.checked) setTimeout(() => data.postRecurring(today()), 300);
+    return;
+  }
   if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
   // 가져오기

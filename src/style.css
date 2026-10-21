@@ -311,6 +311,18 @@
   .amount-in { @apply w-[min(88px,100%)] min-h-[44px] px-2 rounded-xl border text-caption text-right tabular-nums; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
   .goal { @apply flex flex-wrap items-center gap-3 p-3 rounded-2xl; background: var(--bg); }
   .goal > div.flex-1 { min-width: min(100%, 8em); } /* 아주 좁으면 진행 링 아래로 글을 내려 금액이 잘리지 않게 */
+  .mode-grid { display: flex; flex-direction: column; gap: 8px; }
+  .mode-pick { display: flex; align-items: flex-start; gap: 10px; width: 100%; min-height: 44px; padding: 10px 12px; border-radius: 16px; border: 1px solid var(--line); background: var(--surface-solid); text-align: left; color: var(--ink); }
+  .mode-pick.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, var(--surface-solid)); }
+  .mode-copy { min-width: 0; flex: 1; }
+  .mode-copy > span { display: block; overflow-wrap: anywhere; }
+  .feat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
+  .feat-copy { min-width: 0; flex: 1; }
+  .feat-copy > span { display: block; overflow-wrap: anywhere; }
+  /* 라벨은 1행, 금액은 2행. 한쪽 라벨이 줄바꿈돼도 옆 칸 금액과 같은 높이에 둔다. */
+  .pace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: start; }
+  .pace-grid > * { min-width: 0; overflow-wrap: anywhere; }
+  .mode-later { width: 100%; height: auto; white-space: normal; text-align: center; line-height: 1.4; }
 }
 
 /* 동적으로 붙는 클래스 (Tailwind 정리 대상에서 제외하려고 레이어 밖에 둠) */

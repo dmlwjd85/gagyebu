@@ -30,7 +30,7 @@ export function initSheet(context) {
   // 저장 길게 누르기(0.6초) = 매달 반복으로 저장
   let lp;
   el.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('[data-save]') || s.id) return;
+    if (!e.target.closest('[data-save]') || s.id || ctx.getState().features?.recurring === false) return;
     lp = setTimeout(() => { longPressAt = Date.now(); s.repeat = true; haptic(20); save(); }, 600);
   });
   const stop = () => clearTimeout(lp);
@@ -90,7 +90,7 @@ function render() {
         <button class="icon-btn" data-close aria-label="닫기">✕</button>
       </div>
     </div>
-    ${s.id ? '' : smsPasteRow()}
+    ${s.id || st.features?.sms === false ? '' : smsPasteRow()}
     <div class="px-5 pt-3 pb-1 text-right">
       <p data-fit class="amount-display tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
         <span class="${s.kind === 'income' || (s.refund && s.kind === 'expense') ? 'text-income' : 'text-expense'}">${amt ? (s.kind === 'income' || (s.refund && s.kind === 'expense') ? '+' : '−') : ''}</span>${amt.toLocaleString('ko-KR')}<span class="text-head ml-1 text-ink">원</span></p>
@@ -112,7 +112,7 @@ function render() {
         </div>
         <label class="opt-row"><span aria-hidden="true">✏️</span><span class="sr-only">메모</span>
           <input name="memo" value="${esc(s.memo)}" maxlength="${MAX_MEMO}" placeholder="메모 (예: 점심 #회사)" class="opt-input" autocomplete="off" enterkeyhint="done" /></label>
-        ${s.id ? '' : `<button type="button" role="switch" aria-checked="${!!s.repeat}" class="chip self-start" data-repeat><span aria-hidden="true">🔁</span> 매달 반복${s.repeat ? ` · 매달 ${Number(s.date.slice(8))}일` : ''}</button>`}
+        ${s.id || st.features?.recurring === false ? '' : `<button type="button" role="switch" aria-checked="${!!s.repeat}" class="chip self-start" data-repeat><span aria-hidden="true">🔁</span> 매달 반복${s.repeat ? ` · 매달 ${Number(s.date.slice(8))}일` : ''}</button>`}
       </div>`
     : `<button class="mx-5 mt-3 opt-summary" data-opts>
         <span>📅 ${esc(prettyDate(s.date, today))}</span><span>${esc(acc ? `${acc.emoji ?? ''} ${acc.name}` : '💳 결제수단')}</span><span>✏️ ${s.memo ? esc(s.memo) : '메모'}</span>${s.repeat ? '<span>🔁 매달</span>' : ''}</button>`}

@@ -2,12 +2,15 @@
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, browserPopupRedirectResolver, getRedirectResult, signInWithCredential, signOut, GoogleAuthProvider } from 'firebase/auth';
 import { auth, googleProvider, firebaseConfig } from './firebase.js';
 import { pickLoginMode, isIOS, isStandalone, isSameOriginAuth, loginErrorMessage } from './lib/authEnv.js';
+import { LEGACY_FEATURES } from './lib/modes.js';
 
 const listeners = new Set();
+const freshMode = () => ({ settings: null, settingsLoaded: false, mode: null, legacyMode: true, askMode: false, features: { ...LEGACY_FEATURES } });
 export const state = {
   ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [],
   assetAccounts: [], holdings: [], contributions: [], assetPrefs: null,
   txWindow: null, txLoaded: false, pendingWrites: false,
+  ...freshMode(),
 };
 const emit = () => listeners.forEach((fn) => fn(state));
 export const subscribe = (fn) => (listeners.add(fn), () => listeners.delete(fn));
@@ -52,7 +55,7 @@ export function initAuth() {
       try { await loadStore(); } catch (e) { console.error(e); }
       if (auth.currentUser?.uid !== user.uid) return; // 기다리는 사이 로그아웃·계정 전환됨
     } else localStorage.removeItem(SIGNED_IN);
-    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true });
+    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true, ...freshMode() });
     if (user && store) store.startUser();
     emit();
   });
@@ -72,6 +75,9 @@ export const deleteAccount = call('deleteAccount');
 export const reorderCategories = call('reorderCategories');
 export const setBudget = call('setBudget');
 export const setProfile = call('setProfile');
+export const saveSettings = call('saveSettings');
+export const ensureStudentIncome = call('ensureStudentIncome');
+export const restoreBackup = call('restoreBackup');
 export const allTransactions = call('allTransactions');
 export const deleteEverything = call('deleteEverything');
 export const saveRule = call('saveRule');
