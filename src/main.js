@@ -1,7 +1,7 @@
 import './style.css';
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
-import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, themeBannerHtml, installArtFallback } from './lib/look.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -35,7 +35,6 @@ import { validateAssetAccount, validateHolding, validateContribution, validateTa
 
 initTheme();
 initLook();
-installArtFallback();
 installUpdatePrompt();
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
@@ -105,7 +104,6 @@ function render() {
   if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
   const m = model();
   data.watchMonth(m.viewYm);
-  const banner = ui.view === 'home' ? '' : themeBannerHtml(m.look);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
   const scrollY = $('#main') ? scroller().scrollTop : 0;
   const mainFocused = document.activeElement?.id === 'main'; // 다시 그려도 본문 포커스 유지(PageDown·스페이스 스크롤)
@@ -122,7 +120,7 @@ function render() {
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-frame ${nav ? 'has-nav' : ''}">
       <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
-      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${banner}${body}</div></main>
+      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
       ${nav ? tabBar() : ''}
     </div>`;
   // 홈 숫자 롤링

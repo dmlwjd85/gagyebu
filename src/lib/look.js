@@ -1,5 +1,6 @@
-// 분위기(계절) 테마·글꼴·꾸미기.
+// 분위기(계절) 테마는 색만 바꾼다. 머리 그림은 그리지 않는다.
 // 기기에는 localStorage, 로그인한 뒤에는 users/{uid}/settings/prefs 의 mood·font·decor 만 더한다.
+// decor 는 예전 설정과 맞추려고 읽고 저장만 한다. 화면에는 쓰지 않는다.
 // 쓰는 방식(mode·features·용돈·배우자)과 거래 필드는 바꾸지 않는다. normalizeSettings 는 이 키를 백업에 넣지 않는다.
 // 다크 모드는 기존 'theme' 키(light|dark|시스템) 그대로다.
 
@@ -97,33 +98,6 @@ export function ensureFont(font) {
   return jobs.length ? Promise.all(jobs) : Promise.resolve();
 }
 
-/** 큰 폭이 실패하면 480만 다시 받고, 그것도 없으면 빈 칸 없이 숨긴다. */
-export function artFailed(img) {
-  if (!img?.classList || img.classList.contains('is-broken')) return 'hide';
-  const small = img.getAttribute?.('src') || '';
-  const file = small.split('/').pop();
-  const current = String(img.currentSrc || img.src || '');
-  const srcset = img.getAttribute?.('srcset') || '';
-  const onSmall = !!(file && current.endsWith(file));
-  if (!img.dataset?.triedSmall && srcset && !onSmall) {
-    img.dataset.triedSmall = '1';
-    img.setAttribute('srcset', '');
-    if (small) img.src = small;
-    return 'retry';
-  }
-  img.classList.add('is-broken');
-  img.closest?.('.theme-banner')?.classList?.add('is-broken');
-  return 'hide';
-}
-
-export function installArtFallback(target = globalThis.document) {
-  target?.addEventListener?.('error', (e) => {
-    const el = e.target;
-    if (!el?.classList) return;
-    if (el.classList.contains('hero-art') || el.classList.contains('theme-banner-img')) artFailed(el);
-  }, true);
-}
-
 export function initLook() {
   const look = applyLook(readLook());
   ensureFont(look.font);
@@ -152,28 +126,3 @@ export function adoptCloudLook(raw, storage = globalThis.localStorage, root = gl
   return next;
 }
 
-function baseUrl(base) {
-  if (typeof base === 'string' && base) return base.endsWith('/') ? base : `${base}/`;
-  const b = import.meta.env?.BASE_URL;
-  if (typeof b === 'string' && b) return b.endsWith('/') ? b : `${b}/`;
-  return '/gagyebu/';
-}
-
-/** 지금 테마의 그림만. 다른 테마 주소는 넣지 않아 그 테마가 아닐 때는 받지 않는다. */
-export function artImgHtml(look, className, base) {
-  const next = sanitizeLook(look);
-  if (!next.decor || !ART_MOODS.includes(next.mood)) return '';
-  const root = baseUrl(base);
-  const small = `${root}themes/${next.mood}-480.webp`;
-  const large = `${root}themes/${next.mood}-960.webp`;
-  return `<img class="${className}" alt="" width="960" height="540" src="${small}" srcset="${small} 480w, ${large} 960w" sizes="(min-width: 768px) 600px, 100vw" loading="lazy" decoding="async" />`;
-}
-
-export function heroArtHtml(look, base) {
-  return artImgHtml(look, 'hero-art', base);
-}
-
-export function themeBannerHtml(look, base) {
-  const img = artImgHtml(look, 'theme-banner-img', base);
-  return img ? `<div class="theme-banner" aria-hidden="true">${img}</div>` : '';
-}

@@ -13,7 +13,7 @@ import { josa } from '../lib/classify.js';
 import { weekDailyLeft, spentByDateFrom } from '../lib/pace.js';
 import { allowanceStatus } from '../lib/allowance.js';
 import { limitWarnings } from '../lib/budget.js';
-import { sanitizeLook, MOOD_OPTIONS, FONT_OPTIONS, heroArtHtml } from '../lib/look.js';
+import { sanitizeLook, MOOD_OPTIONS, FONT_OPTIONS } from '../lib/look.js';
 
 const feat = (m, id) => featureOn(m.features, id);
 
@@ -143,10 +143,9 @@ export function homeView(m) {
   }
   const recent = m.periodTxs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)).slice(0, m.wide ? 6 : 3);
   const top3 = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3);
-  const art = heroArtHtml(m.look);
   return `<h1 class="sr-only">홈</h1><div class="view-grid">
     <div class="flex flex-col gap-3">
-      <section class="hero-card ${art ? 'has-art' : 'px-5 pt-[18px]'} pb-4" aria-label="요약">${art}${art ? '<div class="hero-copy px-5 pt-3">' : ''}${hero}${art ? '</div>' : ''}</section>
+      <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
       <section class="stat-grid" aria-label="이번 달 통계">
         ${spendStat(m.tot.expense)}
         ${stat('수입', (m.tot.income ? '+' : '') + compactWon(m.tot.income), formatWon(m.tot.income), 'text-income')}
@@ -452,9 +451,6 @@ function lookControls(m) {
       <p id="s-font" class="text-body">글꼴</p>
       <div class="look-grid" role="radiogroup" aria-labelledby="s-font">${FONT_OPTIONS.map((o) => `<button type="button" class="look-pick" role="radio" aria-checked="${look.font === o.id}" data-font-pick="${o.id}"><span class="look-name">${o.label}</span></button>`).join('')}</div>
       <p class="text-caption text-ink-sub">시스템 기본은 이 기기 글꼴이에요. Pretendard와 손글씨(Gaegu)는 SIL OFL 1.1이라 앱에 실어 배포해요.</p>
-      <div class="opt-row"><span id="s-decor" class="opt-k">꾸미기 보기</span>
-        <label class="switch"><input type="checkbox" data-decor ${look.decor ? 'checked' : ''} aria-labelledby="s-decor"><span></span></label></div>
-      <p class="text-caption text-ink-sub">끄면 색만 남고 머리 그림은 숨겨요.</p>
     </div>`;
 }
 
