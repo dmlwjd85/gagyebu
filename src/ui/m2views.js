@@ -58,7 +58,7 @@ export function recurringView(m) {
   const subs = detectSubscriptions(m.txs, list);
   return `<div class="max-w-[640px] mx-auto flex flex-col gap-3">
     <div class="flex items-center gap-2">${back('settings', '설정으로')}<h1 class="text-title">반복 거래</h1></div>
-    <p class="glass px-4 py-3 text-caption">🔁 월세·구독처럼 매달 나가는 돈을 정해 두면 그날 자동으로 기록해요. 앱을 며칠 안 열어도 열 때 밀린 것까지 채워요.</p>
+    <p class="glass px-4 py-3 text-caption break-words">🔁 월세·구독처럼 매달 나가는 돈을 정해 두면 그날 자동으로 기록해요. 앱을 며칠 안 열어도 밀린 것까지 채워요. 여러 기기에서 동시에 열어도 같은 달은 한 번만 들어가요.</p>
     <section class="card-solid p-4" aria-labelledby="rc-h">
       <div class="flex items-baseline justify-between gap-2"><h2 id="rc-h" class="text-head">매달 나가는 돈</h2><span class="text-caption text-ink-sub tabular-nums">고정비 월 ${formatWon(monthlyFixed(list))}</span></div>
       ${list.length ? `<ul class="mt-2 flex flex-col">${list.map((r) => {
@@ -73,7 +73,7 @@ export function recurringView(m) {
           <label class="switch"><input type="checkbox" data-rec-active="${esc(r.id)}" ${r.active ? 'checked' : ''} aria-label="${esc(r.name)} 자동 기록" /><span></span></label>
           <button class="icon-btn" data-rec-del="${esc(r.id)}" aria-label="${esc(r.name)} 삭제">🗑️</button></li>`;
       }).join('')}</ul>` : '<div class="py-6 text-center"><p class="text-4xl" aria-hidden="true">🔁</p><p class="mt-2 text-body text-ink-sub">아직 반복 거래가 없어요.</p></div>'}
-      <button class="btn-ghost mt-3" data-action="add-rec">＋ 반복 거래 추가</button>
+      <div class="mt-3 flex flex-wrap gap-2"><button class="btn-ghost" data-action="add-rec">＋ 반복 거래 추가</button><button class="chip" data-rec-preset="rent">＋ 월세</button><button class="chip" data-rec-preset="sub">＋ 구독</button></div>
       <p class="mt-2 text-caption text-ink-sub">입력 시트에서 '매달 반복'을 켜거나 저장 버튼을 길게 눌러도 만들 수 있어요.</p>
     </section>
     ${subs.length ? `<section class="card-solid p-4" aria-labelledby="sub-h"><h2 id="sub-h" class="text-head">구독 같아요</h2>
@@ -84,9 +84,12 @@ export function recurringView(m) {
 }
 
 // ── 저축 목표(예산 화면 안 카드) ─────────────────────
-export function goalsCard(m) {
+export function goalsCard(m, { piggy = false } = {}) {
+  const title = piggy ? '저금통' : '저축 목표';
+  const add = piggy ? '＋ 저금' : '＋ 목표 추가';
+  const empty = piggy ? '저금통에 모으고 싶은 돈을 넣어 보세요.' : '여행·비상금처럼 모으고 싶은 돈을 정해 보세요. 진행 링으로 보여 드려요.';
   return `<section class="card-solid p-4" aria-labelledby="goal-h">
-    <div class="flex items-center justify-between gap-2"><h2 id="goal-h" class="text-head">저축 목표</h2><button class="link-btn" data-action="add-goal">＋ 목표 추가</button></div>
+    <div class="flex items-center justify-between gap-2"><h2 id="goal-h" class="text-head">${title}</h2><button class="link-btn" data-action="add-goal">${add}</button></div>
     ${m.goals.length ? `<ul class="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-3">${m.goals.map((g) => {
       const p = goalProgress(g, m.today);
       return `<li class="goal">
@@ -97,7 +100,7 @@ export function goalsCard(m) {
           <p class="tabular-nums" role="progressbar" aria-label="${esc(g.name)} 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p.pct}" aria-valuetext="${p.pct}%, ${formatWon(g.saved || 0)} / ${formatWon(g.target)}"><b class="text-head">${p.pct}%</b> <span class="text-caption">${shortWon(g.saved || 0)} / ${shortWon(g.target)}원</span></p>
           <p class="text-caption text-ink-sub">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${numSpan(formatWon(p.left))} 남음` : `한 달에 ${numSpan(formatWon(p.perMonth))}씩 · ${p.months}달 남음`) : `${numSpan(formatWon(p.left))} 남았어요`}</p>
           <button class="chip mt-1" data-goal-add="${esc(g.id)}">＋ 모으기</button></div></li>`;
-    }).join('')}</ul>` : '<p class="mt-2 text-body text-ink-sub">여행·비상금처럼 모으고 싶은 돈을 정해 보세요. 진행 링으로 보여 드려요.</p>'}
+    }).join('')}</ul>` : `<p class="mt-2 text-body text-ink-sub break-words">${empty}</p>`}
   </section>`;
 }
 

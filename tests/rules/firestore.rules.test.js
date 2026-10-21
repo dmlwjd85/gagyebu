@@ -567,3 +567,35 @@ describe('주식·연금 계좌', () => {
     await assertFails(setDoc(doc(bob(), 'users/alice/assetPrefs/tax'), TAX));
   });
 });
+
+describe('쓰는 방식 settings/prefs', () => {
+  const prefs = { mode: 'single', askMode: false, features: { recurring: true, weekDaily: true, sms: true, txOwner: false }, allowanceAmount: 200000, allowanceCycle: 'month', allowanceDay: 1, updatedAt: serverTimestamp() };
+  test('본인: 만들기·읽기·고치기·삭제', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { askMode: true }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), prefs));
+    await assertSucceeds(getDoc(doc(alice(), 'users/alice/settings/prefs')));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'student', features: { allowance: true, piggy: true, categoryLimits: true, studentIncome: true, monthShare: true } }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'couple', features: { txOwner: true } }));
+    await assertSucceeds(deleteDoc(doc(alice(), 'users/alice/settings/prefs')));
+  });
+  test('다른 문서 id·잘못된 모드·테마·모르는 기능·용돈 범위 거부', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/theme'), { mode: 'single' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'family' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { theme: 'ocean' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { features: { recurring: 'yes' } }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { features: { nope: true } }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceAmount: 10.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceDay: 31 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceCycle: 'daily' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceWeekday: 7 }));
+  });
+  test('타인·비로그인: 읽기·쓰기·삭제 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'users/alice/settings/prefs'), { mode: 'student', askMode: false }));
+    await assertFails(getDoc(doc(bob(), 'users/alice/settings/prefs')));
+    await assertFails(getDocs(collection(bob(), 'users/alice/settings')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/settings/prefs'), { mode: 'single' }));
+    await assertFails(deleteDoc(doc(bob(), 'users/alice/settings/prefs')));
+    await assertFails(getDoc(doc(anon(), 'users/alice/settings/prefs')));
+    await assertFails(setDoc(doc(anon(), 'users/alice/settings/prefs'), { askMode: true }));
+  });
+});
