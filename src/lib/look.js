@@ -74,17 +74,54 @@ export function applyLook(look, root = globalThis.document?.documentElement) {
   return next;
 }
 
+/** 손글씨를 고르면 본문은 Gaegu, 금액은 Pretendard 고정폭이라 둘 다 받는다. */
+export function fontsFor(font) {
+  if (font === 'gaegu') return ['gaegu', 'pretendard'];
+  if (font === 'pretendard') return ['pretendard'];
+  return [];
+}
+
 const loadedFonts = new Set();
+const fontLoaders = {
+  pretendard: () => import('../fonts.css'),
+  gaegu: () => import('../assets/fonts/gaegu.css'),
+};
+
 export function ensureFont(font) {
-  if (font === 'pretendard' && !loadedFonts.has(font)) {
-    loadedFonts.add(font);
-    return import('../fonts.css');
+  const jobs = [];
+  for (const name of fontsFor(font)) {
+    if (loadedFonts.has(name)) continue;
+    loadedFonts.add(name);
+    jobs.push(fontLoaders[name]());
   }
-  if (font === 'gaegu' && !loadedFonts.has(font)) {
-    loadedFonts.add(font);
-    return import('../assets/fonts/gaegu.css');
+  return jobs.length ? Promise.all(jobs) : Promise.resolve();
+}
+
+/** 큰 폭이 실패하면 480만 다시 받고, 그것도 없으면 빈 칸 없이 숨긴다. */
+export function artFailed(img) {
+  if (!img?.classList || img.classList.contains('is-broken')) return 'hide';
+  const small = img.getAttribute?.('src') || '';
+  const file = small.split('/').pop();
+  const current = String(img.currentSrc || img.src || '');
+  const srcset = img.getAttribute?.('srcset') || '';
+  const onSmall = !!(file && current.endsWith(file));
+  if (!img.dataset?.triedSmall && srcset && !onSmall) {
+    img.dataset.triedSmall = '1';
+    img.setAttribute('srcset', '');
+    if (small) img.src = small;
+    return 'retry';
   }
-  return Promise.resolve();
+  img.classList.add('is-broken');
+  img.closest?.('.theme-banner')?.classList?.add('is-broken');
+  return 'hide';
+}
+
+export function installArtFallback(target = globalThis.document) {
+  target?.addEventListener?.('error', (e) => {
+    const el = e.target;
+    if (!el?.classList) return;
+    if (el.classList.contains('hero-art') || el.classList.contains('theme-banner-img')) artFailed(el);
+  }, true);
 }
 
 export function initLook() {

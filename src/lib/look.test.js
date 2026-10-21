@@ -5,6 +5,7 @@ import { homeView, settingsView } from '../ui/views.js';
 import {
   DEFAULT_LOOK, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook, heroArtHtml, themeBannerHtml,
+  fontsFor, artFailed,
 } from './look.js';
 
 function mem(init = {}) {
@@ -95,6 +96,66 @@ describe('꾸미기 그림', () => {
     expect(FONTS).toEqual(['system', 'pretendard', 'gaegu']);
     const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
     expect(css).not.toMatch(/\.webp/);
+  });
+  test('그림이 실패하면 480만 다시 받고, 그것도 없으면 칸을 숨긴다', () => {
+    const img = fakeImg({ src: '/gagyebu/themes/sakura-480.webp', srcset: '/gagyebu/themes/sakura-480.webp 480w, /gagyebu/themes/sakura-960.webp 960w' });
+    img.currentSrc = 'https://example.test/gagyebu/themes/sakura-960.webp';
+    expect(artFailed(img)).toBe('retry');
+    expect(img.getAttribute('srcset')).toBe('');
+    expect(img.src).toBe('/gagyebu/themes/sakura-480.webp');
+    expect(artFailed(img)).toBe('hide');
+    expect(img.classList.contains('is-broken')).toBe(true);
+    expect(img.banner.classList.contains('is-broken')).toBe(true);
+    expect(artFailed(img)).toBe('hide');
+  });
+});
+
+function fakeImg({ src, srcset }) {
+  const banner = { classList: classBox() };
+  const attrs = new Map([['src', src], ['srcset', srcset]]);
+  return {
+    src,
+    dataset: {},
+    classList: classBox(),
+    banner,
+    getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
+    setAttribute: (k, v) => attrs.set(k, v),
+    closest: () => banner,
+  };
+}
+function classBox() {
+  const s = new Set();
+  return { add: (c) => s.add(c), contains: (c) => s.has(c) };
+}
+
+describe('손글씨 숫자·크기·오프라인 그림', () => {
+  test('손글씨는 본문과 금액용 Pretendard를 함께 받는다', () => {
+    expect(fontsFor('gaegu')).toEqual(['gaegu', 'pretendard']);
+    expect(fontsFor('pretendard')).toEqual(['pretendard']);
+    expect(fontsFor('system')).toEqual([]);
+  });
+  test('Gaegu는 120%로 키우고, 금액은 Pretendard 고정폭이다', () => {
+    const face = readFileSync(new URL('../assets/fonts/gaegu.css', import.meta.url), 'utf8');
+    const blocks = face.match(/@font-face\s*\{[^}]+\}/g);
+    expect(blocks).toHaveLength(2);
+    for (const block of blocks) expect(block).toMatch(/size-adjust:\s*120%/);
+    const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/html\[data-font="gaegu"\] :is\(\.tabular-nums, \[data-fit\], \.num\)/);
+    expect(css).toMatch(/font-family:[^;]*Pretendard Variable/);
+    expect(css).toMatch(/font-variant-numeric:\s*tabular-nums/);
+    expect(css).toMatch(/height:\s*clamp\(56px,\s*calc\(150px - \(var\(--fs, 1\) - 1\) \* 300px\), 150px\)/);
+    expect(css).toMatch(/@media \(max-width: 480px\)\s*\{\s*\.hero-art \{ height: 60px; \}/);
+    expect(css).toMatch(/\.hero-art\.is-broken \{ display: none; \}/);
+    expect(css).toMatch(/\.theme-banner\.is-broken \{ display: none; \}/);
+    expect(css).not.toMatch(/top:\s*114px/);
+  });
+  test('480 그림만 설치 캐시하고 960은 본 뒤에 저장한다', () => {
+    const cfg = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
+    expect(cfg).toMatch(/themes\/\*-480\.webp/);
+    expect(cfg).not.toMatch(/globPatterns:[^\]]*960/);
+    expect(cfg).toContain('[^/]+-960\\.webp');
+    expect(cfg).toMatch(/cacheName: 'theme-art'/);
+    expect(cfg).toMatch(/handler: 'CacheFirst'/);
   });
 });
 

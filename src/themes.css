@@ -313,16 +313,23 @@ html[data-font="system"] body {
 html[data-font="gaegu"] body {
   font-family: "Gaegu", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
+/* 손글씨 숫자는 너비가 들쭉날쭉하다. 금액·합계·목록 숫자는 Pretendard 고정폭. */
+html[data-font="gaegu"] :is(.tabular-nums, [data-fit], .num) {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
 
 .hero-card.has-art { position: relative; overflow: hidden; padding: 0 0 16px; }
-.hero-art { display: block; width: 100%; height: 150px; object-fit: cover; object-position: center 42%; }
-.hero-card.has-art::after {
-  content: "";
-  position: absolute;
-  left: 0; right: 0; top: 114px; height: 40px;
-  background: linear-gradient(to bottom, transparent, var(--hero-1));
-  pointer-events: none;
+.hero-art {
+  display: block; width: 100%; object-fit: cover; object-position: center 42%;
+  height: clamp(56px, calc(150px - (var(--fs, 1) - 1) * 300px), 150px);
+  -webkit-mask-image: linear-gradient(#000 0, #000 72%, transparent);
+  mask-image: linear-gradient(#000 0, #000 72%, transparent);
 }
+@media (max-width: 480px) {
+  .hero-art { height: 60px; }
+}
+.hero-art.is-broken { display: none; }
 .theme-banner {
   position: relative;
   margin: 0 0 12px;
@@ -332,6 +339,7 @@ html[data-font="gaegu"] body {
   pointer-events: none;
 }
 .theme-banner-img { display: block; width: 100%; height: 100%; object-fit: cover; object-position: center 40%; }
+.theme-banner.is-broken { display: none; }
 .theme-banner::after {
   content: "";
   position: absolute;

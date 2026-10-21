@@ -2,7 +2,7 @@
 import '../style.css';
 import '../fonts.css';
 import { initTheme, currentTheme } from '../lib/theme.js';
-import { applyLook, writeLook, readLook, ensureFont, themeBannerHtml } from '../lib/look.js';
+import { applyLook, writeLook, readLook, ensureFont, themeBannerHtml, installArtFallback } from '../lib/look.js';
 import { applyScale } from '../lib/contentScale.js';
 import { fitNums } from '../ui/util.js';
 import { period, periodOf } from '../lib/dates.js';
@@ -25,6 +25,7 @@ if (q.has('mood') || q.has('font') || q.has('decor')) {
   });
 }
 const look = applyLook(readLook());
+installArtFallback();
 ensureFont(look.font);
 
 const today = '2026-10-21';

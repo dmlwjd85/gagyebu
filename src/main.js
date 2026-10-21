@@ -1,7 +1,7 @@
 import './style.css';
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
-import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, themeBannerHtml } from './lib/look.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, themeBannerHtml, installArtFallback } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -35,6 +35,7 @@ import { validateAssetAccount, validateHolding, validateContribution, validateTa
 
 initTheme();
 initLook();
+installArtFallback();
 installUpdatePrompt();
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
