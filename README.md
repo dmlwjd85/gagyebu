@@ -28,7 +28,7 @@ QA 도구(`tools/qa/*.py`)는 실행마다 따로 쓰는 에뮬레이터 프로�
 - `users/{uid}/assetAccounts` 계좌, `holdings` 보유(수량 `qtyE4` = 수량×10000), `contributions` 납입, `assetPrefs/tax` 세액공제 한도·세율
 - 기본 한도: 연금저축 600만 원, 연금저축+IRP+DC 900만 원. 세율 16.5% / 13.2%. 설정 화면이 아니라 세액공제 화면의 '한도·세율 고치기'에서 바꿉니다.
 - JSON 백업 version 3에 위 컬렉션이 포함돼요. 기존 키는 그대로입니다.
-- **규칙을 배포해야 저장됩니다.** 이 저장소는 규칙을 자동 배포하지 않아요. 소유자가 `firebase deploy --only firestore:rules` 로 올려야 계좌 쓰기가 허용됩니다. 배포 전에는 보안 규칙이 새 경로를 거절합니다.
+- **규칙을 배포해야 저장됩니다.** `main`에 푸시되면 `npm test`와 `npm run test:rules`가 통과한 뒤 `.github/workflows/deploy-pages.yml`이 Firestore 보안 규칙만 올립니다. 문서 데이터는 바꾸지 않아요. 저장소 시크릿 `FIREBASE_SERVICE_ACCOUNT`가 없으면 경고만 남기고 GitHub Pages 배포는 계속됩니다. 시크릿을 넣기 전에는 새 경로 쓰기가 거절될 수 있어요.
 
 ### 시세 자동 갱신
 
@@ -41,6 +41,6 @@ QA 도구(`tools/qa/*.py`)는 실행마다 따로 쓰는 에뮬레이터 프로�
 | Secret | 넣는 값 |
 |---|---|
 | `DATA_GO_KR_KEY` | 공공데이터포털에서 발급한 서비스 키. 주식시세정보와 증권상품시세정보(ETF) 두 활용신청이 필요합니다. 디코딩 키를 넣으면 워크플로가 인코딩합니다. 이미 `%` 가 들어 있는 인코딩 키도 그대로 넣으면 됩니다. |
-| `FIREBASE_SERVICE_ACCOUNT` | Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 JSON 전체. base64 한 줄도 됩니다. 이 키로 본인 프로젝트의 `holdings` 만 읽고 시세 필드만 고칩니다. |
+| `FIREBASE_SERVICE_ACCOUNT` | Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 JSON 전체. base64 한 줄도 됩니다. 시세 동기화와 Firestore 규칙 배포가 같은 시크릿을 씁니다. 규칙 배포에는 Firebase Rules Admin 또는 Firebase Admin 역할이 필요합니다. |
 
-저장소 워크플로에는 서비스 계정 시크릿이 연결되어 있지 않습니다(배포에 쓰는 `VITE_FIREBASE_*` 는 웹 설정이라 Admin SDK로 쓸 수 없어요).
+`VITE_FIREBASE_*` 는 웹 설정이라 규칙 배포나 Admin SDK로 쓸 수 없어요. 시크릿이 없으면 시세 동기화와 규칙 배포 모두 쓰기를 하지 않고 성공으로 끝납니다.

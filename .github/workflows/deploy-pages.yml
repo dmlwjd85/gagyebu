@@ -9,8 +9,60 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with: { node-version: 20, cache: npm }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
       - run: npm ci
       - run: npm test
+      - run: npm run test:rules
+      # 규칙만 배포한다. 데이터는 건드리지 않는다. 시크릿이 없으면 경고 후 Pages 배포를 계속한다.
+      - name: Deploy Firestore rules
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          set -euo pipefail
+          secret="${FIREBASE_SERVICE_ACCOUNT:-}"
+          if [ -z "${secret//[[:space:]]/}" ]; then
+            echo "::warning::저장소 시크릿 FIREBASE_SERVICE_ACCOUNT 가 없어 Firestore 규칙 배포를 건너뜁니다. 사이트(GitHub Pages) 배포는 계속합니다."
+            exit 0
+          fi
+          CREDS="${RUNNER_TEMP:-/tmp}/gagyebu-firebase-sa.json"
+          PLAN="${RUNNER_TEMP:-/tmp}/gagyebu-firestore-deploy-plan"
+          export GOOGLE_APPLICATION_CREDENTIALS="$CREDS"
+          export DEPLOY_PLAN_FILE="$PLAN"
+          cleanup() { rm -f "$CREDS" "$PLAN"; }
+          trap cleanup EXIT
+          node --input-type=module <<'EOF'
+          import { chmodSync, existsSync, readFileSync, writeFileSync } from 'node:fs';
+          import { planFirestoreRulesDeploy } from './src/lib/firestoreDeploy.js';
+
+          let configuredProjectId = '';
+          if (existsSync('.firebaserc')) {
+            const rc = JSON.parse(readFileSync('.firebaserc', 'utf8'));
+            configuredProjectId = rc?.projects?.default ?? '';
+          }
+          const firebaseConfig = JSON.parse(readFileSync('firebase.json', 'utf8'));
+          const plan = planFirestoreRulesDeploy({
+            serviceAccountRaw: process.env.FIREBASE_SERVICE_ACCOUNT,
+            firebaseConfig,
+            configuredProjectId,
+            fileExists: existsSync,
+          });
+          writeFileSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, `${JSON.stringify(plan.serviceAccount)}\n`, { mode: 0o600 });
+          chmodSync(process.env.GOOGLE_APPLICATION_CREDENTIALS, 0o600);
+          writeFileSync(process.env.DEPLOY_PLAN_FILE, `${plan.projectId}\n${plan.only}\n`);
+          EOF
+          PROJECT_ID="$(sed -n '1p' "$PLAN")"
+          ONLY="$(sed -n '2p' "$PLAN")"
+          if ! [[ "$PROJECT_ID" =~ ^[a-z][a-z0-9-]{4,28}[a-z0-9]$ ]]; then
+            echo "::error::서비스 계정 project_id 로 Firebase 프로젝트를 정할 수 없어 규칙 배포를 멈춥니다." >&2
+            exit 1
+          fi
+          case "$ONLY" in
+            firestore:rules|firestore:rules,firestore:indexes) ;;
+            *) echo "::error::Firestore 규칙(과 이미 연결된 인덱스) 이외는 배포하지 않습니다." >&2; exit 1 ;;
+          esac
+          echo "Firestore ${ONLY} 를 프로젝트 ${PROJECT_ID} 에 배포합니다. 문서는 변경하지 않습니다."
+          npx --no-install firebase-tools deploy --only "$ONLY" --project "$PROJECT_ID" --non-interactive
       - run: npm run build -- --base=/gagyebu/
         env:
           VITE_FIREBASE_API_KEY: ${{ secrets.VITE_FIREBASE_API_KEY }}
