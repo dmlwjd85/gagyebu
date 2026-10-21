@@ -2,7 +2,7 @@
 import '../style.css';
 import '../fonts.css';
 import { initTheme, currentTheme } from '../lib/theme.js';
-import { applyLook, writeLook, readLook, ensureFont, themeBannerHtml, installArtFallback } from '../lib/look.js';
+import { applyLook, writeLook, readLook, ensureFont } from '../lib/look.js';
 import { applyScale } from '../lib/contentScale.js';
 import { fitNums } from '../ui/util.js';
 import { period, periodOf } from '../lib/dates.js';
@@ -25,7 +25,6 @@ if (q.has('mood') || q.has('font') || q.has('decor')) {
   });
 }
 const look = applyLook(readLook());
-installArtFallback();
 ensureFont(look.font);
 
 const today = '2026-10-21';
@@ -99,7 +98,7 @@ document.getElementById('app').innerHTML = `
   <div class="aurora" aria-hidden="true"></div>
   <div class="app-frame ${nav ? 'has-nav' : ''}">
     <div class="app-top"><div class="app-shell">${topBar(m, { month: screen !== 'settings' })}</div></div>
-    <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell">${screen === 'home' ? '' : themeBannerHtml(look)}${body}</div></main>
+    <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell">${body}</div></main>
     ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" aria-label="새 기록 추가"><span>＋</span></button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav>` : ''}
   </div>`;
 fitNums(document);

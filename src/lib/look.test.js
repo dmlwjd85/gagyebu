@@ -4,8 +4,8 @@ import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
 import {
   DEFAULT_LOOK, MOODS, FONTS, ART_MOODS,
-  readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook, heroArtHtml, themeBannerHtml,
-  fontsFor, artFailed,
+  readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
+  fontsFor,
 } from './look.js';
 
 function mem(init = {}) {
@@ -80,55 +80,31 @@ describe('클라우드 설정', () => {
   });
 });
 
-describe('꾸미기 그림', () => {
-  test('꺼짐·기본 테마는 그림을 넣지 않는다', () => {
-    expect(heroArtHtml({ mood: 'sakura', decor: false }, '/gagyebu/')).toBe('');
-    expect(heroArtHtml({ mood: 'default', decor: true }, '/gagyebu/')).toBe('');
-    expect(themeBannerHtml(DEFAULT_LOOK, '/gagyebu/')).toBe('');
-  });
-  test('켜진 테마의 그림만, 두 폭, lazy', () => {
-    const html = heroArtHtml({ mood: 'sakura', font: 'pretendard', decor: true }, '/gagyebu/');
-    expect(html).toContain('src="/gagyebu/themes/sakura-480.webp"');
-    expect(html).toContain('srcset="/gagyebu/themes/sakura-480.webp 480w, /gagyebu/themes/sakura-960.webp 960w"');
-    expect(html).toContain('loading="lazy"');
-    for (const other of ART_MOODS.filter((id) => id !== 'sakura')) expect(html).not.toContain(other);
+describe('테마는 색만', () => {
+  test('화면 HTML·CSS·설치 캐시에 테마 그림이 없다', () => {
     expect(MOODS).toEqual(['default', 'sakura', 'ocean', 'maple', 'snow', 'retro']);
     expect(FONTS).toEqual(['system', 'pretendard', 'gaegu']);
     const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
-    expect(css).not.toMatch(/\.webp/);
+    const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
+    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+    expect(css).not.toMatch(/hero-art|theme-banner|\.webp/);
+    expect(views).not.toMatch(/hero-art|theme-banner|꾸미기 보기|\.webp/);
+    expect(main).not.toMatch(/hero-art|theme-banner|themeBannerHtml|\.webp/);
+    const cfg = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
+    expect(cfg).not.toMatch(/webp|theme-art/);
+    expect(cfg).toMatch(/globPatterns: \['\*\*\/\*\.\{js,css,html,svg,png\}'\]/);
   });
-  test('그림이 실패하면 480만 다시 받고, 그것도 없으면 칸을 숨긴다', () => {
-    const img = fakeImg({ src: '/gagyebu/themes/sakura-480.webp', srcset: '/gagyebu/themes/sakura-480.webp 480w, /gagyebu/themes/sakura-960.webp 960w' });
-    img.currentSrc = 'https://example.test/gagyebu/themes/sakura-960.webp';
-    expect(artFailed(img)).toBe('retry');
-    expect(img.getAttribute('srcset')).toBe('');
-    expect(img.src).toBe('/gagyebu/themes/sakura-480.webp');
-    expect(artFailed(img)).toBe('hide');
-    expect(img.classList.contains('is-broken')).toBe(true);
-    expect(img.banner.classList.contains('is-broken')).toBe(true);
-    expect(artFailed(img)).toBe('hide');
+  test('저장된 decor 는 화면을 바꾸지 않고 그대로 읽힌다', () => {
+    const s = mem({ decor: 'off', mood: 'sakura' });
+    expect(readLook(s)).toEqual({ mood: 'sakura', font: 'pretendard', decor: false });
+    const root = { dataset: {} };
+    applyLook(readLook(s), root);
+    expect(root.dataset).toEqual({ theme: 'sakura', font: 'pretendard', decor: 'off' });
+    expect(s.getItem('decor')).toBe('off');
   });
 });
 
-function fakeImg({ src, srcset }) {
-  const banner = { classList: classBox() };
-  const attrs = new Map([['src', src], ['srcset', srcset]]);
-  return {
-    src,
-    dataset: {},
-    classList: classBox(),
-    banner,
-    getAttribute: (k) => (attrs.has(k) ? attrs.get(k) : null),
-    setAttribute: (k, v) => attrs.set(k, v),
-    closest: () => banner,
-  };
-}
-function classBox() {
-  const s = new Set();
-  return { add: (c) => s.add(c), contains: (c) => s.has(c) };
-}
-
-describe('손글씨 숫자·크기·오프라인 그림', () => {
+describe('손글씨 숫자·크기', () => {
   test('손글씨는 본문과 금액용 Pretendard를 함께 받는다', () => {
     expect(fontsFor('gaegu')).toEqual(['gaegu', 'pretendard']);
     expect(fontsFor('pretendard')).toEqual(['pretendard']);
@@ -143,19 +119,7 @@ describe('손글씨 숫자·크기·오프라인 그림', () => {
     expect(css).toMatch(/html\[data-font="gaegu"\] :is\(\.tabular-nums, \[data-fit\], \.num\)/);
     expect(css).toMatch(/font-family:[^;]*Pretendard Variable/);
     expect(css).toMatch(/font-variant-numeric:\s*tabular-nums/);
-    expect(css).toMatch(/height:\s*clamp\(56px,\s*calc\(150px - \(var\(--fs, 1\) - 1\) \* 300px\), 150px\)/);
-    expect(css).toMatch(/@media \(max-width: 480px\)\s*\{\s*\.hero-art \{ height: 60px; \}/);
-    expect(css).toMatch(/\.hero-art\.is-broken \{ display: none; \}/);
-    expect(css).toMatch(/\.theme-banner\.is-broken \{ display: none; \}/);
-    expect(css).not.toMatch(/top:\s*114px/);
-  });
-  test('480 그림만 설치 캐시하고 960은 본 뒤에 저장한다', () => {
-    const cfg = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
-    expect(cfg).toMatch(/themes\/\*-480\.webp/);
-    expect(cfg).not.toMatch(/globPatterns:[^\]]*960/);
-    expect(cfg).toContain('[^/]+-960\\.webp');
-    expect(cfg).toMatch(/cacheName: 'theme-art'/);
-    expect(cfg).toMatch(/handler: 'CacheFirst'/);
+    expect(css).not.toMatch(/hero-art|theme-banner/);
   });
 });
 
@@ -172,7 +136,7 @@ function homeFixture(look) {
 }
 
 describe('설정·홈 표시', () => {
-  test('설정에 색 견본·글꼴·꾸미기 스위치가 있다', () => {
+  test('설정에 색 견본과 글꼴이 있고 꾸미기 스위치는 없다', () => {
     if (!globalThis.localStorage) {
       const box = new Map();
       globalThis.localStorage = { getItem: (k) => box.get(k) ?? null, setItem: (k, v) => box.set(k, String(v)), removeItem: (k) => box.delete(k) };
@@ -182,25 +146,17 @@ describe('설정·홈 표시', () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('벚꽃');
     expect(html).toContain('data-font-pick="system"');
-    expect(html).toContain('꾸미기 보기');
-    expect(html).toContain('data-decor');
-    expect(html).not.toMatch(/<input[^>]*data-decor[^>]*checked/);
+    expect(html).not.toContain('꾸미기 보기');
+    expect(html).not.toContain('data-decor');
     expect(html).toContain('SIL OFL');
   });
-  test('그림이 켜지면 금액은 그림 아래 칸에 있다', () => {
-    const on = homeView(homeFixture({ mood: 'maple', font: 'pretendard', decor: true }));
-    const artAt = on.indexOf('class="hero-art"');
-    const copyAt = on.indexOf('hero-copy');
-    const numAt = on.indexOf('오늘 쓸 수 있는 돈');
-    expect(artAt).toBeGreaterThan(-1);
-    expect(artAt).toBeLessThan(copyAt);
-    expect(copyAt).toBeLessThan(numAt);
-    expect(on).toContain('maple-960.webp');
-    expect(on).not.toContain('sakura-');
-    const off = homeView(homeFixture({ mood: 'maple', font: 'pretendard', decor: false }));
-    expect(off).not.toContain('hero-art');
-    expect(off).toContain('오늘 쓸 수 있는 돈');
-    expect(off).toContain('hero-card px-5');
+  test('분위기를 켜도 홈에는 그림 없이 금액만 있다', () => {
+    for (const decor of [true, false]) {
+      const html = homeView(homeFixture({ mood: 'sakura', font: 'pretendard', decor }));
+      expect(html).not.toMatch(/hero-art|theme-banner|\.webp/);
+      expect(html).toContain('오늘 쓸 수 있는 돈');
+      expect(html).toContain('hero-card px-5');
+    }
   });
 });
 
