@@ -322,6 +322,17 @@
   /* 라벨은 1행, 금액은 2행. 한쪽 라벨이 줄바꿈돼도 옆 칸 금액과 같은 높이에 둔다. */
   .pace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: start; }
   .pace-grid > * { min-width: 0; overflow-wrap: anywhere; }
+  .owner-picks { display: flex; flex-wrap: wrap; gap: 6px; max-width: 100%; }
+  .owner-picks > .chip { max-width: 100%; height: auto; white-space: normal; overflow-wrap: anywhere; text-align: left; }
+  .owner-seg { display: flex; flex-wrap: wrap; width: 100%; }
+  .owner-seg > button { flex: 1 1 4.5em; height: auto; white-space: normal; overflow-wrap: anywhere; }
+  .who-list { display: flex; flex-direction: column; gap: 8px; }
+  .who-row { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 12px; min-width: 0; }
+  .who-name { flex: 1 1 4.5em; min-width: 0; overflow-wrap: anywhere; font-weight: 700; }
+  .who-amt { flex: 1 1 7.5em; min-width: 0; overflow-wrap: anywhere; }
+  .owner-chip { display: inline-block; max-width: 100%; margin-top: 2px; padding: 0 0.45rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.75em; line-height: 1.45; overflow-wrap: anywhere; }
+  .owner-chip.is-deposit { font-weight: 700; color: var(--income); border-color: var(--income); background: color-mix(in srgb, var(--income) 14%, transparent); }
+  .owner-chip.is-shared { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
   .mode-later { width: 100%; height: auto; white-space: normal; text-align: center; line-height: 1.4; }
 }
 

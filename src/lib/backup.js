@@ -3,16 +3,18 @@
 // version 4: 쓰는 방식(settings)을 더함. 없으면 null. 1~3 백업은 settings 키가 없어도 읽힌다.
 import { clampStartDay } from './dates.js';
 import { normalizeSettings } from './modes.js';
+import { sanitizeOwnerRow } from './couple.js';
 
 const strip = (o) => { const { createdAt, updatedAt, at, ...r } = o ?? {}; return r; };
+const owned = (row) => sanitizeOwnerRow(strip(row));
 export const BACKUP_VERSION = 4;
 export function buildBackup({ profile = {}, categories = [], accounts = [], transactions = [], budgets = [], rules = [], recurring = [], goals = [], imports = [], assetAccounts = [], holdings = [], contributions = [], assetPrefs = null, settings = null }, now = new Date()) {
   const prefs = settings ? normalizeSettings(settings) : null;
   return {
     app: 'gagyebu', version: BACKUP_VERSION, exportedAt: now.toISOString(),
     profile: { monthStartDay: profile.monthStartDay ?? 1 },
-    categories: categories.map(strip), accounts: accounts.map(strip), transactions: transactions.map(strip),
-    budgets: budgets.map(strip), rules: rules.map(strip), recurring: recurring.map(strip), goals: goals.map(strip),
+    categories: categories.map(strip), accounts: accounts.map(strip), transactions: transactions.map(owned),
+    budgets: budgets.map(strip), rules: rules.map(strip), recurring: recurring.map(owned), goals: goals.map(strip),
     imports: imports.map(strip),
     assetAccounts: assetAccounts.map(strip), holdings: holdings.map(strip), contributions: contributions.map(strip),
     assetPrefs: assetPrefs ? strip(assetPrefs) : null,
@@ -36,10 +38,10 @@ export function parseBackup(raw) {
     profile: { monthStartDay: clampStartDay(raw.profile?.monthStartDay ?? 1) },
     categories: listOf(raw, 'categories'),
     accounts: listOf(raw, 'accounts'),
-    transactions: listOf(raw, 'transactions'),
+    transactions: listOf(raw, 'transactions').map(sanitizeOwnerRow),
     budgets: listOf(raw, 'budgets'),
     rules: listOf(raw, 'rules'),
-    recurring: listOf(raw, 'recurring'),
+    recurring: listOf(raw, 'recurring').map(sanitizeOwnerRow),
     goals: listOf(raw, 'goals'),
     imports: listOf(raw, 'imports'),
     hasAssets: false,

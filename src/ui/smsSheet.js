@@ -8,6 +8,8 @@ import {
   parseSms, readClipboard, clipboardHint, failMessage, draftFromItem, txFromDraft,
   categorize, composeMemo, signedOf, isLikelyDuplicate, pickAccount,
 } from '../lib/sms.js';
+import { ownerToWrite, spouseLabel } from '../lib/couple.js';
+import { ownerPickHtml } from './views.js';
 
 const STATUSES = [
   ['approval', '승인'],
@@ -125,6 +127,9 @@ function previewHtml(sms, st) {
         <div class="sms-cats" role="radiogroup" aria-labelledby="sms-acc-l">
           ${accs.map((a) => `<button type="button" role="radio" class="chip sms-chip" aria-checked="${a.id === d.accountId}" data-sms-acc="${esc(a.id)}"><span aria-hidden="true">${esc(a.emoji ?? '')}</span><span>${esc(a.name)}</span></button>`).join('')}
         </div></div>
+      ${st.features?.txOwner ? `<div class="sms-field min-w-0"><span class="text-caption text-ink-sub" id="sms-own-l">누구 돈</span>
+        ${ownerPickHtml(d.owner, spouseLabel(st.settings), 'data-sms-owner')}
+        <p class="text-caption text-ink-sub break-words">${d.kind === 'income' ? '배우자 입금이면 배우자를 고르세요. ' : ''}나는 기록에 누구 돈을 적지 않아요.</p></div>` : ''}
       <label class="sms-field"><span class="text-caption text-ink-sub">메모</span>
         <input name="memo" class="sms-in text-body" maxlength="${MAX_MEMO}" autocomplete="off" value="${esc(memo)}" /></label>
       ${d.error ? `<p class="text-body text-expense" role="alert">${esc(d.error)}</p>` : ''}
@@ -226,6 +231,8 @@ export function applySmsInput(sms, target, st) {
 
 export function smsTx(d) {
   const tx = txFromDraft(d);
+  const owner = ownerToWrite(d.owner);
+  if (owner) tx.owner = owner;
   return { tx, err: validateTx(tx) };
 }
 

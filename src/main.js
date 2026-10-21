@@ -23,6 +23,7 @@ import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup, parseBackup } from './lib/backup.js';
 import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, effectiveStartDay } from './lib/modes.js';
+import { ownerToWrite, spouseLabel } from './lib/couple.js';
 import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
@@ -40,7 +41,7 @@ const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart',
 const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring', 'assets', 'tax'];
 const NO_NAV = new Set(['settings', 'import', 'search', 'recurring', 'assets', 'tax']); // 아래 탭 막대 없는 화면
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
-const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, assetOpen: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
+const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, ownerFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, assetOpen: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
 const today = () => ymd(new Date());
 
 function model() {
@@ -155,7 +156,7 @@ function onSave(tx, { repeat = false } = {}) {
   if (repeat && tx.amount > 0) {
     // 이번 회차는 방금 기록했으니 lastPosted = 이번 달 → 다음 달부터 자동 기록
     const ym = tx.date.slice(0, 7);
-    data.saveRecurring({ name: (tx.memo || c?.name || '반복').split(' #')[0].slice(0, 30), amount: tx.amount, kind: tx.kind, categoryId: tx.categoryId, accountId: tx.accountId, dayOfMonth: Number(tx.date.slice(8)), active: true, startYm: ym, lastPosted: ym });
+    data.saveRecurring({ name: (tx.memo || c?.name || '반복').split(' #')[0].slice(0, 30), amount: tx.amount, kind: tx.kind, categoryId: tx.categoryId, accountId: tx.accountId, dayOfMonth: Number(tx.date.slice(8)), active: true, startYm: ym, lastPosted: ym, owner: ownerToWrite(tx.owner) });
     return setTimeout(() => toast(`🔁 매달 ${Number(tx.date.slice(8))}일에 ${formatWon(tx.amount)} 자동으로 기록할게요.`, { action: '반복 보기', onAction: () => go('recurring') }), 50);
   }
   // 분류를 고치면 규칙 제안: 앞으로 같은 가맹점은 이 카테고리로('10월' 같은 일반어·이미 맞는 규칙은 묻지 않음)
@@ -224,6 +225,7 @@ async function editRecurring(r) {
       { name: 'categoryId', label: '카테고리', type: 'select', value: r?.categoryId ?? state.categories.find((c) => c.kind === 'expense')?.id, options: catOptions() },
       { name: 'dayOfMonth', label: '매달 며칠', type: 'select', value: r?.dayOfMonth ?? Number(t.slice(8)), options: Array.from({ length: 31 }, (_, i) => [i + 1, `${i + 1}일`]) },
       { name: 'accountId', label: '결제수단', type: 'select', value: r?.accountId ?? '', options: [['', '지정 안 함'], ...state.accounts.map((a) => [a.id, `${a.emoji || ''} ${a.name}`])] },
+      ...(state.features?.txOwner ? [{ name: 'owner', label: '누구 돈', type: 'select', value: r?.owner === '배우자' || r?.owner === '공동' ? r.owner : '', options: [['', '나'], ['배우자', spouseLabel(state.settings)], ['공동', '공동']], hint: '나는 기록에 누구 돈을 적지 않아요. 배우자 입금이면 배우자를 고르세요.' }] : []),
     ],
     validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 입력해 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
   });
@@ -233,7 +235,8 @@ async function editRecurring(r) {
   // 새로 만들 때: 오늘이 이미 지난 날이면 이번 달은 건너뜀(직접 기록했을 수 있음) → 다음 달부터
   const ym = t.slice(0, 7);
   const lastPosted = isNew ? (day <= Number(t.slice(8)) ? ym : undefined) : r.lastPosted;
-  data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted });
+  const pickedOwner = state.features?.txOwner ? v.owner : r?.owner;
+  data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted, owner: pickedOwner === '나' ? '나' : ownerToWrite(pickedOwner) });
   setTimeout(() => data.postRecurring(today()), 300);
   toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요.');
 }
@@ -568,6 +571,7 @@ app.addEventListener('click', async (e) => {
   }
   if (d.date) { ui.selDate = ui.selDate === d.date ? null : d.date; return render(); }
   if (d.addOn) return openSheet(null, { date: d.addOn });
+  if (d.ownerFilter !== undefined) { ui.ownerFilter = d.ownerFilter || null; return render(); }
   if (d.mode) { ui.mode = d.mode; return render(); }
   if (d.clearFilter !== undefined) { ui.catFilter = null; return render(); }
   if (d.filterCat) return go('calendar', { mode: 'list', catFilter: d.filterCat });
@@ -717,6 +721,18 @@ app.addEventListener('change', (e) => {
     if (id === 'recurring' && t.checked) setTimeout(() => data.postRecurring(today()), 300);
     return;
   }
+  if (t.dataset.spouseName !== undefined) {
+    const name = t.value.trim();
+    if (name.length > 20) { toast('배우자 이름은 20자까지예요.'); t.value = state.settings?.spouseName || ''; return; }
+    data.saveSettings({ spouseName: name || null });
+    toast(name ? `배우자 이름을 ${name}(으)로 보여 드려요.` : '배우자 이름을 기본으로 돌렸어요.');
+    return;
+  }
+  if (t.dataset.splitMe !== undefined) {
+    const n = Number(t.value);
+    if (Number.isInteger(n) && n >= 0 && n <= 100) data.saveSettings({ splitMe: n });
+    return;
+  }
   if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
   // 가져오기
@@ -747,6 +763,14 @@ app.addEventListener('change', (e) => {
 let searchTimer;
 app.addEventListener('input', (e) => {
   if (e.target.dataset?.contentScale !== undefined) return setScale(Number(e.target.value) / 100);
+  if (e.target.dataset?.splitMe !== undefined) {
+    const n = Number(e.target.value);
+    const who = spouseLabel(state.settings);
+    const out = $('[data-split-out]');
+    if (out && Number.isInteger(n)) out.textContent = `나 ${n}% · ${who} ${100 - n}%`;
+    e.target.setAttribute('aria-valuetext', `나 ${n}퍼센트`);
+    return;
+  }
   if (e.target.dataset?.searchQ === undefined) return;
   ui.search.q = e.target.value;
   clearTimeout(searchTimer);

@@ -1,12 +1,13 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, getDocs, getDocsFromCache, getDoc, getDocFromCache } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, deleteField, writeBatch, serverTimestamp, getDocs, getDocsFromCache, getDoc, getDocFromCache } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
 import { resolveMode, STUDENT_INCOME, effectiveStartDay } from './lib/modes.js';
+import { ownerToWrite } from './lib/couple.js';
 import { ackOrTimeout, RESTORE_ACK_MS } from './lib/restoreWait.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
@@ -101,7 +102,7 @@ export function postRecurring(today) {
     const due = dueOccurrences(r, today);
     if (!due.length) continue;
     for (const o of due) {
-      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: r.id, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
+      b.set(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: r.id, owner: ownerToWrite(r.owner), createdAt: serverTimestamp(), updatedAt: serverTimestamp() }));
       n++;
     }
     b.update(u('recurring', r.id), { lastPosted: due[due.length - 1].ym, updatedAt: serverTimestamp() });
@@ -146,8 +147,8 @@ export function watchMonth(ym) {
 }
 
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ''));
-const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4 }) =>
-  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4 });
+const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4, owner }) =>
+  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4, owner: owner === '나' ? '나' : ownerToWrite(owner) });
 export const tagsOf = (memo = '') => [...new Set((memo.match(/#[^\s#]{1,20}/g) || []).map((t) => t.slice(1)))].slice(0, 20);
 
 export function saveTx(tx) {
@@ -218,7 +219,12 @@ export function setProfile(patch) {
   fire(setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
 }
 export function saveSettings(patch) {
-  fire(setDoc(u('settings', 'prefs'), clean({ ...patch, updatedAt: serverTimestamp() }), { merge: true }), writeErrorHandler);
+  const data = { updatedAt: serverTimestamp() };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) data[k] = deleteField();
+    else if (v !== undefined && v !== '') data[k] = v;
+  }
+  fire(setDoc(u('settings', 'prefs'), data, { merge: true }), writeErrorHandler);
 }
 // 알바·심부름. 이미 있는 카테고리는 이름·이모지를 덮지 않는다.
 export async function ensureStudentIncome() {
@@ -242,7 +248,8 @@ export const deleteRule = (id) => fire(deleteDoc(u('rules', id)), writeErrorHand
 export function saveRecurring(r) {
   const ref = r.id ? u('recurring', r.id) : doc(col('recurring'));
   fire(setDoc(ref, clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) })), writeErrorHandler);
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, owner: r.owner === '나' ? '나' : ownerToWrite(r.owner),
+    updatedAt: serverTimestamp(), ...(r.id ? {} : { createdAt: serverTimestamp() }) })), writeErrorHandler);
   return ref.id;
 }
 export const deleteRecurring = (id) => fire(deleteDoc(u('recurring', id)), writeErrorHandler);

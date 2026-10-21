@@ -47,14 +47,16 @@ describe('모드', () => {
     expect(mixed.features.recurring).toBe(true);
     expect(mixed.features.allowance).toBe(true);
   });
-  test('부부 모드는 거래 주인 자리만 켜고 구현하지 않는다', () => {
+  test('부부 모드는 거래 주인을 읽고 문서를 고치지 않는다', () => {
     expect(resolveMode(settingsForMode('couple')).features.txOwner).toBe(true);
-    expect(COUPLE_OWNER_IMPLEMENTED).toBe(false);
+    expect(COUPLE_OWNER_IMPLEMENTED).toBe(true);
     const tx = { id: 't', amount: 1000, kind: 'expense' };
     const hook = coupleOwnerHook(tx);
-    expect(hook).toMatchObject({ field: 'owner', implemented: false, tx });
+    expect(hook).toMatchObject({ field: 'owner', implemented: true, owner: '나', tx });
     expect(tx.owner).toBeUndefined();
     expect(Object.keys(tx)).toEqual(['id', 'amount', 'kind']);
+    expect(coupleOwnerHook({ owner: '배우자' }).owner).toBe('배우자');
+    expect(coupleOwnerHook({ owner: '그외' }).owner).toBe('나');
   });
   test('설정 정규화는 모르는 키·테마를 버린다', () => {
     expect(normalizeSettings({ mode: 'student', theme: 'ocean', features: { allowance: true, nope: true }, allowanceAmount: 200000, allowanceCycle: 'week', allowanceWeekday: 1, allowanceDay: 5 })).toEqual({
@@ -297,14 +299,15 @@ describe('오늘 금액은 계산마다 이름이 다르다', () => {
     const card = html.slice(html.indexOf('id="pace-h"'));
     expect(hero.match(/오늘 쓸 수 있는 돈/g)).toEqual(['오늘 쓸 수 있는 돈']);
     expect(hero).toContain(formatWon(m.weather.available));
-    expect(card).toContain('이번 주 몫');
-    expect(card).toContain('오늘 몫');
+    expect(card).toContain('이번 주 몫 중 남은 돈');
+    expect(card).toContain('오늘 몫 중 남은 돈');
+    expect(card).toContain('쓴 돈');
     expect(card).toContain(formatWon(pace.todayLeft));
     expect(card).toContain(formatWon(pace.weekLeft));
     expect(card).not.toContain('오늘 남은 돈');
     expect(card).not.toContain('오늘 쓸 수 있는 돈');
     expect(card).not.toContain('하루에 쓸 수 있는 돈');
-    expect(card).toMatch(/class="pace-grid[^"]*">\s*<p class="text-caption[^"]*">이번 주 몫<\/p>\s*<p class="text-caption[^"]*">오늘 몫<\/p>\s*<p /);
+    expect(card).toMatch(/class="pace-grid[^"]*">\s*<p class="text-caption[^"]*">이번 주 몫 중 남은 돈<\/p>\s*<p class="text-caption[^"]*">오늘 몫 중 남은 돈<\/p>\s*<p /);
   });
   test('학생 용돈은 하루 몫이고, 숨긴 월급날 25일은 기간에 안 쓴다', () => {
     const profile = { monthStartDay: 25 };
