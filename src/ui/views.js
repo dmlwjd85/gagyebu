@@ -113,32 +113,34 @@ const WEEKDAY = ['일', '월', '화', '수', '목', '금', '토'];
 function modeHomeCards(m) {
   return [feat(m, 'weekDaily') ? paceCard(m) : '', feat(m, 'allowance') ? allowanceCard(m) : '', m.mode && feat(m, 'categoryLimits') ? limitCard(m) : ''].join('');
 }
+function paceCells(leftLabel, leftValue, leftCls, rightLabel, rightValue, rightCls) {
+  return `<div class="pace-grid mt-2">
+      <p class="text-caption text-ink-sub">${leftLabel}</p>
+      <p class="text-caption text-ink-sub">${rightLabel}</p>
+      <p data-fit class="text-head tabular-nums ${leftCls}">${leftValue}</p>
+      <p data-fit class="text-head tabular-nums ${rightCls}">${rightValue}</p>
+    </div>`;
+}
 function paceCard(m) {
   const total = m.budget?.total ?? 0;
-  if (!(total > 0)) return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주</h2><p class="mt-1 text-body text-ink-sub break-words">예산을 정하면 이번 주와 오늘 남은 돈을 보여 드려요.</p><button class="btn-ghost mt-3" data-action="budget">예산 정하기</button></section>`;
+  if (!(total > 0)) return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주 몫</h2><p class="mt-1 text-body text-ink-sub break-words">예산을 정하면 이번 주 몫과 오늘 몫을 보여 드려요.</p><button class="btn-ghost mt-3" data-action="budget">예산 정하기</button></section>`;
   const w = weekDailyLeft({ budget: total, p: m.p, today: m.today, spentByDate: spentByDateFrom(m.periodTxs) });
   if (!w.inPeriod) return '';
   const tone = (n) => (n < 0 ? 'text-expense' : '');
-  return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주</h2>
-    <div class="pace-grid mt-2">
-      <div><p class="text-caption text-ink-sub">이번 주 남은 돈</p><p data-fit class="text-head tabular-nums ${tone(w.weekLeft)}">${formatWon(w.weekLeft)}</p></div>
-      <div><p class="text-caption text-ink-sub">오늘 남은 돈</p><p data-fit class="text-head tabular-nums ${tone(w.todayLeft)}">${formatWon(w.todayLeft)}</p></div>
-    </div>
-    <p class="mt-2 text-caption text-ink-sub break-words">한 달 예산을 기간 일수로 나눈 몫이에요. 나머지는 앞날부터 1원씩이에요.</p></section>`;
+  return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주 몫</h2>
+    ${paceCells('이번 주 몫', formatWon(w.weekLeft), tone(w.weekLeft), '오늘 몫', formatWon(w.todayLeft), tone(w.todayLeft))}
+    <p class="mt-2 text-caption text-ink-sub break-words">한 달 예산을 기간의 모든 날로 나눈 몫이에요. 위의 큰 숫자는 남은 예산을 남은 날로 나눈 값이라 금액이 다를 수 있어요.</p></section>`;
 }
 function allowanceCard(m) {
   const a = allowanceFrom(m.settings);
-  if (!(a.amount > 0)) return `<section class="card-solid p-4" aria-labelledby="alw-h"><h2 id="alw-h" class="text-head">용돈</h2><p class="mt-1 text-body text-ink-sub break-words">용돈 날과 금액을 정하면, 다음 용돈까지 하루에 쓸 수 있는 돈을 보여 드려요.</p><button class="btn-ghost mt-3" data-action="allowance">용돈 정하기</button></section>`;
+  if (!(a.amount > 0)) return `<section class="card-solid p-4" aria-labelledby="alw-h"><h2 id="alw-h" class="text-head">용돈</h2><p class="mt-1 text-body text-ink-sub break-words">용돈 날과 금액을 정하면 다음 용돈까지 하루 몫을 보여 드려요.</p><button class="btn-ghost mt-3" data-action="allowance">용돈 정하기</button></section>`;
   const st = allowanceStatus({ ...a, today: m.today, txs: m.txs ?? m.periodTxs });
   const when = a.cycle === 'week' ? `매주 ${WEEKDAY[a.weekday]}요일` : `매달 ${a.day}일`;
   const next = `${Number(st.next.slice(5, 7))}월 ${Number(st.next.slice(8))}일`;
   const left = Math.max(0, st.left);
   return `<section class="card-solid p-4" aria-labelledby="alw-h"><h2 id="alw-h" class="text-head">용돈</h2>
     <p class="mt-1 text-caption text-ink-sub break-words">${when} · 다음 용돈 ${next} · ${st.days}일 남음</p>
-    <div class="pace-grid mt-2">
-      <div><p class="text-caption text-ink-sub">하루에 쓸 수 있는 돈</p><p data-fit class="text-head tabular-nums">${formatWon(st.perDay)}</p></div>
-      <div><p class="text-caption text-ink-sub">남은 용돈</p><p data-fit class="text-head tabular-nums ${st.left < 0 ? 'text-expense' : ''}">${st.left < 0 ? formatWon(st.left) : formatWon(left)}</p></div>
-    </div>
+    ${paceCells('용돈 하루 몫', formatWon(st.perDay), '', '남은 용돈', st.left < 0 ? formatWon(st.left) : formatWon(left), st.left < 0 ? 'text-expense' : '')}
     ${st.remainder > 0 && st.perDay > 0 ? `<p class="mt-2 text-caption text-ink-sub break-words">나누고 남은 ${formatWon(st.remainder)}은 마지막 날에 더해요.</p>` : ''}
     <button class="btn-ghost mt-3" data-action="allowance">용돈 고치기</button></section>`;
 }
@@ -383,7 +385,7 @@ export function settingsView(m, ui) {
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-view"><h2 id="s-view" class="text-head">화면</h2>
       <div class="seg self-start" role="radiogroup" aria-label="테마">${[['system', '시스템'], ['light', '라이트'], ['dark', '다크']].map(([v, l]) => `<button role="radio" aria-checked="${m.themeMode === v}" data-theme="${v}">${l}</button>`).join('')}</div>
       ${feat(m, 'monthStart') ? `<label class="opt-row"><span class="opt-k">한 달 시작일 (월급날)</span>
-        <select class="select" data-start-day aria-label="한 달 시작일">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${m.sd === i + 1 ? 'selected' : ''}>${i + 1}일</option>`).join('')}</select></label>` : ''}
+        <select class="select" data-start-day aria-label="한 달 시작일">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${(m.storedStart ?? m.sd) === i + 1 ? 'selected' : ''}>${i + 1}일</option>`).join('')}</select></label>` : ''}
       <label class="flex items-center justify-between gap-2 text-body">진동 피드백<label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동 피드백"><span></span></label></label>
       ${scaleControl(m.contentScale ?? 1)}
       <button class="btn-ghost self-start" data-action="tips-reset">팁 다시 보기</button></section>

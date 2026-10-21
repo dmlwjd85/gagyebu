@@ -6,7 +6,8 @@ import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
-import { resolveMode, STUDENT_INCOME } from './lib/modes.js';
+import { resolveMode, STUDENT_INCOME, effectiveStartDay } from './lib/modes.js';
+import { ackOrTimeout, RESTORE_ACK_MS } from './lib/restoreWait.js';
 
 // 오프라인 캐시: 인터넷이 끊겨도 기록하고, 연결되면 자동 업로드
 const db = initializeFirestore(app, { localCache: persistentLocalCache({ tabManager: persistentMultipleTabManager() }) });
@@ -123,7 +124,7 @@ async function seedDefaults() {
 // 보고 있는 달 기준 6개 기간 거래 구독(차트 추이용)
 export function watchMonth(ym) {
   if (!state.user) return;
-  const sd = state.profile?.monthStartDay ?? 1;
+  const sd = effectiveStartDay(state.profile?.monthStartDay ?? 1, state.features);
   const start = period(shiftYm(ym, -5), sd).start, end = period(ym, sd).end;
   const key = `${start}~${end}`;
   if (state.txWindow !== key) {
@@ -367,8 +368,20 @@ export async function allTransactions() {
 }
 // 모든 기록 삭제(계정 삭제 포함)
 const dropStamp = (row) => { const { id, ym, createdAt, updatedAt, at, ...rest } = row ?? {}; return rest; };
+// 오프라인이거나 서버 답이 없으면 기다리지 않고 로컬에 넣는다. 한 번 막히면 나머지는 바로 큐에 넣는다.
+async function commitTracked(promise, flags) {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  if (flags.queued || offline) {
+    fire(promise);
+    flags.queued = true;
+    return;
+  }
+  const result = await ackOrTimeout(promise, RESTORE_ACK_MS);
+  if (result === 'timeout') flags.queued = true;
+}
 // 백업에 있는 문서만 같은 id로 합친다. 파일에 없는 기록·예전 백업에 없는 컬렉션은 지우지 않는다.
 export async function restoreBackup(parsed) {
+  const flags = { queued: false };
   const writeList = async (name, items, idOf) => {
     const rows = (items ?? []).filter((x) => idOf(x));
     for (let i = 0; i < rows.length; i += 400) {
@@ -378,11 +391,11 @@ export async function restoreBackup(parsed) {
         if (name === 'imports' && !data.at) data.at = serverTimestamp();
         b.set(u(name, idOf(x)), data, { merge: true });
       });
-      await b.commit();
+      await commitTracked(b.commit(), flags);
     }
   };
   if (Number.isInteger(parsed.profile?.monthStartDay)) {
-    await setDoc(u(), { monthStartDay: parsed.profile.monthStartDay, updatedAt: serverTimestamp() }, { merge: true });
+    await commitTracked(setDoc(u(), { monthStartDay: parsed.profile.monthStartDay, updatedAt: serverTimestamp() }, { merge: true }), flags);
   }
   await writeList('categories', parsed.categories, (x) => x.id);
   await writeList('accounts', parsed.accounts, (x) => x.id);
@@ -396,11 +409,12 @@ export async function restoreBackup(parsed) {
     await writeList('assetAccounts', parsed.assetAccounts, (x) => x.id);
     await writeList('holdings', parsed.holdings, (x) => x.id);
     await writeList('contributions', parsed.contributions, (x) => x.id);
-    if (parsed.assetPrefs) await setDoc(u('assetPrefs', 'tax'), clean(dropStamp(parsed.assetPrefs)), { merge: true });
+    if (parsed.assetPrefs) await commitTracked(setDoc(u('assetPrefs', 'tax'), clean(dropStamp(parsed.assetPrefs)), { merge: true }), flags);
   }
   if (parsed.hasSettings && parsed.settings && Object.keys(parsed.settings).length) {
-    await setDoc(u('settings', 'prefs'), { ...parsed.settings, updatedAt: serverTimestamp() }, { merge: true });
+    await commitTracked(setDoc(u('settings', 'prefs'), { ...parsed.settings, updatedAt: serverTimestamp() }, { merge: true }), flags);
   }
+  return { queued: flags.queued, online: typeof navigator === 'undefined' || navigator.onLine !== false };
 }
 
 export async function deleteEverything() {

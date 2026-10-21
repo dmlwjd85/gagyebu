@@ -319,8 +319,9 @@
   .feat-row { display: flex; align-items: center; justify-content: space-between; gap: 8px; min-height: 44px; }
   .feat-copy { min-width: 0; flex: 1; }
   .feat-copy > span { display: block; overflow-wrap: anywhere; }
-  .pace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 8px; }
-  .pace-grid > div { min-width: 0; }
+  /* 라벨은 1행, 금액은 2행. 한쪽 라벨이 줄바꿈돼도 옆 칸 금액과 같은 높이에 둔다. */
+  .pace-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); column-gap: 8px; row-gap: 2px; align-items: start; }
+  .pace-grid > * { min-width: 0; overflow-wrap: anywhere; }
   .mode-later { width: 100%; height: auto; white-space: normal; text-align: center; line-height: 1.4; }
 }
 

@@ -22,7 +22,8 @@ const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup, parseBackup } from './lib/backup.js';
-import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom } from './lib/modes.js';
+import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, effectiveStartDay } from './lib/modes.js';
+import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
@@ -43,7 +44,8 @@ const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilt
 const today = () => ymd(new Date());
 
 function model() {
-  const sd = state.profile?.monthStartDay ?? 1;
+  const storedStart = state.profile?.monthStartDay ?? 1;
+  const sd = effectiveStartDay(storedStart, state.features);
   const t = today();
   const curYm = periodOf(t, sd);
   const viewYm = ui.viewYm ?? curYm;
@@ -52,7 +54,7 @@ function model() {
   const tot = totals(periodTxs);
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
-    sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
+    sd, storedStart, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
     categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
     assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
@@ -249,7 +251,7 @@ function applyModeChoice(mode) {
 async function editAllowance() {
   const a = allowanceFrom(state.settings);
   const v = await formDialog({
-    title: '용돈', body: '다음 용돈날까지 남은 돈을 남은 일수로 나눠, 하루에 쓸 수 있는 돈을 정수 원으로 보여 드려요.',
+    title: '용돈', body: '다음 용돈날까지 남은 돈을 남은 일수로 나눈 하루 몫이에요. 홈의 큰 숫자와는 계산이 달라요.',
     fields: [
       { name: 'amount', label: '한 번에 받는 용돈', type: 'amount', value: a.amount },
       { name: 'cycle', label: '주기', type: 'select', value: a.cycle, options: [['month', '매달'], ['week', '매주']] },
@@ -446,8 +448,10 @@ async function restoreFile(file) {
   catch (e) { return toast(e?.message || '백업 파일을 읽지 못했어요.'); }
   const ok = await confirmDialog({ title: '백업을 더할까요?', body: '파일에 있는 기록만 같은 칸에 넣어요. 파일에 없는 기록은 지우지 않아요. 예전 백업에 없는 항목도 그대로 둡니다.', ok: '더하기' });
   if (!ok) return;
-  try { await data.restoreBackup(parsed); toast('백업을 더했어요.'); }
-  catch { toast('복원하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+  try {
+    const result = await data.restoreBackup(parsed);
+    toast(restoreMessage({ online: navigator.onLine, queued: !!result?.queued }));
+  } catch { toast('복원하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
 }
 async function impFile(file) {
   if (!file) return;
@@ -675,7 +679,7 @@ app.addEventListener('click', async (e) => {
       try {
         // 규칙·반복·목표·모든 달 예산·가져오기 기록까지(QA M4)
         const [txs, budgets, assets] = await Promise.all([data.allTransactions(), data.allBudgets(), data.assetExport()]);
-        const b = buildBackup({ profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, settings: state.settings, ...assets });
+        const b = buildBackup({ profile: { monthStartDay: m.storedStart ?? state.profile?.monthStartDay ?? 1 }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, settings: state.settings, ...assets });
         download(`쓱가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;

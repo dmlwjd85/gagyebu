@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { period, periodOf } from './dates.js';
 import { dailyShares, weekDailyLeft, spentByDateFrom } from './pace.js';
@@ -5,10 +6,14 @@ import { allowanceBounds, allowanceStatus, dailyAllowance, daysBetween } from '.
 import { limitWarnings } from './budget.js';
 import { buildBackup, parseBackup, BACKUP_VERSION } from './backup.js';
 import {
-  resolveMode, settingsForMode, normalizeSettings, coupleOwnerHook, COUPLE_OWNER_IMPLEMENTED, LEGACY_FEATURES, STUDENT_INCOME,
+  resolveMode, settingsForMode, normalizeSettings, coupleOwnerHook, COUPLE_OWNER_IMPLEMENTED, LEGACY_FEATURES, STUDENT_INCOME, effectiveStartDay,
 } from './modes.js';
 import { monthSummaryText, shareSummary } from './shareSummary.js';
 import { dueOccurrences, recTxId } from './recurring.js';
+import { filterPeriod, totals, moneyWeather } from './stats.js';
+import { formatWon } from './money.js';
+import { homeView, settingsView } from '../ui/views.js';
+import { ackOrTimeout, restoreMessage, OFFLINE_RESTORE_NOTICE } from './restoreWait.js';
 
 describe('모드', () => {
   test('모드가 없으면 지금 메뉴를 유지하고 새 카드는 숨긴다', () => {
@@ -250,6 +255,112 @@ describe('월간 요약 공유', () => {
       URL.createObjectURL = prevCreate;
       URL.revokeObjectURL = prevRevoke;
     }
+  });
+});
+
+function paceHome(features, extra = {}) {
+  const storedStart = extra.storedStart ?? 1;
+  const sd = effectiveStartDay(storedStart, features);
+  const today = '2026-10-21';
+  const viewYm = periodOf(today, sd);
+  const p = period(viewYm, sd);
+  const txs = [
+    { id: 'h', date: '2026-10-02', amount: 550000, kind: 'expense', categoryId: 'housing' },
+    { id: 'f', date: '2026-10-21', amount: 8900, kind: 'expense', categoryId: 'food' },
+  ];
+  const periodTxs = filterPeriod(txs, p);
+  const budget = { total: 1500000, byCategory: {} };
+  return {
+    sd, storedStart, today, curYm: viewYm, viewYm, p, periodTxs, tot: totals(periodTxs),
+    budget, txLoaded: true, user: { displayName: '초', email: 'cho@example.com' },
+    categories: [], accounts: [], rules: [], recurring: [], goals: [], imports: [], txs,
+    assetAccounts: [], holdings: [], contributions: [], assetPrefs: null,
+    catMap: new Map(), accMap: new Map(),
+    weather: moneyWeather({ budget: budget.total, periodTxs, p, today }),
+    trend: [], streak: 0, noSpend: 0, insight: null,
+    wide: false, dark: false, themeMode: 'light', offline: false, contentScale: 1,
+    mode: extra.mode ?? 'single', legacyMode: false, features,
+    settings: extra.settings ?? null,
+  };
+}
+
+describe('오늘 금액은 계산마다 이름이 다르다', () => {
+  test('큰 숫자와 오늘 몫은 다른 금액이고, 카드는 몫이라고만 적는다', () => {
+    const features = resolveMode(settingsForMode('single')).features;
+    const m = paceHome(features);
+    const pace = weekDailyLeft({ budget: 1500000, p: m.p, today: m.today, spentByDate: spentByDateFrom(m.periodTxs) });
+    expect(m.weather.available).not.toBe(pace.todayLeft);
+    expect(Number.isInteger(m.weather.available)).toBe(true);
+    expect(Number.isInteger(pace.todayLeft)).toBe(true);
+    const html = homeView(m);
+    const hero = html.slice(0, html.indexOf('id="pace-h"'));
+    const card = html.slice(html.indexOf('id="pace-h"'));
+    expect(hero.match(/오늘 쓸 수 있는 돈/g)).toEqual(['오늘 쓸 수 있는 돈']);
+    expect(hero).toContain(formatWon(m.weather.available));
+    expect(card).toContain('이번 주 몫');
+    expect(card).toContain('오늘 몫');
+    expect(card).toContain(formatWon(pace.todayLeft));
+    expect(card).toContain(formatWon(pace.weekLeft));
+    expect(card).not.toContain('오늘 남은 돈');
+    expect(card).not.toContain('오늘 쓸 수 있는 돈');
+    expect(card).not.toContain('하루에 쓸 수 있는 돈');
+    expect(card).toMatch(/class="pace-grid[^"]*">\s*<p class="text-caption[^"]*">이번 주 몫<\/p>\s*<p class="text-caption[^"]*">오늘 몫<\/p>\s*<p /);
+  });
+  test('학생 용돈은 하루 몫이고, 숨긴 월급날 25일은 기간에 안 쓴다', () => {
+    const profile = { monthStartDay: 25 };
+    const settings = { ...settingsForMode('student'), allowanceAmount: 800000, allowanceCycle: 'month', allowanceDay: 1 };
+    const features = resolveMode(settings).features;
+    expect(features.monthStart).toBe(false);
+    expect(effectiveStartDay(profile.monthStartDay, features)).toBe(1);
+    expect(profile).toEqual({ monthStartDay: 25 });
+    expect(period('2026-10', effectiveStartDay(25, features))).toMatchObject({ start: '2026-10-01', end: '2026-11-01' });
+    expect(effectiveStartDay(25, { ...features, monthStart: true })).toBe(25);
+    expect(effectiveStartDay(25, LEGACY_FEATURES)).toBe(25);
+    const m = paceHome(features, { mode: 'student', storedStart: 25, settings });
+    expect(m.sd).toBe(1);
+    expect(m.storedStart).toBe(25);
+    expect(m.p.start).toBe('2026-10-01');
+    const html = homeView(m);
+    expect(html).toContain('용돈 하루 몫');
+    expect(html).toContain('남은 용돈');
+    expect(html).not.toContain('하루에 쓸 수 있는 돈');
+    expect(html).not.toContain('오늘 남은 돈');
+    const alw = html.slice(html.indexOf('id="alw-h"'));
+    expect(alw).toMatch(/class="pace-grid[^"]*">\s*<p class="text-caption[^"]*">용돈 하루 몫<\/p>\s*<p class="text-caption[^"]*">남은 용돈<\/p>\s*<p /);
+    globalThis.localStorage = { getItem: () => null, setItem() {}, removeItem() {} };
+    const setHtml = settingsView(m, { catKind: 'expense' });
+    expect(setHtml).not.toContain('data-start-day');
+    expect(setHtml).not.toContain('한 달 시작일');
+    const single = paceHome(resolveMode(settingsForMode('single')).features, { storedStart: 25 });
+    expect(single.sd).toBe(25);
+    const singleSet = settingsView(single, { catKind: 'expense' });
+    expect(singleSet).toContain('data-start-day');
+    expect(singleSet).toContain('value="25" selected');
+    const backed = buildBackup({ profile: { monthStartDay: m.storedStart }, settings });
+    expect(backed.profile.monthStartDay).toBe(25);
+  });
+  test('몫 칸은 라벨과 금액이 같은 행이라 줄바꿈이 옆 칸을 밀지 않는다', () => {
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const rule = css.match(/\.pace-grid \{[^}]*\}/)[0];
+    expect(rule).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)\s*minmax\(0,\s*1fr\)/);
+    expect(rule).toMatch(/align-items:\s*start/);
+    expect(css).toMatch(/\.pace-grid > \* \{[^}]*min-width:\s*0/);
+    expect(css).not.toMatch(/\.pace-grid > div/);
+  });
+});
+
+describe('오프라인 복원 안내', () => {
+  test('끊기거나 서버 답이 없으면 대기 문구, 받으면 완료 문구', () => {
+    expect(restoreMessage({ online: false, queued: true })).toBe(OFFLINE_RESTORE_NOTICE);
+    expect(restoreMessage({ online: true, queued: true })).toBe(OFFLINE_RESTORE_NOTICE);
+    expect(restoreMessage({ online: true, queued: false })).toBe('백업을 더했어요.');
+    expect(OFFLINE_RESTORE_NOTICE).toMatch(/오프라인/);
+    expect(OFFLINE_RESTORE_NOTICE).toMatch(/이 기기/);
+  });
+  test('멈춘 쓰기는 시간 안에 timeout, 끝난 쓰기는 acked', async () => {
+    expect(await ackOrTimeout(Promise.resolve('ok'), 30)).toBe('acked');
+    expect(await ackOrTimeout(new Promise(() => {}), 20)).toBe('timeout');
+    await expect(ackOrTimeout(Promise.reject(new Error('denied')), 30)).rejects.toThrow('denied');
   });
 });
 

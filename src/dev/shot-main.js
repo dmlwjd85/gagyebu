@@ -12,9 +12,10 @@ import { resolveMode, settingsForMode } from '../lib/modes.js';
 
 const q = new URLSearchParams(location.search);
 const screen = q.get('screen') || 'home';
+const scale = Number(q.get('scale')) || 1;
 localStorage.setItem('theme', 'light');
 initTheme();
-applyScale(1);
+applyScale(scale);
 
 const today = '2026-10-21';
 const sd = 1;
@@ -48,7 +49,7 @@ const m = {
   weather: moneyWeather({ budget: budget.total, periodTxs, p, today }),
   trend: trend(txs, [0].map(() => p)),
   streak: 2, noSpend: 4, insight: null,
-  wide: false, dark: currentTheme() === 'dark', themeMode: 'light', offline: false, contentScale: 1,
+  wide: false, dark: currentTheme() === 'dark', themeMode: 'light', offline: false, contentScale: scale, storedStart: sd,
 };
 const mode = q.get('mode');
 const settings = (mode === 'single' || mode === 'student' || mode === 'couple')

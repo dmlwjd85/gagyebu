@@ -1,9 +1,10 @@
 // 쓰는 방식(1인 가구·부부·학생)과 기능 스위치.
 // 모드 문서가 없는 기존 사용자는 지금 보이는 메뉴를 그대로 둔다.
 // 부부 '거래 주인'은 자리만 둔다. 거래 문서에는 이 PR에서 필드를 붙이지 않는다.
+import { clampStartDay } from './dates.js';
 
 export const MODES = [
-  { id: 'single', label: '1인 가구', emoji: '🏠', blurb: '월세·구독, 월급날, 오늘·이번 주 남은 돈' },
+  { id: 'single', label: '1인 가구', emoji: '🏠', blurb: '월세·구독, 월급날, 오늘·이번 주 몫' },
   { id: 'couple', label: '부부', emoji: '💑', blurb: '함께 보는 가계부. 누가 썼는지는 곧 나와요.' },
   { id: 'student', label: '학생', emoji: '🎓', blurb: '용돈, 저금통, 한도, 알바·심부름' },
 ];
@@ -11,9 +12,9 @@ export const MODES = [
 export const FEATURES = [
   { id: 'recurring', label: '반복 고정지출', hint: '월세·구독은 그날 자동으로, 같은 달은 한 번만', group: 'single' },
   { id: 'monthStart', label: '월급날 시작', hint: '한 달 합계와 예산 기간을 월급날에 맞춰요', group: 'single' },
-  { id: 'weekDaily', label: '오늘·이번 주 남은 돈', hint: '주간·하루 예산', group: 'single' },
+  { id: 'weekDaily', label: '오늘·이번 주 몫', hint: '한 달 예산을 날마다 나눈 몫. 큰 숫자와는 계산이 달라요', group: 'single' },
   { id: 'sms', label: '카드 문자 붙여넣기', hint: '문자를 붙여 바로 기록', group: 'single' },
-  { id: 'allowance', label: '용돈 주기', hint: '다음 용돈까지 하루에 쓸 수 있는 돈', group: 'student' },
+  { id: 'allowance', label: '용돈 주기', hint: '다음 용돈까지 하루 몫', group: 'student' },
   { id: 'piggy', label: '저금통', hint: '모으는 목표', group: 'student' },
   { id: 'categoryLimits', label: '카테고리 한도', hint: '한도에 가까우면 알려요', group: 'student' },
   { id: 'studentIncome', label: '알바·심부름', hint: '수입 카테고리', group: 'student' },
@@ -87,6 +88,15 @@ export function resolveMode(settings) {
 export function featureOn(features, id) {
   if (!features) return !!LEGACY_FEATURES[id];
   return !!features[id];
+}
+
+/**
+ * 화면·조회에 쓰는 한 달 시작일.
+ * 월급날 메뉴가 꺼져 있으면 1일. 프로필에 저장된 값은 바꾸지 않는다.
+ */
+export function effectiveStartDay(stored, features) {
+  if (!featureOn(features, 'monthStart')) return 1;
+  return clampStartDay(stored ?? 1);
 }
 
 export function settingsForMode(mode) {
