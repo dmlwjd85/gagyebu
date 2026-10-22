@@ -319,7 +319,12 @@ html[data-font="gaegu"] :is(.tabular-nums, [data-fit], .num) {
   font-variant-numeric: tabular-nums;
 }
 
-.look-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.look-grid {
+  display: grid;
+  font-size: calc(13px * var(--fs, 1));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.6em), 1fr));
+  gap: 8px;
+}
 .look-pick {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   min-width: 0; min-height: 44px; height: auto; padding: 8px 4px;
@@ -331,6 +336,6 @@ html[data-font="gaegu"] :is(.tabular-nums, [data-fit], .num) {
   background: linear-gradient(90deg, var(--sw1), var(--sw2) 52%, var(--sw3));
 }
 .look-name {
-  max-width: 100%; font-size: calc(13px * var(--fs, 1)); line-height: 1.25; font-weight: 700;
-  text-align: center; overflow-wrap: anywhere; white-space: normal;
+  max-width: 100%; font-size: 1em; line-height: 1.25; font-weight: 700;
+  text-align: center; word-break: keep-all; overflow-wrap: normal; white-space: normal;
 }
