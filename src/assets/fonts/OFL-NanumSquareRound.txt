@@ -2,7 +2,12 @@ Copyright (c) 2010, NAVER Corporation (https://www.naver.com),
 with Reserved Font Name Nanum, NanumSquareRound.
 
 나눔스퀘어라운드(NanumSquareRound)는 네이버가 SIL Open Font License 1.1로 공개한 글꼴이다.
-이 디렉터리의 woff2는 쓱 가계부용 서브셋이다. 한글 음절·한글 자모·라틴·문장부호만 남기고 한자는 뺐다.
+이 디렉터리의 woff2는 쓱 가계부용 서브셋이다. 한글 음절·한글 자모·라틴·문장부호를 남기고 한자는 뺐다.
+나눔스퀘어라운드에 없는 기호는 같은 라이선스의 글꼴에서 윤곽만 가져왔다.
+· (U+00B7)는 Noto Sans, Copyright 2015 Google LLC.
+− (U+2212), ↩ (U+21A9)는 Pretendard, Copyright 2023 Kil Hyung-jin.
+✓ (U+2713), ✕ (U+2715), ▾ (U+25BE)는 Noto Sans Symbols 2, Copyright 2017 Google Inc.
+≠ (U+2260), ⋯ (U+22EF), ㈜ (U+321C)는 나눔스퀘어라운드에 있던 글자다.
 서브셋은 수정본이라, 예약된 글꼴 이름(Nanum, NanumSquareRound)을 파일 안의 글꼴 이름으로 쓰지 않는다.
 파일 안 이름은 Gagyebu Round 이다.
 

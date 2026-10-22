@@ -227,7 +227,9 @@ describe('테마 글자 대비', () => {
     expect(p['--bg']).toBeUndefined();
     expect(p['--ink']).toBeUndefined();
     expect(p['--mood']).toMatch(/^#[0-9A-Fa-f]{6}$/);
-    const card = mix(n.surface, p['--mood'], 0.12);
+    const card = mix(n.surface, p['--mood'], 0.08);
+    const expense = label.startsWith('dark') ? '#FF8A9B' : '#CC2A48';
+    const income = label.startsWith('dark') ? '#5EE0A8' : '#0B7A55';
     const bar = mix(n.surface, p['--mood'], 0.14);
     const head = mix(n.bg, p['--mood'], 0.14);
     need('mood/bg', p['--mood'], n.bg);
@@ -235,6 +237,8 @@ describe('테마 글자 대비', () => {
     need('mood-on', p['--mood-on'], p['--mood']);
     need('ink/card', n.ink, card);
     need('sub/card', n.sub, card);
+    need('expense/card', expense, card);
+    need('income/card', income, card);
     need('mood/card', p['--mood'], card);
     need('sub/bar', n.sub, bar);
     need('mood/bar', p['--mood'], bar);
@@ -248,6 +252,7 @@ describe('테마 글자 대비', () => {
     expect(css).toMatch(/data-tone-menu/);
     expect(css).toMatch(/data-tone-accent/);
     expect(css).toMatch(/data-tone-card/);
+    expect(css).toMatch(/--mood\) 8%, var\(--surface-solid\)/);
     expect(css).not.toMatch(/--bg\s*:/);
     expect(css).not.toMatch(/--ink\s*:/);
     expect(css).not.toMatch(/--aurora-/);
