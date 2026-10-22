@@ -606,7 +606,18 @@ describe('쓰는 방식 settings/prefs', () => {
     await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mood: 'oceanx' }));
     await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { font: 'comic' }));
     await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { decor: 'yes' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'single', askMode: false }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['menu', 'accent'] }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['card'] }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: [] }));
+    const withTone = await getDoc(doc(alice(), 'users/alice/settings/prefs'));
+    expect(withTone.data().tone).toEqual([]);
+    expect(withTone.data().mood).toBeUndefined();
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: 'menu' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['comic'] }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['menu', 'accent', 'card', 'menu'] }));
     await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-mood'), { ...TX, mood: 'sakura' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-tone'), { ...TX, tone: ['menu'] }));
     const tx = await getDoc(doc(alice(), 'users/alice/transactions/t1'));
     expect(tx.data().mood).toBeUndefined();
     expect(tx.data()).toMatchObject({ amount: 1000, kind: 'expense', categoryId: 'food' });

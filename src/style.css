@@ -166,7 +166,7 @@
   @supports not (backdrop-filter: blur(1px)) { .tabbar { background: var(--surface-solid); } }
   .tab { @apply flex flex-col items-center gap-0.5 min-w-[56px] min-h-[48px] justify-center text-micro text-ink-sub rounded-xl; }
   .tab > span:first-child { @apply text-xl; filter: grayscale(.6); opacity: .8; }
-  .tab.on { color: var(--primary); }
+  .tab.on { color: var(--nav-accent, var(--primary)); }
   .tab.on > span:first-child { filter: none; opacity: 1; }
   /* 좁은 폭(작은 폰에서 브라우저 150~200% 확대 등): 5칸을 똑같이 나눠 어떤 폭에서도 5개 모두 보이고 눌리게.
      228px까지는 칸마다 44px 이상, 그보다 좁으면 칸이 화면 폭에 맞춰 줄어듦(높이는 48px 유지).

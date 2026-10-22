@@ -10,6 +10,7 @@ service cloud.firestore {
     function optInt(k, min, max) { return !(k in d()) || (d()[k] is int && d()[k] >= min && d()[k] <= max); }
     function optBool(k) { return !(k in d()) || d()[k] is bool; }
     function optTs(k) { return !(k in d()) || d()[k] is timestamp; }
+    function toneOk() { return !('tone' in d()) || (d().tone is list && d().tone.size() <= 3 && d().tone.hasOnly(['menu', 'accent', 'card'])); }
     // 실제 있는 날짜만(2026-13-45, 2026-02-30 거부). 윤년 계산 포함
     function leap(y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
     function mdays(y, m) { return m == 2 ? (leap(y) ? 29 : 28) : (m in [4, 6, 9, 11] ? 30 : 31); }
@@ -319,7 +320,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && docId == 'prefs'
-          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'spouseName', 'splitMe', 'mood', 'font', 'decor', 'updatedAt'])
+          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'spouseName', 'splitMe', 'mood', 'font', 'decor', 'tone', 'updatedAt'])
           && (!('mode' in d()) || d().mode in ['single', 'couple', 'student'])
           && optBool('askMode')
           && (!('features' in d()) || featuresOk(d().features))
@@ -332,6 +333,7 @@ service cloud.firestore {
           && (!('mood' in d()) || d().mood in ['default', 'sakura', 'ocean', 'maple', 'snow', 'retro'])
           && (!('font' in d()) || d().font in ['system', 'pretendard', 'gaegu'])
           && optBool('decor')
+          && toneOk()
           && optTs('updatedAt');
       }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부

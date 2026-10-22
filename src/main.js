@@ -1,7 +1,7 @@
 import './style.css';
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
-import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook } from './lib/look.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, toneList } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -90,7 +90,7 @@ function pushLook(partial) {
   const next = applyLook(writeLook({ ...readLook(), ...partial }));
   ensureFont(next.font)?.then?.(() => { if ($('#main')) fitNums(); });
   if (state.user && data?.saveSettings) {
-    const patch = { mood: next.mood, font: next.font, decor: next.decor };
+    const patch = { mood: next.mood, font: next.font, decor: next.decor, tone: toneList(next.tone) };
     if (state.settings) state.settings = { ...state.settings, ...patch };
     data.saveSettings(patch);
   }
@@ -751,6 +751,7 @@ app.addEventListener('change', (e) => {
   if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
   if (t.dataset.decor !== undefined && t.type === 'checkbox') return pushLook({ decor: t.checked });
+  if (t.dataset.tonePart && t.type === 'checkbox') return pushLook({ tone: { ...readLook().tone, [t.dataset.tonePart]: t.checked } });
   // 가져오기
   if (t.dataset.impFile !== undefined) { impFile(t.files?.[0]); t.value = ''; return; }
   if (t.dataset.impCol && ui.imp) { IMP.setCol(ui.imp, Number(t.dataset.impCol), t.value); return render(); }

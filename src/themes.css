@@ -1,319 +1,117 @@
-/* 분위기 테마. <html data-theme> 와 기존 html.dark(라이트/다크)를 함께 쓴다.
-   기본(data-theme=default)은 design/tokens-a.css 그대로.
-   글자 색은 배경·카드 면 대비 4.5:1 이상, 차트·＋버튼은 3:1 이상.
-   그림은 public/themes 의 사진만 쓰고, CSS 로 꽃·바다를 그리지 않는다.
-   금액은 그림 아래 그라데이션 칸에 두고, 그림 아래쪽만 짧게 덮어 이어 붙인다. */
+/* 분위기 톤은 화면 전체 바탕·본문색을 바꾸지 않는다.
+   바탕·본문·오로라는 design/tokens-a.css 라이트/다크 그대로.
+   --mood 는 고른 부분에만 쓴다.
+   data-tone-menu=on: 활성 탭, 위 막대.
+   data-tone-accent=on: 제목, 버튼, 강조 금액(--primary·＋버튼).
+   data-tone-card=on: 카드 바탕을 --mood 8%만 섞음. 12%는 금액·수입·다크 버튼이 4.5:1 아래로 떨어진다.
+   기본(data-theme=default)은 톤을 칠하지 않는다.
+   글자 대비는 중립 바탕·흰/어두운 면 기준 4.5:1, ＋버튼은 3:1. */
 
 html[data-theme="sakura"] {
-  --bg: #FFF5F7;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-solid: #FFFFFF;
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --line: rgba(58, 18, 36, 0.10);
-  --ink: #3A1224;
-  --ink-sub: #6E3146;
-  --primary: #A81850;
-  --on-primary: #FFFFFF;
-  --toast-action: #FFD0E0;
-  --expense: #B01E3C;
-  --income: #0B7A48;
-  --on-expense: #FFFFFF;
-  --on-income: #FFFFFF;
-  --hero-1: #8C1E48;
-  --hero-2: #B43258;
-  --hero-3: #9A3038;
-  --hero-ink: #FFFFFF;
-  --hero-btn-ink: #8C1E48;
-  --fab-1: #9A1850;
-  --fab-2: #BE3260;
-  --glow: rgba(168, 24, 80, 0.35);
-  --aurora-1: #FFD0E0;
-  --aurora-2: #FFE0EA;
-  --aurora-3: #F8D8E4;
-  --heat-1: color-mix(in srgb, var(--primary) 12%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 24%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 40%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 58%, transparent);
-  --chart-1: #A81850; --chart-2: #C2410C; --chart-3: #0F766E; --chart-4: #1D4ED8;
-  --chart-5: #A16207; --chart-6: #7A3050; --chart-7: #5C4E56;
-  --weather-sunny: #C47A10; --weather-cloudy: #6E7E96; --weather-rainy: #3A5EBE;
-  --lg1: #8C1E48; --lg2: #B43258; --lg3: #9A3038; --logo-ink: #3A1224;
+  --mood: #A81850;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #9A1850;
+  --mood-fab-2: #BE3260;
 }
 html.dark[data-theme="sakura"] {
-  --bg: #160C12;
-  --surface: rgba(44, 24, 34, 0.72);
-  --surface-solid: #2C1822;
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --line: rgba(255, 232, 240, 0.14);
-  --ink: #FFE8F0;
-  --ink-sub: #F0C4D2;
-  --primary: #FFA3C0;
-  --on-primary: #3A1020;
-  --toast-action: #8C1E48;
-  --expense: #FF9AAB;
-  --income: #6EE0B4;
-  --on-expense: #3A1020;
-  --on-income: #06281A;
-  --hero-1: #8C1E48; --hero-2: #B43258; --hero-3: #9A3038;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #8C1E48;
-  --fab-1: #C43A68; --fab-2: #E06A90;
-  --glow: rgba(255, 163, 192, 0.28);
-  --aurora-1: #3A1828; --aurora-2: #2E1830; --aurora-3: #321820;
-  --heat-1: color-mix(in srgb, var(--primary) 10%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 18%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 28%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 40%, transparent);
-  --chart-1: #FFA3C0; --chart-2: #FFB086; --chart-3: #5EE0C8; --chart-4: #9CC4FF;
-  --chart-5: #F0D080; --chart-6: #F0A0C0; --chart-7: #C8B4BE;
-  --weather-sunny: #FFC857; --weather-cloudy: #9BB0C8; --weather-rainy: #8AA6FF;
-  --lg1: #FFA3C0; --lg2: #FFB7CC; --lg3: #FFC2A8; --logo-ink: #FFE8F0;
+  --mood: #FFA3C0;
+  --mood-on: #3A1020;
+  --mood-fab-1: #C43A68;
+  --mood-fab-2: #E06A90;
 }
 
 html[data-theme="ocean"] {
-  --bg: #F2F7FB;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-solid: #FFFFFF;
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --line: rgba(12, 36, 51, 0.10);
-  --ink: #0C2433;
-  --ink-sub: #3A5568;
-  --primary: #0B5E78;
-  --on-primary: #FFFFFF;
-  --toast-action: #D4EEF8;
-  --expense: #B01E3C;
-  --income: #0B7A48;
-  --on-expense: #FFFFFF;
-  --on-income: #FFFFFF;
-  --hero-1: #0C4A68; --hero-2: #145878; --hero-3: #1A4E68;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #0C4A68;
-  --fab-1: #0C5270; --fab-2: #1A6A88;
-  --glow: rgba(12, 94, 120, 0.32);
-  --aurora-1: #D4EEF8; --aurora-2: #D6E6F8; --aurora-3: #D8F3EE;
-  --heat-1: color-mix(in srgb, var(--primary) 12%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 24%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 40%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 58%, transparent);
-  --chart-1: #0B5E78; --chart-2: #C2410C; --chart-3: #0F766E; --chart-4: #1D4ED8;
-  --chart-5: #A16207; --chart-6: #7A3050; --chart-7: #4A5C68;
-  --weather-sunny: #C47A10; --weather-cloudy: #6E7E96; --weather-rainy: #2A6EAE;
-  --lg1: #0C4A68; --lg2: #145878; --lg3: #1A4E68; --logo-ink: #0C2433;
+  --mood: #0B5E78;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #0C5270;
+  --mood-fab-2: #1A6A88;
 }
 html.dark[data-theme="ocean"] {
-  --bg: #07141C;
-  --surface: rgba(16, 36, 48, 0.72);
-  --surface-solid: #102430;
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --line: rgba(231, 244, 251, 0.14);
-  --ink: #E7F4FB;
-  --ink-sub: #B7D4E4;
-  --primary: #8AD4F0;
-  --on-primary: #06202C;
-  --toast-action: #0C4A68;
-  --expense: #FF9AAB;
-  --income: #6EE0B4;
-  --on-expense: #3A1020;
-  --on-income: #06281A;
-  --hero-1: #0C4A68; --hero-2: #145878; --hero-3: #1A4E68;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #0C4A68;
-  --fab-1: #147898; --fab-2: #2A90B0;
-  --glow: rgba(138, 212, 240, 0.28);
-  --aurora-1: #0E2C3C; --aurora-2: #102848; --aurora-3: #0C3030;
-  --heat-1: color-mix(in srgb, var(--primary) 10%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 18%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 28%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 40%, transparent);
-  --chart-1: #8AD4F0; --chart-2: #FFB086; --chart-3: #5EE0C8; --chart-4: #9CC4FF;
-  --chart-5: #F0D080; --chart-6: #F0A0C0; --chart-7: #B4C6D2;
-  --weather-sunny: #FFC857; --weather-cloudy: #9BB0C8; --weather-rainy: #8AA6FF;
-  --lg1: #8AD4F0; --lg2: #B7E4F8; --lg3: #9AD8E0; --logo-ink: #E7F4FB;
+  --mood: #8AD4F0;
+  --mood-on: #06202C;
+  --mood-fab-1: #147898;
+  --mood-fab-2: #2A90B0;
 }
 
 html[data-theme="maple"] {
-  --bg: #FBF6F1;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-solid: #FFFFFF;
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --line: rgba(42, 20, 12, 0.10);
-  --ink: #2A140C;
-  --ink-sub: #6A4030;
-  --primary: #A33B12;
-  --on-primary: #FFFFFF;
-  --toast-action: #FFE0C8;
-  --expense: #B01E3C;
-  --income: #0B7A48;
-  --on-expense: #FFFFFF;
-  --on-income: #FFFFFF;
-  --hero-1: #7A2A10; --hero-2: #B04414; --hero-3: #8A3420;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #7A2A10;
-  --fab-1: #9A3410; --fab-2: #C45218;
-  --glow: rgba(163, 59, 18, 0.32);
-  --aurora-1: #FFE0C8; --aurora-2: #F8D8C0; --aurora-3: #F6E4C8;
-  --heat-1: color-mix(in srgb, var(--primary) 12%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 24%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 40%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 58%, transparent);
-  --chart-1: #A33B12; --chart-2: #9F1239; --chart-3: #0F766E; --chart-4: #1D4ED8;
-  --chart-5: #A16207; --chart-6: #7A3050; --chart-7: #6A5648;
-  --weather-sunny: #C47A10; --weather-cloudy: #8A7468; --weather-rainy: #3A5EBE;
-  --lg1: #7A2A10; --lg2: #B04414; --lg3: #8A3420; --logo-ink: #2A140C;
+  --mood: #A33B12;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #9A3410;
+  --mood-fab-2: #C45218;
 }
 html.dark[data-theme="maple"] {
-  --bg: #140E0A;
-  --surface: rgba(38, 24, 16, 0.72);
-  --surface-solid: #261810;
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --line: rgba(255, 241, 230, 0.14);
-  --ink: #FFF1E6;
-  --ink-sub: #F0D0B8;
-  --primary: #FFB07A;
-  --on-primary: #2A1408;
-  --toast-action: #7A2A10;
-  --expense: #FF9AAB;
-  --income: #6EE0B4;
-  --on-expense: #3A1020;
-  --on-income: #06281A;
-  --hero-1: #7A2A10; --hero-2: #B04414; --hero-3: #8A3420;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #7A2A10;
-  --fab-1: #A84818; --fab-2: #C45A20;
-  --glow: rgba(255, 176, 122, 0.28);
-  --aurora-1: #3A2014; --aurora-2: #3A2418; --aurora-3: #2C2014;
-  --heat-1: color-mix(in srgb, var(--primary) 10%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 18%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 28%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 40%, transparent);
-  --chart-1: #FFB07A; --chart-2: #FF8AA0; --chart-3: #5EE0C8; --chart-4: #9CC4FF;
-  --chart-5: #F0D080; --chart-6: #F0A0C0; --chart-7: #D4C2B4;
-  --weather-sunny: #FFC857; --weather-cloudy: #C4B0A4; --weather-rainy: #8AA6FF;
-  --lg1: #FFB07A; --lg2: #FFC4A0; --lg3: #F0D0B8; --logo-ink: #FFF1E6;
+  --mood: #FFB07A;
+  --mood-on: #2A1408;
+  --mood-fab-1: #A84818;
+  --mood-fab-2: #C45A20;
 }
 
 html[data-theme="snow"] {
-  --bg: #F4F7FB;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-solid: #FFFFFF;
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --line: rgba(21, 32, 51, 0.10);
-  --ink: #152033;
-  --ink-sub: #3E5168;
-  --primary: #1E4E86;
-  --on-primary: #FFFFFF;
-  --toast-action: #E4EEF8;
-  --expense: #B01E3C;
-  --income: #0B7A48;
-  --on-expense: #FFFFFF;
-  --on-income: #FFFFFF;
-  --hero-1: #1A3A64; --hero-2: #2A4E78; --hero-3: #3A5878;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #1A3A64;
-  --fab-1: #1A4478; --fab-2: #2E5C90;
-  --glow: rgba(30, 78, 134, 0.32);
-  --aurora-1: #E4EEF8; --aurora-2: #E8F0F8; --aurora-3: #E6F2F6;
-  --heat-1: color-mix(in srgb, var(--primary) 12%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 24%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 40%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 58%, transparent);
-  --chart-1: #1E4E86; --chart-2: #9F1239; --chart-3: #0F766E; --chart-4: #1D4ED8;
-  --chart-5: #A16207; --chart-6: #6A3A58; --chart-7: #546274;
-  --weather-sunny: #C47A10; --weather-cloudy: #7E90A4; --weather-rainy: #3A5EBE;
-  --lg1: #1A3A64; --lg2: #2A4E78; --lg3: #3A5878; --logo-ink: #152033;
+  --mood: #1E4E86;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #1A4478;
+  --mood-fab-2: #2E5C90;
 }
 html.dark[data-theme="snow"] {
-  --bg: #0E141C;
-  --surface: rgba(24, 34, 48, 0.72);
-  --surface-solid: #182230;
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --line: rgba(242, 246, 251, 0.14);
-  --ink: #F2F6FB;
-  --ink-sub: #C9D7E6;
-  --primary: #A9CFFF;
-  --on-primary: #0E1C30;
-  --toast-action: #1A3A64;
-  --expense: #FF9AAB;
-  --income: #6EE0B4;
-  --on-expense: #3A1020;
-  --on-income: #06281A;
-  --hero-1: #1A3A64; --hero-2: #2A4E78; --hero-3: #3A5878;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #1A3A64;
-  --fab-1: #2A5A90; --fab-2: #3A74B0;
-  --glow: rgba(169, 207, 255, 0.28);
-  --aurora-1: #1A2838; --aurora-2: #182434; --aurora-3: #142830;
-  --heat-1: color-mix(in srgb, var(--primary) 10%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 18%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 28%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 40%, transparent);
-  --chart-1: #A9CFFF; --chart-2: #FF8AA0; --chart-3: #5EE0C8; --chart-4: #9CC4FF;
-  --chart-5: #F0D080; --chart-6: #F0A0C0; --chart-7: #C4D0DC;
-  --weather-sunny: #FFC857; --weather-cloudy: #B7C6D6; --weather-rainy: #8AA6FF;
-  --lg1: #A9CFFF; --lg2: #C9D7E6; --lg3: #D5E4F2; --logo-ink: #F2F6FB;
+  --mood: #A9CFFF;
+  --mood-on: #0E1C30;
+  --mood-fab-1: #2A5A90;
+  --mood-fab-2: #3A74B0;
 }
 
 html[data-theme="retro"] {
-  --bg: #F8F3E8;
-  --surface: rgba(255, 255, 255, 0.78);
-  --surface-solid: #FFFFFF;
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --line: rgba(36, 24, 15, 0.10);
-  --ink: #24180F;
-  --ink-sub: #5C4632;
-  --primary: #8C2E3A;
-  --on-primary: #FFFFFF;
-  --toast-action: #F6E0C0;
-  --expense: #A32038;
-  --income: #1B6B3A;
-  --on-expense: #FFFFFF;
-  --on-income: #FFFFFF;
-  --hero-1: #6E2430; --hero-2: #9A3E20; --hero-3: #7A4214;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #6E2430;
-  --fab-1: #7A2834; --fab-2: #A34420;
-  --glow: rgba(140, 46, 58, 0.32);
-  --aurora-1: #F6E0C0; --aurora-2: #F0D8C4; --aurora-3: #E8E0C8;
-  --heat-1: color-mix(in srgb, var(--primary) 12%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 24%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 40%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 58%, transparent);
-  --chart-1: #8C2E3A; --chart-2: #A33B12; --chart-3: #0F6E56; --chart-4: #1E4A8A;
-  --chart-5: #8A6410; --chart-6: #6A3058; --chart-7: #5C5148;
-  --weather-sunny: #C47A10; --weather-cloudy: #8A7460; --weather-rainy: #3A5EBE;
-  --lg1: #6E2430; --lg2: #9A3E20; --lg3: #7A4214; --logo-ink: #24180F;
+  --mood: #8C2E3A;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #7A2834;
+  --mood-fab-2: #A34420;
 }
 html.dark[data-theme="retro"] {
-  --bg: #14110E;
-  --surface: rgba(38, 28, 22, 0.72);
-  --surface-solid: #261C16;
-  --glass-border: rgba(255, 255, 255, 0.10);
-  --line: rgba(248, 240, 228, 0.14);
-  --ink: #F8F0E4;
-  --ink-sub: #E4D0B8;
-  --primary: #FFB4A8;
-  --on-primary: #2A1214;
-  --toast-action: #6E2430;
-  --expense: #FF9AAB;
-  --income: #7EE0A8;
-  --on-expense: #3A1020;
-  --on-income: #06281A;
-  --hero-1: #6E2430; --hero-2: #9A3E20; --hero-3: #7A4214;
-  --hero-ink: #FFFFFF; --hero-btn-ink: #6E2430;
-  --fab-1: #C44A40; --fab-2: #D07030;
-  --glow: rgba(255, 180, 168, 0.28);
-  --aurora-1: #3A2418; --aurora-2: #342018; --aurora-3: #2C2418;
-  --heat-1: color-mix(in srgb, var(--primary) 10%, transparent);
-  --heat-2: color-mix(in srgb, var(--primary) 18%, transparent);
-  --heat-3: color-mix(in srgb, var(--primary) 28%, transparent);
-  --heat-4: color-mix(in srgb, var(--primary) 40%, transparent);
-  --chart-1: #FFB4A8; --chart-2: #FFB07A; --chart-3: #7EE0B8; --chart-4: #A9C4F0;
-  --chart-5: #F0D080; --chart-6: #F0A0C0; --chart-7: #D4C6B6;
-  --weather-sunny: #FFC857; --weather-cloudy: #C4B4A4; --weather-rainy: #8AA6FF;
-  --lg1: #FFB4A8; --lg2: #FFC4A0; --lg3: #E4D0B8; --logo-ink: #F8F0E4;
+  --mood: #FFB4A8;
+  --mood-on: #2A1214;
+  --mood-fab-1: #C44A40;
+  --mood-fab-2: #D07030;
 }
 
-html[data-theme]:not([data-theme="default"]) .toast { background: var(--ink); color: var(--bg); }
+/* 메뉴를 꺼도 강조 글씨가 --primary 를 바꿔도 활성 탭은 기본 색을 유지한다. */
+html[data-tone-menu="on"]:not([data-theme="default"]) {
+  --nav-accent: var(--mood);
+}
+html[data-tone-menu="on"]:not([data-theme="default"]) .app-top {
+  background: color-mix(in srgb, var(--mood) 14%, var(--bg));
+}
+html[data-tone-menu="on"]:not([data-theme="default"]) .app-top header {
+  color: var(--mood);
+}
+html[data-tone-menu="on"]:not([data-theme="default"]) .tabbar {
+  background: color-mix(in srgb, var(--mood) 14%, var(--surface-solid));
+}
+
+html[data-tone-accent="on"]:not([data-theme="default"]) {
+  --primary: var(--mood);
+  --on-primary: var(--mood-on);
+  --fab-1: var(--mood-fab-1);
+  --fab-2: var(--mood-fab-2);
+}
+html[data-tone-accent="on"]:not([data-theme="default"]) :is(.text-title, .text-head):not(.tabular-nums):not(.text-expense):not(.text-income) {
+  color: var(--mood);
+}
+/* 히어로 카드 글자는 흰 색을 유지한다. 제목 색이 그라데이션 위를 덮지 않게. */
+html[data-tone-accent="on"]:not([data-theme="default"]) .hero-card :is(.text-title, .text-head, .text-display, .text-body, .text-caption) {
+  color: var(--hero-ink);
+}
+
+html[data-tone-card="on"]:not([data-theme="default"]) :is(.card-solid, .glass):not(.hero-card) {
+  background: color-mix(in srgb, var(--mood) 8%, var(--surface-solid));
+}
 
 html[data-font="system"] body {
   font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
 }
+/* 저장값 gaegu. 보이는 글꼴은 나눔스퀘어라운드 서브셋. */
 html[data-font="gaegu"] body {
-  font-family: "Gaegu", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-family: "Gagyebu Round", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
 }
-/* 손글씨 숫자는 너비가 들쭉날쭉하다. 금액·합계·목록 숫자는 Pretendard 고정폭. */
+/* 금액·합계·목록 숫자는 Pretendard 고정폭. */
 html[data-font="gaegu"] :is(.tabular-nums, [data-fit], .num) {
   font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
   font-variant-numeric: tabular-nums;
@@ -329,8 +127,10 @@ html[data-font="gaegu"] :is(.tabular-nums, [data-fit], .num) {
   display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
   min-width: 0; min-height: 44px; height: auto; padding: 8px 4px;
   border-radius: 16px; border: 1px solid var(--line); background: var(--surface-solid); color: var(--ink);
+  cursor: pointer;
 }
-.look-pick[aria-checked="true"] { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.look-pick[aria-checked="true"],
+.look-pick:has(:checked) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
 .look-swatch {
   display: block; width: 100%; max-width: 72px; height: 22px; border-radius: 999px;
   background: linear-gradient(90deg, var(--sw1), var(--sw2) 52%, var(--sw3));
