@@ -91,8 +91,14 @@ describe('테마는 색만', () => {
     expect(views).not.toMatch(/hero-art|theme-banner|꾸미기 보기|\.webp/);
     expect(main).not.toMatch(/hero-art|theme-banner|themeBannerHtml|\.webp/);
     const cfg = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
-    expect(cfg).not.toMatch(/webp|theme-art/);
+    expect(cfg).not.toMatch(/webp|cacheName:\s*'theme-art'/);
     expect(cfg).toMatch(/globPatterns: \['\*\*\/\*\.\{js,css,html,svg,png\}'\]/);
+    expect(cfg).toContain("importScripts: ['sw-cleanup.js']");
+    const sw = readFileSync(new URL('../../public/sw-cleanup.js', import.meta.url), 'utf8');
+    expect(sw).toMatch(/addEventListener\(\s*'activate'/);
+    expect(sw).toContain("caches.delete('theme-art')");
+    expect(css).toMatch(/word-break:\s*keep-all/);
+    expect(css).not.toMatch(/\.look-name\s*\{[^}]*overflow-wrap:\s*anywhere/);
   });
   test('저장된 decor 는 화면을 바꾸지 않고 그대로 읽힌다', () => {
     const s = mem({ decor: 'off', mood: 'sakura' });
