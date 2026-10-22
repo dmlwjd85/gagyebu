@@ -1,4 +1,10 @@
-Copyright 2018 The Gaegu Project Authors
+Copyright (c) 2010, NAVER Corporation (https://www.naver.com),
+with Reserved Font Name Nanum, NanumSquareRound.
+
+나눔스퀘어라운드(NanumSquareRound)는 네이버가 SIL Open Font License 1.1로 공개한 글꼴이다.
+이 디렉터리의 woff2는 쓱 가계부용 서브셋이다. 한글 음절·한글 자모·라틴·문장부호만 남기고 한자는 뺐다.
+서브셋은 수정본이라, 예약된 글꼴 이름(Nanum, NanumSquareRound)을 파일 안의 글꼴 이름으로 쓰지 않는다.
+파일 안 이름은 Gagyebu Round 이다.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

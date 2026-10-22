@@ -13,7 +13,7 @@ import { josa } from '../lib/classify.js';
 import { weekDailyLeft, spentByDateFrom } from '../lib/pace.js';
 import { allowanceStatus } from '../lib/allowance.js';
 import { limitWarnings } from '../lib/budget.js';
-import { sanitizeLook, MOOD_OPTIONS, FONT_OPTIONS } from '../lib/look.js';
+import { sanitizeLook, MOOD_OPTIONS, FONT_OPTIONS, TONE_OPTIONS } from '../lib/look.js';
 
 const feat = (m, id) => featureOn(m.features, id);
 
@@ -448,9 +448,11 @@ function lookControls(m) {
       <p id="s-mood" class="text-body">분위기</p>
       <div class="look-grid" role="radiogroup" aria-labelledby="s-mood">${MOOD_OPTIONS.map((o) => `<button type="button" class="look-pick" role="radio" aria-checked="${look.mood === o.id}" data-mood="${o.id}">
         <span class="look-swatch" style="${swatch(o.sw)}" aria-hidden="true"></span><span class="look-name">${o.label}</span></button>`).join('')}</div>
+      <p id="s-tone" class="text-body">톤 적용 부분</p>
+      <div class="look-grid" role="group" aria-labelledby="s-tone">${TONE_OPTIONS.map((o) => `<label class="look-pick"><input class="sr-only" type="checkbox" data-tone-part="${o.id}" ${look.tone[o.id] ? 'checked' : ''}><span class="look-name">${o.label}</span></label>`).join('')}</div>
       <p id="s-font" class="text-body">글꼴</p>
       <div class="look-grid" role="radiogroup" aria-labelledby="s-font">${FONT_OPTIONS.map((o) => `<button type="button" class="look-pick" role="radio" aria-checked="${look.font === o.id}" data-font-pick="${o.id}"><span class="look-name">${o.label}</span></button>`).join('')}</div>
-      <p class="text-caption text-ink-sub">시스템 기본은 이 기기 글꼴이에요. Pretendard와 손글씨(Gaegu)는 SIL OFL 1.1이라 앱에 실어 배포해요.</p>
+      <p class="text-caption text-ink-sub">시스템 기본은 이 기기 글꼴이에요. Pretendard와 나눔스퀘어라운드(나눔라운드)는 SIL OFL 1.1이라 앱에 실어 배포해요. 예전에 손글씨로 저장한 설정도 이 글꼴로 보여요.</p>
     </div>`;
 }
 

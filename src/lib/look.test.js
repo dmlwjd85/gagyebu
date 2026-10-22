@@ -3,9 +3,9 @@ import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
 import {
-  DEFAULT_LOOK, MOODS, FONTS, ART_MOODS,
+  DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
-  fontsFor,
+  fontsFor, toneList,
 } from './look.js';
 
 function mem(init = {}) {
@@ -20,35 +20,44 @@ function mem(init = {}) {
 describe('분위기 저장', () => {
   test('기본값: 기본 테마, Pretendard, 꾸미기 켜짐', () => {
     expect(readLook(mem())).toEqual(DEFAULT_LOOK);
-    expect(DEFAULT_LOOK).toEqual({ mood: 'default', font: 'pretendard', decor: true });
+    expect(DEFAULT_LOOK).toEqual({ mood: 'default', font: 'pretendard', decor: true, tone: { menu: true, accent: true, card: false } });
+    expect(DEFAULT_TONE).toEqual({ menu: true, accent: true, card: false });
     expect(sanitizeLook(null)).toEqual(DEFAULT_LOOK);
     expect(sanitizeLook({ mood: 'blue', font: 'comic', decor: 'yes' })).toEqual(DEFAULT_LOOK);
   });
   test('저장한 값은 다시 읽고, 기본값이면 키를 지운다', () => {
     const s = mem();
     writeLook({ mood: 'sakura', font: 'gaegu', decor: false }, s);
-    expect(readLook(s)).toEqual({ mood: 'sakura', font: 'gaegu', decor: false });
+    expect(readLook(s)).toEqual({ mood: 'sakura', font: 'gaegu', decor: false, tone: { ...DEFAULT_TONE } });
     expect(s.getItem('mood')).toBe('sakura');
     expect(s.getItem('font')).toBe('gaegu');
     expect(s.getItem('decor')).toBe('off');
+    expect(s.getItem('tone')).toBeNull();
     writeLook(DEFAULT_LOOK, s);
     expect(s.getItem('mood')).toBeNull();
     expect(s.getItem('font')).toBeNull();
     expect(s.getItem('decor')).toBeNull();
+    expect(s.getItem('tone')).toBeNull();
     expect(readLook(s)).toEqual(DEFAULT_LOOK);
   });
   test('잘못된 저장값은 무시하고 기본으로 돌아간다', () => {
-    expect(readLook(mem({ mood: 'ocean', font: 'papyrus', decor: 'maybe' }))).toEqual({ mood: 'ocean', font: 'pretendard', decor: true });
-    expect(readLook(mem({ mood: 'blue', font: 'system', decor: 'off' }))).toEqual({ mood: 'default', font: 'system', decor: false });
+    expect(readLook(mem({ mood: 'ocean', font: 'papyrus', decor: 'maybe' }))).toEqual({ mood: 'ocean', font: 'pretendard', decor: true, tone: { ...DEFAULT_TONE } });
+    expect(readLook(mem({ mood: 'blue', font: 'system', decor: 'off' }))).toEqual({ mood: 'default', font: 'system', decor: false, tone: { ...DEFAULT_TONE } });
+    expect(readLook(mem({ tone: 'none' })).tone).toEqual({ menu: false, accent: false, card: false });
+    expect(readLook(mem({ tone: 'card' })).tone).toEqual({ menu: false, accent: false, card: true });
+    expect(readLook(mem({ tone: 'nope' })).tone).toEqual({ ...DEFAULT_TONE });
     expect(readLook({ getItem() { throw new Error('막힘'); } })).toEqual(DEFAULT_LOOK);
   });
   test('html data-theme·data-font·data-decor 에 반영', () => {
     const root = { dataset: {} };
     applyLook({ mood: 'maple', font: 'system', decor: false }, root);
-    expect(root.dataset).toEqual({ theme: 'maple', font: 'system', decor: 'off' });
-    applyLook(DEFAULT_LOOK, root);
+    expect(root.dataset).toEqual({ theme: 'maple', font: 'system', decor: 'off', toneMenu: 'on', toneAccent: 'on', toneCard: 'off' });
+    applyLook({ ...DEFAULT_LOOK, tone: { menu: false, accent: true, card: true } }, root);
     expect(root.dataset.theme).toBe('default');
     expect(root.dataset.decor).toBe('on');
+    expect(root.dataset.toneMenu).toBe('off');
+    expect(root.dataset.toneAccent).toBe('on');
+    expect(root.dataset.toneCard).toBe('on');
   });
 });
 
@@ -59,7 +68,7 @@ describe('클라우드 설정', () => {
     const root = { dataset: {} };
     expect(lookFromCloud(null)).toBeNull();
     expect(lookFromCloud({ theme: 'ocean', mode: 'single' })).toBeNull();
-    expect(adoptCloudLook({ mode: 'student', theme: 'ocean' }, s, root)).toEqual({ mood: 'sakura', font: 'system', decor: true });
+    expect(adoptCloudLook({ mode: 'student', theme: 'ocean' }, s, root)).toEqual({ mood: 'sakura', font: 'system', decor: true, tone: { ...DEFAULT_TONE } });
     expect(s.getItem('mood')).toBe('sakura');
     expect(root.dataset.theme).toBeUndefined();
   });
@@ -68,15 +77,17 @@ describe('클라우드 설정', () => {
     writeLook({ mood: 'sakura', font: 'pretendard', decor: true }, s);
     const root = { dataset: {} };
     expect(lookFromCloud({ mood: 'ocean', font: 'nope', decor: false, mode: 'couple' })).toEqual({ mood: 'ocean', decor: false });
+    expect(lookFromCloud({ tone: ['nope'] })).toBeNull();
+    expect(lookFromCloud({ tone: [] })).toEqual({ tone: { menu: false, accent: false, card: false } });
     const next = adoptCloudLook({ mood: 'ocean', font: 'comic', decor: false }, s, root);
-    expect(next).toEqual({ mood: 'ocean', font: 'pretendard', decor: false });
-    expect(root.dataset).toEqual({ theme: 'ocean', font: 'pretendard', decor: 'off' });
+    expect(next).toEqual({ mood: 'ocean', font: 'pretendard', decor: false, tone: { ...DEFAULT_TONE } });
+    expect(root.dataset).toEqual({ theme: 'ocean', font: 'pretendard', decor: 'off', toneMenu: 'on', toneAccent: 'on', toneCard: 'off' });
     expect(readLook(s).mood).toBe('ocean');
   });
   test('모드 정규화·백업 경로는 분위기 키를 기존 설정에 섞지 않는다', () => {
-    const raw = { mode: 'single', mood: 'sakura', font: 'gaegu', decor: true, theme: 'ocean', allowanceAmount: 1, updatedAt: 'x' };
+    const raw = { mode: 'single', mood: 'sakura', font: 'gaegu', decor: true, tone: ['menu', 'accent'], theme: 'ocean', allowanceAmount: 1, updatedAt: 'x' };
     expect(normalizeSettings(raw)).toEqual({ mode: 'single', allowanceAmount: 1 });
-    expect(JSON.stringify(normalizeSettings(raw))).not.toMatch(/mood|font|decor|theme|updatedAt/);
+    expect(JSON.stringify(normalizeSettings(raw))).not.toMatch(/mood|font|decor|tone|theme|updatedAt/);
   });
 });
 
@@ -102,30 +113,38 @@ describe('테마는 색만', () => {
   });
   test('저장된 decor 는 화면을 바꾸지 않고 그대로 읽힌다', () => {
     const s = mem({ decor: 'off', mood: 'sakura' });
-    expect(readLook(s)).toEqual({ mood: 'sakura', font: 'pretendard', decor: false });
+    expect(readLook(s)).toEqual({ mood: 'sakura', font: 'pretendard', decor: false, tone: { ...DEFAULT_TONE } });
     const root = { dataset: {} };
     applyLook(readLook(s), root);
-    expect(root.dataset).toEqual({ theme: 'sakura', font: 'pretendard', decor: 'off' });
+    expect(root.dataset).toEqual({ theme: 'sakura', font: 'pretendard', decor: 'off', toneMenu: 'on', toneAccent: 'on', toneCard: 'off' });
     expect(s.getItem('decor')).toBe('off');
   });
 });
 
-describe('손글씨 숫자·크기', () => {
-  test('손글씨는 본문과 금액용 Pretendard를 함께 받는다', () => {
+describe('나눔라운드 숫자', () => {
+  test('저장된 gaegu 는 본문 글꼴과 금액용 Pretendard를 함께 받는다', () => {
     expect(fontsFor('gaegu')).toEqual(['gaegu', 'pretendard']);
     expect(fontsFor('pretendard')).toEqual(['pretendard']);
     expect(fontsFor('system')).toEqual([]);
+    expect(toneList({ menu: true, accent: true, card: false })).toEqual(['menu', 'accent']);
+    expect(toneList({ menu: false, accent: false, card: false })).toEqual([]);
   });
-  test('Gaegu는 120%로 키우고, 금액은 Pretendard 고정폭이다', () => {
+  test('gaegu 값은 나눔스퀘어라운드 서브셋이고, 금액은 Pretendard 고정폭이다', () => {
     const face = readFileSync(new URL('../assets/fonts/gaegu.css', import.meta.url), 'utf8');
     const blocks = face.match(/@font-face\s*\{[^}]+\}/g);
     expect(blocks).toHaveLength(2);
-    for (const block of blocks) expect(block).toMatch(/size-adjust:\s*120%/);
+    for (const block of blocks) {
+      expect(block).toMatch(/font-family:\s*"Gagyebu Round"/);
+      expect(block).not.toMatch(/size-adjust/);
+      expect(block).toMatch(/GagyebuRound-/);
+    }
+    expect(face).toMatch(/SIL Open Font License/);
     const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
     expect(css).toMatch(/html\[data-font="gaegu"\] :is\(\.tabular-nums, \[data-fit\], \.num\)/);
     expect(css).toMatch(/font-family:[^;]*Pretendard Variable/);
+    expect(css).toMatch(/font-family:[^;]*Gagyebu Round/);
     expect(css).toMatch(/font-variant-numeric:\s*tabular-nums/);
-    expect(css).not.toMatch(/hero-art|theme-banner/);
+    expect(css).not.toMatch(/hero-art|theme-banner|Gaegu/);
   });
 });
 
@@ -152,8 +171,14 @@ describe('설정·홈 표시', () => {
     expect(html).toContain('aria-checked="true"');
     expect(html).toContain('벚꽃');
     expect(html).toContain('data-font-pick="system"');
+    expect(html).toContain('나눔라운드');
+    expect(html).toContain('톤 적용 부분');
+    expect(html).toContain('data-tone-part="menu" checked');
+    expect(html).toContain('data-tone-part="accent" checked');
+    expect(html).not.toMatch(/data-tone-part="card" checked/);
     expect(html).not.toContain('꾸미기 보기');
     expect(html).not.toContain('data-decor');
+    expect(html).not.toContain('Gaegu');
     expect(html).toContain('SIL OFL');
   });
   test('분위기를 켜도 홈에는 그림 없이 금액만 있다', () => {
@@ -189,53 +214,46 @@ function varsIn(css, selector) {
   }
   return out;
 }
-function heatAlpha(block, name) {
-  const m = block[name].match(/color-mix\(in srgb, var\(--primary\)\s+(\d+)%/);
-  if (!m) throw new Error(name);
-  return Number(m[1]) / 100;
-}
 
 describe('테마 글자 대비', () => {
   const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
-  const pairs = (p, min, label) => {
+  const neutral = {
+    light: { bg: '#F6F4FF', ink: '#1E1B3A', sub: '#5B5775', surface: '#FFFFFF' },
+    dark: { bg: '#0F0E1A', ink: '#F3F1FF', sub: '#B4AFCF', surface: '#1C1A2E' },
+  };
+  const pairs = (p, n, label) => {
     const fails = [];
-    const need = (name, a, b, floor = min) => { const c = contrast(a, b); if (c < floor - 0.02) fails.push(`${label} ${name} ${c.toFixed(2)}`); };
-    need('ink/bg', p['--ink'], p['--bg']);
-    need('ink/surface', p['--ink'], p['--surface-solid']);
-    need('sub/bg', p['--ink-sub'], p['--bg']);
-    need('sub/surface', p['--ink-sub'], p['--surface-solid']);
-    need('primary/surface', p['--primary'], p['--surface-solid']);
-    need('primary/bg', p['--primary'], p['--bg']);
-    need('on-primary', p['--on-primary'], p['--primary']);
-    need('expense/surface', p['--expense'], p['--surface-solid']);
-    need('expense/bg', p['--expense'], p['--bg']);
-    need('income/surface', p['--income'], p['--surface-solid']);
-    need('income/bg', p['--income'], p['--bg']);
-    need('on-expense', p['--on-expense'], p['--expense']);
-    need('on-income', p['--on-income'], p['--income']);
-    need('logo', p['--logo-ink'], p['--bg']);
-    need('toast', p['--toast-action'], p['--ink']);
-    need('hero-btn', p['--hero-btn-ink'], '#FFFFFF');
-    for (const id of ['--hero-1', '--hero-2', '--hero-3']) need(`white/${id}`, '#FFFFFF', p[id]);
-    need('white/blend12', '#FFFFFF', mix(p['--hero-1'], p['--hero-2'], 0.58));
-    need('white/blend23', '#FFFFFF', mix(p['--hero-2'], p['--hero-3'], 0.5));
-    for (const id of ['--aurora-1', '--aurora-2', '--aurora-3']) {
-      need(`ink/${id}`, p['--ink'], p[id]);
-      need(`sub/${id}`, p['--ink-sub'], p[id]);
-    }
-    for (let i = 1; i <= 7; i++) need(`chart${i}`, p[`--chart-${i}`], p['--surface-solid'], 3);
-    need('fab1', '#FFFFFF', p['--fab-1'], 3);
-    need('fab2', '#FFFFFF', p['--fab-2'], 3);
-    const heatMax = label.startsWith('dark') ? 0.4 : 0.58;
-    for (const name of ['--heat-1', '--heat-2', '--heat-3', '--heat-4']) {
-      const a = heatAlpha(p, name);
-      expect(a).toBeLessThanOrEqual(heatMax + 0.001);
-      need(name, p['--ink'], mix(p['--surface-solid'], p['--primary'], a));
-    }
+    const need = (name, a, b, floor = 4.5) => { const c = contrast(a, b); if (c < floor - 0.02) fails.push(`${label} ${name} ${c.toFixed(2)}`); };
+    expect(p['--bg']).toBeUndefined();
+    expect(p['--ink']).toBeUndefined();
+    expect(p['--mood']).toMatch(/^#[0-9A-Fa-f]{6}$/);
+    const card = mix(n.surface, p['--mood'], 0.12);
+    const bar = mix(n.surface, p['--mood'], 0.14);
+    const head = mix(n.bg, p['--mood'], 0.14);
+    need('mood/bg', p['--mood'], n.bg);
+    need('mood/surface', p['--mood'], n.surface);
+    need('mood-on', p['--mood-on'], p['--mood']);
+    need('ink/card', n.ink, card);
+    need('sub/card', n.sub, card);
+    need('mood/card', p['--mood'], card);
+    need('sub/bar', n.sub, bar);
+    need('mood/bar', p['--mood'], bar);
+    need('mood/head', p['--mood'], head);
+    need('ink/head', n.ink, head);
+    need('fab1', '#FFFFFF', p['--mood-fab-1'], 3);
+    need('fab2', '#FFFFFF', p['--mood-fab-2'], 3);
     expect(fails, fails.join('\n')).toEqual([]);
   };
+  test('톤은 메뉴·강조·카드에만 붙고 바탕 변수는 건드리지 않는다', () => {
+    expect(css).toMatch(/data-tone-menu/);
+    expect(css).toMatch(/data-tone-accent/);
+    expect(css).toMatch(/data-tone-card/);
+    expect(css).not.toMatch(/--bg\s*:/);
+    expect(css).not.toMatch(/--ink\s*:/);
+    expect(css).not.toMatch(/--aurora-/);
+  });
   for (const id of ART_MOODS) {
-    test(`라이트 ${id}`, () => pairs(varsIn(css, `html[data-theme="${id}"]`), 4.5, `light ${id}`));
-    test(`다크 ${id}`, () => pairs(varsIn(css, `html.dark[data-theme="${id}"]`), 4.5, `dark ${id}`));
+    test(`라이트 ${id}`, () => pairs(varsIn(css, `html[data-theme="${id}"]`), neutral.light, `light ${id}`));
+    test(`다크 ${id}`, () => pairs(varsIn(css, `html.dark[data-theme="${id}"]`), neutral.dark, `dark ${id}`));
   }
 });

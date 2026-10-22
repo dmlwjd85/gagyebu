@@ -1,25 +1,22 @@
-/* 손글씨 글꼴 Gaegu(개그체).
-   SIL Open Font License 1.1 — 상업적 이용·수정·재배포 가능. 글꼴만 따로 판매하는 것은 금지.
-   Copyright 2018 The Gaegu Project Authors (https://github.com/googlefonts/gaegu)
-   라이선스 원문: src/assets/fonts/OFL-Gaegu.txt
-   파일은 라틴·문장부호·한글 음절(원본에 있는 KS X 1001 계열 글리프)만 남긴 woff2.
+/* 저장값 font=gaegu 는 예전 손글씨(Gaegu) 자리다. 파일은 그대로 두고 글꼴만 나눔스퀘어라운드 서브셋으로 바꾼다.
+   나눔스퀘어라운드: Copyright 2010 NAVER Corporation. SIL Open Font License 1.1.
+   예약된 이름(Nanum, NanumSquareRound)은 수정본에 쓸 수 없어, 이 서브셋의 font-family 는 "Gagyebu Round".
+   라이선스 원문: src/assets/fonts/OFL-NanumSquareRound.txt
+   한글 음절·자모·라틴·문장부호만 남긴 woff2. 한자는 빼서 작게 실었다.
    font-display: swap → 시스템 글꼴로 먼저 그리고, 받아지면 바꿔 그림.
-   size-adjust 120%: 같은 px에서 Pretendard보다 작아 보이던 글자를 본문 크기에 맞춘다.
    금액 숫자는 이 글꼴을 쓰지 않는다(themes.css, Pretendard 고정폭).
-   이 파일은 설정에서 손글씨를 골랐을 때만 불러 온다. */
+   이 파일은 설정에서 나눔라운드를 골랐을 때만 불러 온다. */
 @font-face {
-  font-family: "Gaegu";
+  font-family: "Gagyebu Round";
   font-style: normal;
   font-weight: 400;
   font-display: swap;
-  size-adjust: 120%;
-  src: url("./Gaegu-Regular.woff2") format("woff2");
+  src: url("./GagyebuRound-Regular.woff2") format("woff2");
 }
 @font-face {
-  font-family: "Gaegu";
+  font-family: "Gagyebu Round";
   font-style: normal;
   font-weight: 700;
   font-display: swap;
-  size-adjust: 120%;
-  src: url("./Gaegu-Bold.woff2") format("woff2");
+  src: url("./GagyebuRound-Bold.woff2") format("woff2");
 }

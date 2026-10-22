@@ -24,6 +24,17 @@
       var f = localStorage.getItem('font');
       document.documentElement.dataset.font = fonts[f] ? f : 'pretendard';
       document.documentElement.dataset.decor = localStorage.getItem('decor') === 'off' ? 'off' : 'on';
+      var tone = localStorage.getItem('tone');
+      var parts = tone == null ? null : tone.split(',');
+      var known = parts && parts.some(function (id) { return id === 'menu' || id === 'accent' || id === 'card'; });
+      function tonePart(id, fallback) {
+        if (tone == null || (tone !== 'none' && !known)) return fallback;
+        if (tone === 'none') return 'off';
+        return parts.indexOf(id) >= 0 ? 'on' : 'off';
+      }
+      document.documentElement.dataset.toneMenu = tonePart('menu', 'on');
+      document.documentElement.dataset.toneAccent = tonePart('accent', 'on');
+      document.documentElement.dataset.toneCard = tonePart('card', 'off');
     } catch (e) {}
   </script>
 </head>
