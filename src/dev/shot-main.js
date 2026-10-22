@@ -4,12 +4,13 @@ import '../fonts.css';
 import { initTheme, currentTheme } from '../lib/theme.js';
 import { applyLook, writeLook, readLook, ensureFont } from '../lib/look.js';
 import { applyScale } from '../lib/contentScale.js';
-import { fitNums } from '../ui/util.js';
+import { fitNums, confirmDialog } from '../ui/util.js';
 import { period, periodOf } from '../lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather } from '../lib/stats.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../lib/defaults.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, onboardingView } from '../ui/views.js';
 import { resolveMode, settingsForMode } from '../lib/modes.js';
+import { initSheet, openSheet } from '../ui/sheet.js';
 
 const q = new URLSearchParams(location.search);
 const screen = q.get('screen') || 'home';
@@ -103,4 +104,11 @@ document.getElementById('app').innerHTML = `
   </div>`;
 fitNums(document);
 document.fonts?.ready?.then(() => fitNums(document));
+if (screen === 'sheet') {
+  initSheet({ getState: () => m, onSave() {}, onDelete() {} });
+  openSheet({ amount: 12800, kind: 'expense', categoryId: 'food', date: today, accountId: 'card', memo: '점심' });
+  const sheet = document.querySelector('.sheet');
+  if (sheet) sheet.scrollTop = sheet.scrollHeight;
+}
+if (screen === 'dialog') confirmDialog({ title: '이 기록을 저장할까요?', body: '점심 12,800원을 지출로 남깁니다.', ok: '저장', cancel: '취소' });
 document.documentElement.dataset.shotReady = '1';
