@@ -253,6 +253,17 @@ describe('테마 글자 대비', () => {
     expect(css).toMatch(/data-tone-accent/);
     expect(css).toMatch(/data-tone-card/);
     expect(css).toMatch(/--mood\) 8%, var\(--surface-solid\)/);
+    expect(css).toMatch(/:not\(\.btn-primary, \.btn-primary \*\)/);
+    expect(css).toMatch(/\.btn-primary \{\s*color: var\(--on-primary\)/);
+    const style = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const wash = (name) => {
+      const m = style.match(new RegExp(`\\.bud-hero\\.is-${name}[^{]*\\{[^}]*?color-mix\\(in srgb, var\\(--(?:income|expense)\\) (\\d+)%`));
+      expect(m, name).toBeTruthy();
+      return Number(m[1]) / 100;
+    };
+    const surface = '#FFFFFF';
+    expect(contrast('#0B7A55', mix(surface, '#0B7A55', wash('ok')))).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#CC2A48', mix(surface, '#CC2A48', wash('over')))).toBeGreaterThanOrEqual(4.5);
     expect(css).not.toMatch(/--bg\s*:/);
     expect(css).not.toMatch(/--ink\s*:/);
     expect(css).not.toMatch(/--aurora-/);
