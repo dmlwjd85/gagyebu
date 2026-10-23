@@ -52,14 +52,16 @@ export function openSheet(tx = null, { date } = {}) {
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
   document.getElementById('app').inert = true;
+  ctx.onHistory?.('open');
   requestAnimationFrame(() => $('.sheet', el).focus());
 }
-export function closeSheet() {
+export function closeSheet({ fromPop = false } = {}) {
   if (!isSheetOpen()) return;
   el.classList.remove('open');
   document.documentElement.classList.remove('sheet-open');
   document.getElementById('app').inert = false;
   lastFocus?.focus?.();
+  if (!fromPop) ctx.onHistory?.('close');
 }
 
 const amount = () => (s.digits ? parseInt(s.digits, 10) : 0);

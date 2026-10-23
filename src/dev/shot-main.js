@@ -98,7 +98,7 @@ document.body.classList.add('has-frame');
 document.getElementById('app').innerHTML = `
   <div class="aurora" aria-hidden="true"></div>
   <div class="app-frame ${nav ? 'has-nav' : ''}">
-    <div class="app-top"><div class="app-shell">${topBar(m, { month: screen !== 'settings' })}</div></div>
+    <div class="app-top"><div class="app-shell">${topBar(m, { month: screen !== 'settings', back: screen === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null })}</div></div>
     <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell">${body}</div></main>
     ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" aria-label="새 기록 추가"><span>＋</span></button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav>` : ''}
   </div>`;
