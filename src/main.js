@@ -13,8 +13,9 @@ import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
 import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
+import { createNavHistory } from './lib/navBack.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
@@ -27,7 +28,7 @@ import { installUpdatePrompt } from './lib/pwaUpdate.js';
 import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
-import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
+import { initSheet, openSheet, closeSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
 import { assetsView, taxView } from './ui/assetsView.js';
@@ -41,7 +42,10 @@ let contentScale = applyScale(readScale());
 const app = $('#app');
 const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
 const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring', 'assets', 'tax'];
-const NO_NAV = new Set(['settings', 'import', 'search', 'recurring', 'assets', 'tax']); // 아래 탭 막대 없는 화면
+// 아래 탭은 홈·달력·차트·예산과 기록 버튼만. 설정·검색·가져오기·반복·자산·세액공제는
+// 그 위의 화면이라 탭을 숨긴다(긴 설정이 탭·기록 버튼에 가리지 않게). 나가는 길은 헤더의 홈/뒤로.
+const NO_NAV = new Set(['settings', 'import', 'search', 'recurring', 'assets', 'tax']);
+const headerBack = (view) => (view === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null);
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
 const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, ownerFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, assetOpen: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
 const today = () => ymd(new Date());
@@ -119,7 +123,7 @@ function render() {
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-frame ${nav ? 'has-nav' : ''}">
-      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
+      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view), back: headerBack(ui.view) })}</div></div>
       <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
       ${nav ? tabBar() : ''}
     </div>`;
@@ -208,11 +212,11 @@ function download(name, text, type = 'text/csv;charset=utf-8') {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function go(view, extra = {}) {
-  if (ui.view === 'import' && view !== 'import') ui.imp = null; // 가져오기에서 나가면 읽은 파일을 메모리에서 버림
-  if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
+  const from = ui.view;
+  if (from === 'import' && view !== 'import') ui.imp = null; // 가져오기에서 나가면 읽은 파일을 메모리에서 버림
+  if (view === 'search' && from !== 'search') { ui.searchAll = null; refreshSearch(); }
   Object.assign(ui, { view, emojiFor: null }, extra);
-  // 탭·뒤로(설정 등)는 히스토리를 쌓지 않음. push 하면 휴대폰 뒤로가기가 탭을 바꾸게 된다.
-  history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
+  if (from !== view) nav.show(view);
   exitGuard.noteStay(location.href);
   render();
   $('#main')?.focus({ preventScroll: true });
@@ -259,10 +263,11 @@ function applyModeChoice(mode) {
   data.saveSettings(next);
   if (next.features.studentIncome) data.ensureStudentIncome();
   if (next.features.recurring) setTimeout(() => data.postRecurring(today()), 300);
-  if (ui.view === 'recurring' && !next.features.recurring) ui.view = 'settings';
+  const leaveRecurring = ui.view === 'recurring' && !next.features.recurring;
   const label = MODES.find((x) => x.id === mode)?.label ?? '';
   toast(`${label}에 맞춰 메뉴를 골랐어요. 설정에서 기능을 더 켜고 끌 수 있어요.`);
-  render();
+  if (leaveRecurring) go('settings');
+  else render();
 }
 async function editAllowance() {
   const a = allowanceFrom(state.settings);
@@ -453,8 +458,11 @@ async function onAssetClick(d) {
 const impCtx = () => ({ categories: state.categories, rules: state.rules, txsInRange: data.txsInRange, importTxs: data.importTxs });
 async function impLoad(bytes, name, enc) {
   const imp = ui.imp ?? (ui.imp = IMP.newImport());
+  const before = imp.step;
+  if (before < 2) nav.pushStep(2);
   imp.busy = true; render();
   await IMP.loadFile(imp, bytes, name, enc);
+  if (imp.step < 2) nav.undoStep();
   render(); $('#main')?.focus({ preventScroll: true });
 }
 async function restoreFile(file) {
@@ -482,8 +490,7 @@ async function onImportClick(d) {
   if (!imp) return;
   if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); scrollMainTop(); return $('#main')?.focus({ preventScroll: true }); }
   if (d.impBack !== undefined) {
-    if (imp.step === 2) { ui.imp = IMP.newImport(); return render(); }
-    if (imp.step === 3 || imp.step === 4) { imp.step--; imp.error = ''; return render(); }
+    if (imp.step > 1) { history.back(); return; }
     return go('settings');
   }
   if (d.impSample !== undefined) {
@@ -503,9 +510,14 @@ async function onImportClick(d) {
   if (d.impSkipall !== undefined) { imp.choice = {}; return render(); }
   if (d.impChoice) { imp.choice[d.impChoice] = d.v; return render(); }
   if (d.impNext !== undefined) {
+    const before = imp.step;
+    if (imp.step === 2) nav.pushStep(3);
+    else if (imp.step === 3) nav.pushStep(4);
+    else if (imp.step === 4) nav.pushStep(5);
     if (imp.step === 2) { imp.busy = true; render(); await IMP.checkDuplicates(imp, impCtx()); }
     else if (imp.step === 3) imp.step = 4;
     else if (imp.step === 4) { imp.busy = true; render(); await IMP.commit(imp, impCtx()); if (imp.step === 5) haptic(20); }
+    if (imp.step === before) nav.undoStep();
     render(); scrollMainTop(); $('#main')?.focus({ preventScroll: true });
   }
 }
@@ -929,16 +941,37 @@ setInterval(dayCheck, 60_000);
 // 종료 확인: 로그인된 뒤에, 사용자의 첫 입력에서만 센티널 히스토리를 하나 둔다.
 // 페이지 로드·로그인 콜백에서 pushState 하면 Chrome 이 그 기록을 뒤로가기에서 건너뛰고
 // Android 는 확인 없이 앱을 닫는다. 취소한 뒤에 다시 깔 때도 그 클릭·Escape 안에서 넣는다.
-// 시트·다른 대화상자는 그대로 버튼·Escape 로만 닫힌다. Google 리다이렉트가 끝나기 전에는 켜지 않는다.
+// 시트·확인 창·하위 화면은 뒤로 가기에서 먼저 닫고, 홈에서만 종료를 묻는다. Google 리다이렉트가 끝나기 전에는 켜지 않는다.
 const exitGuard = createExitGuard({
   history,
-  confirm: () => confirmDialog({ title: EXIT_CONFIRM_TITLE, ok: '종료', cancel: '취소' }),
+  confirm: () => confirmDialog({ title: EXIT_CONFIRM_TITLE, ok: '종료', cancel: '취소', history: false }),
   closeWindow: () => window.close(),
   isHidden: () => document.visibilityState === 'hidden',
 });
-document.addEventListener('pointerdown', () => { exitGuard.onUserGesture(); }, true);
-document.addEventListener('keydown', (e) => {
+const navUrl = (view) => {
+  const base = location.href.split('#')[0];
+  return view === 'home' ? base : `${base}#${view}`;
+};
+const nav = createNavHistory(history, navUrl, { onStay: () => exitGuard.noteStay(location.href) });
+nav.adopt(ui.view);
+bindModalHistory({
+  open: () => nav.pushModal('dialog'),
+  close: () => nav.closeModal(),
+});
+// 종료 센티널은 홈(빈 스택)에서만 얹는다. 하위 화면·시트 위의 첫 탭에 얹으면
+// 뒤로 가기가 부모 대신 종료 확인을 연다(새로고침 직후가 그 경우).
+const onNavGesture = () => {
+  if (state.user && nav.prepareFreshTrail(history.length)) {
+    exitGuard.claimPushed();
+    return;
+  }
+  if (!nav.atExitRoot()) return;
   exitGuard.onUserGesture();
+};
+document.addEventListener('pointerdown', onNavGesture, true);
+if (import.meta.env.MODE === 'test') globalThis.__gagyebuNav = { nav, exitGuard };
+document.addEventListener('keydown', (e) => {
+  onNavGesture();
   if (exitGuard.isConfirming() && isExitDismissGesture(e)) exitGuard.rearm();
 }, true);
 document.addEventListener('click', (e) => {
@@ -946,14 +979,63 @@ document.addEventListener('click', (e) => {
 }, true);
 let redirectDone = false;
 let suppressViewHash = false;
+function showPlannedView(view) {
+  if (ui.view === 'import' && view !== 'import') ui.imp = null;
+  if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
+  ui.view = view;
+  ui.emojiFor = null;
+  if (hashView() !== view) history.replaceState(history.state, '', navUrl(view));
+  exitGuard.noteStay(location.href);
+  render();
+  $('#main')?.focus({ preventScroll: true });
+  scrollMainTop();
+}
 window.addEventListener('popstate', () => {
-  if (exitGuard.willTrap() || exitGuard.isLeaving() || exitGuard.isConfirming()) suppressViewHash = true;
-  exitGuard.onPopState();
-  queueMicrotask(() => { suppressViewHash = false; });
+  const plan = nav.onPop({
+    sheet: isSheetOpen(),
+    dialog: hasModal(),
+    exitReady: exitGuard.willTrap() && !exitGuard.isLeaving(),
+    landed: hashView(),
+  });
+  if (plan.dropExit) exitGuard.forgetSentinel();
+  if (plan.kind !== 'exit' && exitGuard.isConfirming()) dismissTopModal();
+  if (plan.kind === 'ignore') return;
+  if (plan.kind === 'dialog') { dismissTopModal(); return; }
+  if (plan.kind === 'sheet') { closeSheet({ fromPop: true }); return; }
+  if (plan.kind === 'import-reset') {
+    ui.imp = IMP ? IMP.newImport() : null;
+    render();
+    return;
+  }
+  if (plan.kind === 'import-step') {
+    if (ui.imp) { ui.imp.step = plan.step; ui.imp.error = ''; }
+    render();
+    return;
+  }
+  if (plan.kind === 'view') { showPlannedView(plan.view); return; }
+  if (plan.kind === 'exit') {
+    // 시트가 아직 열려 있으면 종료 확인을 그 위에 띄우지 않고 시트만 닫는다.
+    if (isSheetOpen()) { closeSheet({ fromPop: true }); exitGuard.forgetSentinel(); return; }
+    if (hasModal()) { dismissTopModal(); exitGuard.forgetSentinel(); return; }
+    if (hashView() !== 'home' || ui.view !== 'home') {
+      exitGuard.forgetSentinel();
+      showPlannedView(hashView());
+      return;
+    }
+    if (exitGuard.willTrap() || exitGuard.isLeaving() || exitGuard.isConfirming()) suppressViewHash = true;
+    exitGuard.onPopState();
+    queueMicrotask(() => { suppressViewHash = false; });
+  }
 });
 window.addEventListener('hashchange', () => {
   if (suppressViewHash) return;
-  if (hashView() !== ui.view) go(hashView());
+  if (exitGuard.isConfirming()) dismissTopModal();
+  const view = hashView();
+  exitGuard.noteStay(location.href);
+  if (view === ui.view) return;
+  nav.adopt(view);
+  ui.view = view;
+  render();
 });
 window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
@@ -997,7 +1079,13 @@ const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; 
 if (isFirebaseConfigured) {
   data = await import('./data.js');
   state = data.state;
-  initSheet({ getState: () => state, onSave, onDelete });
+  initSheet({
+    getState: () => state, onSave, onDelete,
+    onHistory(ev) {
+      if (ev === 'open') nav.pushModal('sheet');
+      if (ev === 'close') nav.closeModal();
+    },
+  });
   data.onWriteError((e) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
     if (e?.code === 'permission-denied') {

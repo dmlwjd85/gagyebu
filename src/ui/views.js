@@ -102,9 +102,10 @@ export function txRow(m, t) {
 const empty = (icon, text, extra = '') => `<div class="py-8 text-center"><p class="text-4xl" aria-hidden="true">${icon}</p><p class="mt-2 text-body text-ink-sub">${esc(text)}</p>${extra}</div>`;
 
 // month: 달 이동 막대(가져오기·검색·반복·설정처럼 달과 상관없는 화면에서는 숨김)
-export function topBar(m, { month = true } = {}) {
+export function topBar(m, { month = true, back = null } = {}) {
   return `<header class="flex flex-wrap items-center justify-between gap-x-2 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
     <div class="flex flex-wrap items-center gap-1 max-[419px]:gap-0 min-w-0">
+      ${back ? `<button type="button" class="nav-home" data-nav="${esc(back.to)}" aria-label="${esc(back.label)}"><span aria-hidden="true">‹</span>${esc(back.text || '홈')}</button>` : ''}
       ${symbol('S', { cls: 'hsym mr-0.5', label: '쓱 가계부' })}
       ${month ? `<button class="icon-btn" data-month="-1" aria-label="이전 달">‹</button>
       <button class="month-btn" data-month="0" aria-label="${esc(monthLabel(m.viewYm, m.sd))}, 이번 달로 이동">${esc(monthLabel(m.viewYm, m.sd))}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary" aria-hidden="true"><span class="max-[479px]:hidden">이번 달로</span><span class="min-[480px]:hidden">↩</span></span>' : ''}</button>
@@ -460,7 +461,7 @@ export function settingsView(m, ui) {
   const kind = ui.catKind ?? 'expense';
   const list = m.categories.filter((c) => c.kind === kind);
   return `<div class="flex flex-col gap-3">
-    <div class="flex items-center gap-2"><button class="icon-btn" data-nav="home" aria-label="뒤로">‹</button><h1 class="text-title">설정</h1></div>
+    <h1 class="text-title">설정</h1>
     <p class="glass px-4 py-3 text-caption">🔒 광고 0 · 알림 스팸 0 · 내 데이터는 내 것. 기록은 내 계정에만 저장돼요.</p>
     <div class="view-grid">
     <div class="flex flex-col gap-3">

@@ -220,12 +220,17 @@ describe('종료 확인 가드', () => {
     const popFn = guardSrc.slice(guardSrc.indexOf('function onPopState'), guardSrc.indexOf('function leave'));
     expect(syncFn).not.toContain('pushSentinel');
     expect(popFn).not.toContain('pushSentinel');
-    expect(main).toContain('history.replaceState');
+    // 센티널 push 는 가드가 제스처에서만. 화면·시트 기록은 navBack 이 맡는다.
     expect(main).not.toMatch(/history\.pushState/);
+    expect(main).toContain('nav.show');
+    expect(readFileSync('src/lib/navBack.js', 'utf8')).toContain('history.pushState');
     expect(main).toContain('exitGuard.onUserGesture');
+    expect(main).toContain('exitGuard.claimPushed');
+    expect(main).toContain('exitGuard.forgetSentinel');
     expect(main).toContain('exitGuard.rearm');
     expect(main).toContain('isExitDismissGesture');
-    expect(main).toContain("addEventListener('pointerdown', () => { exitGuard.onUserGesture(); }, true)");
+    expect(main).toContain("addEventListener('pointerdown', onNavGesture, true)");
+    expect(main).toContain('nav.atExitRoot()');
     expect(main).toContain('confirmDialog({ title: EXIT_CONFIRM_TITLE');
     expect(main).toContain('whenAuthRedirectSettled');
     expect(main).not.toMatch(/window\.confirm\s*\(/);

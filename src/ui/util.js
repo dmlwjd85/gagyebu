@@ -51,8 +51,35 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
   requestAnimationFrame(step);
 }
 
+// 확인 창은 휴대폰 뒤로 가기로도 닫힌다. history: false 는 종료 확인(이미 히스토리를 쓴 뒤)용.
+let modalCtl = { open() {}, close() {} };
+const modalClosers = [];
+export function bindModalHistory(ctl) { modalCtl = { ...modalCtl, ...ctl }; }
+export function hasModal() { return modalClosers.length > 0; }
+export function dismissTopModal() {
+  const fn = modalClosers.at(-1);
+  if (!fn) return false;
+  fn();
+  return true;
+}
+function attachModal(settle, { history = true, cancelValue = null } = {}) {
+  let done = false;
+  if (history) modalCtl.open();
+  const finish = (value, fromPop = false) => {
+    if (done) return;
+    done = true;
+    const i = modalClosers.indexOf(popClose);
+    if (i >= 0) modalClosers.splice(i, 1);
+    if (history && !fromPop) modalCtl.close();
+    settle(value);
+  };
+  const popClose = () => finish(cancelValue, true);
+  modalClosers.push(popClose);
+  return finish;
+}
+
 // 가벼운 확인 대화상자 (alert/confirm 대체)
-export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '' }) {
+export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '', history = true }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
     wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
@@ -62,7 +89,7 @@ export function confirmDialog({ title, body = '', ok = '확인', cancel = '취�
       <div class="dlg-actions">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
-    const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const done = attachModal((v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); }, { history, cancelValue: false });
     const onKey = (e) => e.key === 'Escape' && done(false);
     wrap.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) done(b.dataset.v === '1'); else if (e.target === wrap) done(false); });
     document.addEventListener('keydown', onKey);
@@ -97,7 +124,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
       <p class="mt-1 h-5 text-expense" role="alert"></p>
       <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const input = wrap.querySelector('input'), err = wrap.querySelector('[role=alert]');
-    const done = (v) => { wrap.remove(); resolve(v); };
+    const done = attachModal((v) => { wrap.remove(); resolve(v); }, { cancelValue: null });
     input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
       input.value = d ? Number(d).toLocaleString('ko-KR') : '';
@@ -141,7 +168,7 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const form = wrap.querySelector('form'), err = wrap.querySelector('[role=alert]');
     const app = document.getElementById('app'), back = document.activeElement;
-    const done = (v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); };
+    const done = attachModal((v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); }, { cancelValue: null });
     if (app) app.inert = true; // 대화상자 뒤 화면은 잠금(포커스·스크린리더가 뒤로 새지 않게)
     form.querySelectorAll('[data-amount]').forEach((input) => input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');

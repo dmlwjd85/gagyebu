@@ -103,6 +103,19 @@ export function createExitGuard({
     return pushSentinel();
   }
 
+  // 새로고침으로 부모 기록을 다시 깐 뒤, 그 안의 센티널을 이미 넣은 것으로 친다.
+  function claimPushed() {
+    pushed = true;
+    return true;
+  }
+
+  // 센티널 칸은 소비됐지만 종료 확인은 열지 않을 때(하위 화면·시트).
+  function forgetSentinel() {
+    if (leaving) return false;
+    pushed = false;
+    return true;
+  }
+
   function willTrap() {
     return planExitPop({ armed, leaving, redirectPending, confirming, pushed }).trap;
   }
@@ -141,7 +154,7 @@ export function createExitGuard({
   }
 
   return {
-    noteStay, sync, onUserGesture, rearm, willTrap, onPopState,
+    noteStay, sync, onUserGesture, rearm, claimPushed, forgetSentinel, willTrap, onPopState,
     isLeaving: () => leaving,
     isConfirming: () => confirming,
   };
