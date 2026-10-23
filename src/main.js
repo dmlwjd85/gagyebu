@@ -140,9 +140,9 @@ function render() {
   renderTip();
 }
 const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
-  <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쓱 가계부' })}</div>
+  <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '콕 가계부' })}</div>
   ${TABS.slice(0, 2).map(tabBtn).join('')}
-  <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">＋</span></button>
+  <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">${symbol('S', { cls: 'fab-mark', ink: true })}</span></button>
   ${TABS.slice(2).map(tabBtn).join('')}</nav>`;
 const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on' : ''}" data-nav="${id}" ${ui.view === id ? 'aria-current="page"' : ''}><span aria-hidden="true">${icon}</span><span>${label}</span></button>`;
 
@@ -662,7 +662,7 @@ app.addEventListener('click', async (e) => {
         const d = reportData(m);
         const text = monthSummaryText(d);
         const blob = await drawReport(d, { dark: m.dark });
-        const file = new File([blob], `쓱가계부_${d.ym}_요약.png`, { type: 'image/png' });
+        const file = new File([blob], `콕가계부_${d.ym}_요약.png`, { type: 'image/png' });
         const r = await shareSummary({ text, file, title: `${d.month}월 요약` });
         if (r === 'shared') toast('요약을 공유했어요.');
         else if (r === 'copied') toast('글을 복사하고 이미지를 저장했어요.');
@@ -690,9 +690,9 @@ app.addEventListener('click', async (e) => {
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
     case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
-    case 'csv-month': return download(`쓱가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
+    case 'csv-month': return download(`콕가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
-      try { download(`쓱가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
+      try { download(`콕가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
       catch { toast('내보내지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'add-acc': {
@@ -711,7 +711,7 @@ app.addEventListener('click', async (e) => {
         // 규칙·반복·목표·모든 달 예산·가져오기 기록까지(QA M4)
         const [txs, budgets, assets] = await Promise.all([data.allTransactions(), data.allBudgets(), data.assetExport()]);
         const b = buildBackup({ profile: { monthStartDay: m.storedStart ?? state.profile?.monthStartDay ?? 1 }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, settings: state.settings, ...assets });
-        download(`쓱가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
+        download(`콕가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'delete-all':

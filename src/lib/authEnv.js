@@ -25,6 +25,6 @@ export function pickLoginMode({ authDomain, host, nav, win }) {
 
 export function loginErrorMessage(code, { iosHomeApp = false, sameOrigin = false } = {}) {
   if (code === 'auth/network-request-failed') return '인터넷 연결이 불안정해요. 연결을 확인하고 다시 눌러 주세요.';
-  if (iosHomeApp && !sameOrigin) return '아이폰 홈 화면 앱에서는 지금 Google 로그인이 잘 안 돼요. 고치고 있으니, 그동안은 Safari에서 쓱 가계부를 열어 로그인해 주세요.';
+  if (iosHomeApp && !sameOrigin) return '아이폰 홈 화면 앱에서는 지금 Google 로그인이 잘 안 돼요. 고치고 있으니, 그동안은 Safari에서 콕 가계부를 열어 로그인해 주세요.';
   return '로그인하지 못했어요. 잠시 후 다시 시도해 주세요.';
 }

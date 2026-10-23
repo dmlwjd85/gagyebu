@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
-// 첫 화면 글자(쓱 가계부, 로그인 안내)가 많이 든 Pretendard 조각만 미리 받기.
+// 첫 화면 글자(콕 가계부, 로그인 안내)가 많이 든 Pretendard 조각만 미리 받기.
 // 91: 영문·숫자·가장 흔한 한글, 90: 그다음 흔한 한글. 나머지 조각은 필요할 때 받음.
 const BASE = '/gagyebu/';
 const PRELOAD_FONT_SUBSETS = [91, 90];
@@ -35,9 +35,9 @@ export default defineConfig({
 
       includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
-        name: '쓱 가계부',
-        short_name: '쓱 가계부',
-        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 쓱 가계부.',
+        name: '콕 가계부',
+        short_name: '콕 가계부',
+        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 콕 가계부.',
         lang: 'ko',
         start_url: '/gagyebu/',
         scope: '/gagyebu/',
@@ -54,10 +54,11 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png}'],
-        // 예전 테마 그림 캐시(theme-art)는 sw-cleanup.js 의 activate 에서 지운다.
+        // 예전 테마 그림 캐시(theme-art)·폰트 캐시(fonts)·workbox 프리캐시는 sw-cleanup.js 의 activate 에서 지운다.
         importScripts: ['sw-cleanup.js'],
+        cacheId: 'gagyebu-v2',
         // 폰트 조각(92개)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
-        runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
+        runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
       },
