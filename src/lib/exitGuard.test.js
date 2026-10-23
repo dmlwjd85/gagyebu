@@ -225,9 +225,12 @@ describe('종료 확인 가드', () => {
     expect(main).toContain('nav.show');
     expect(readFileSync('src/lib/navBack.js', 'utf8')).toContain('history.pushState');
     expect(main).toContain('exitGuard.onUserGesture');
+    expect(main).toContain('exitGuard.claimPushed');
+    expect(main).toContain('exitGuard.forgetSentinel');
     expect(main).toContain('exitGuard.rearm');
     expect(main).toContain('isExitDismissGesture');
-    expect(main).toContain("addEventListener('pointerdown', () => { exitGuard.onUserGesture(); }, true)");
+    expect(main).toContain("addEventListener('pointerdown', onNavGesture, true)");
+    expect(main).toContain('nav.atExitRoot()');
     expect(main).toContain('confirmDialog({ title: EXIT_CONFIRM_TITLE');
     expect(main).toContain('whenAuthRedirectSettled');
     expect(main).not.toMatch(/window\.confirm\s*\(/);

@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'vitest';
 import { readFileSync } from 'node:fs';
-import { createNavHistory, parentView, TAB_VIEWS } from './navBack.js';
+import { createNavHistory, parentView, TAB_VIEWS, viewChain } from './navBack.js';
 import { topBar } from '../ui/views.js';
 
 function fakeHistory(url = 'http://app.local/gagyebu/') {
@@ -162,6 +162,65 @@ describe('뒤로 가기 동선', () => {
     expect(flush()).toEqual({ kind: 'view', view: 'settings' });
   });
 
+  test('새로고침으로 비운 자산 화면은 종료 확인 대신 설정을 보여주고 주소를 맞춘다', () => {
+    const history = fakeHistory('http://app.local/gagyebu/#settings');
+    history.pushState({ gagyebuNav: 'assets' }, '', 'http://app.local/gagyebu/#assets');
+    const nav = createNavHistory(history, urlFor, {});
+    nav.adopt('assets');
+    expect(nav.atExitRoot()).toBe(false);
+    history.pushState({ gagyebuExit: 1 }, '', 'http://app.local/gagyebu/#assets');
+    history.back();
+    const plan = nav.onPop({ exitReady: true, landed: 'assets' });
+    expect(plan).toMatchObject({ kind: 'view', view: 'settings', dropExit: true });
+    expect(plan.kind).not.toBe('exit');
+    expect(history.href).toBe('http://app.local/gagyebu/#settings');
+    history.back();
+    const home = nav.onPop({ exitReady: false, landed: 'settings' });
+    expect(home).toMatchObject({ kind: 'view', view: 'home' });
+    expect(home.kind).not.toBe('exit');
+    expect(history.href).toBe('http://app.local/gagyebu/');
+  });
+
+  test('새로고침 뒤 브라우저에 남은 부모 주소로 뒤로 가면 그 화면이다', () => {
+    const history = fakeHistory('http://app.local/gagyebu/#settings');
+    history.pushState({ gagyebuNav: 'assets' }, '', 'http://app.local/gagyebu/#assets');
+    const nav = createNavHistory(history, urlFor, {});
+    nav.adopt('assets');
+    history.back();
+    expect(nav.onPop({ exitReady: false, landed: 'settings' })).toEqual({ kind: 'view', view: 'settings' });
+    expect(history.href).toBe('http://app.local/gagyebu/#settings');
+    expect(nav.snapshot().current).toBe('settings');
+  });
+
+  test('기록 하나뿐인 자산 화면은 부모를 깔아 뒤로 가면 설정, 그다음은 홈, 그다음은 종료다', () => {
+    const history = fakeHistory('http://app.local/gagyebu/#assets');
+    const nav = createNavHistory(history, urlFor, {});
+    nav.adopt('assets');
+    expect(viewChain('assets')).toEqual(['settings', 'assets']);
+    expect(viewChain('tax')).toEqual(['settings', 'assets', 'tax']);
+    expect(nav.prepareFreshTrail(history.length)).toBe(true);
+    expect(nav.prepareFreshTrail(history.length)).toBe(false);
+    expect(history.href).toBe('http://app.local/gagyebu/#assets');
+    expect(nav.atExitRoot()).toBe(false);
+    history.back();
+    expect(nav.onPop({ exitReady: true, landed: 'settings' })).toMatchObject({ kind: 'view', view: 'settings' });
+    history.back();
+    expect(nav.onPop({ exitReady: true, landed: 'home' })).toMatchObject({ kind: 'view', view: 'home' });
+    history.back();
+    expect(nav.onPop({ exitReady: true, landed: 'home' })).toEqual({ kind: 'exit' });
+    expect(history.href).toBe('http://app.local/gagyebu/');
+  });
+
+  test('이미 기록이 쌓인 화면은 부모 궤적을 다시 깔지 않고, 홈만 종료 루트다', () => {
+    const { history, nav } = setup();
+    expect(nav.atExitRoot()).toBe(true);
+    expect(nav.prepareFreshTrail(1)).toBe(false);
+    nav.show('settings');
+    expect(nav.atExitRoot()).toBe(false);
+    expect(nav.prepareFreshTrail(1)).toBe(false);
+    expect(history.href).toContain('#settings');
+  });
+
   test('설정 헤더에 홈으로 가는 버튼이 있다', () => {
     const html = topBar({
       offline: false, viewYm: '2026-10', curYm: '2026-10', sd: 1, dark: false,
@@ -169,6 +228,11 @@ describe('뒤로 가기 동선', () => {
     expect(html).toContain('data-nav="home"');
     expect(html).toContain('aria-label="홈으로"');
     expect(html).toContain('>홈<');
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    const rule = css.slice(css.indexOf('.nav-home {'), css.indexOf('.nav-home:hover'));
+    expect(rule).toContain('min-h-[44px]');
+    expect(rule).toContain('min-w-[44px]');
+    expect(rule).toContain('shrink-0');
   });
 
   test('앱은 뒤로 가기를 시트·확인 창·하위 화면·종료 순으로 처리한다', () => {

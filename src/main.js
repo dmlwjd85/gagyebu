@@ -28,7 +28,7 @@ import { installUpdatePrompt } from './lib/pwaUpdate.js';
 import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
-import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
+import { initSheet, openSheet, closeSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol } from './ui/brand.js';
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
 import { assetsView, taxView } from './ui/assetsView.js';
@@ -948,18 +948,30 @@ const exitGuard = createExitGuard({
   closeWindow: () => window.close(),
   isHidden: () => document.visibilityState === 'hidden',
 });
-const nav = createNavHistory(history, (view) => {
+const navUrl = (view) => {
   const base = location.href.split('#')[0];
   return view === 'home' ? base : `${base}#${view}`;
-}, { onStay: () => exitGuard.noteStay(location.href) });
+};
+const nav = createNavHistory(history, navUrl, { onStay: () => exitGuard.noteStay(location.href) });
 nav.adopt(ui.view);
 bindModalHistory({
   open: () => nav.pushModal('dialog'),
   close: () => nav.closeModal(),
 });
-document.addEventListener('pointerdown', () => { exitGuard.onUserGesture(); }, true);
-document.addEventListener('keydown', (e) => {
+// 종료 센티널은 홈(빈 스택)에서만 얹는다. 하위 화면·시트 위의 첫 탭에 얹으면
+// 뒤로 가기가 부모 대신 종료 확인을 연다(새로고침 직후가 그 경우).
+const onNavGesture = () => {
+  if (state.user && nav.prepareFreshTrail(history.length)) {
+    exitGuard.claimPushed();
+    return;
+  }
+  if (!nav.atExitRoot()) return;
   exitGuard.onUserGesture();
+};
+document.addEventListener('pointerdown', onNavGesture, true);
+if (import.meta.env.MODE === 'test') globalThis.__gagyebuNav = { nav, exitGuard };
+document.addEventListener('keydown', (e) => {
+  onNavGesture();
   if (exitGuard.isConfirming() && isExitDismissGesture(e)) exitGuard.rearm();
 }, true);
 document.addEventListener('click', (e) => {
@@ -967,12 +979,26 @@ document.addEventListener('click', (e) => {
 }, true);
 let redirectDone = false;
 let suppressViewHash = false;
+function showPlannedView(view) {
+  if (ui.view === 'import' && view !== 'import') ui.imp = null;
+  if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
+  ui.view = view;
+  ui.emojiFor = null;
+  if (hashView() !== view) history.replaceState(history.state, '', navUrl(view));
+  exitGuard.noteStay(location.href);
+  render();
+  $('#main')?.focus({ preventScroll: true });
+  scrollMainTop();
+}
 window.addEventListener('popstate', () => {
   const plan = nav.onPop({
     sheet: isSheetOpen(),
     dialog: hasModal(),
     exitReady: exitGuard.willTrap() && !exitGuard.isLeaving(),
+    landed: hashView(),
   });
+  if (plan.dropExit) exitGuard.forgetSentinel();
+  if (plan.kind !== 'exit' && exitGuard.isConfirming()) dismissTopModal();
   if (plan.kind === 'ignore') return;
   if (plan.kind === 'dialog') { dismissTopModal(); return; }
   if (plan.kind === 'sheet') { closeSheet({ fromPop: true }); return; }
@@ -986,18 +1012,16 @@ window.addEventListener('popstate', () => {
     render();
     return;
   }
-  if (plan.kind === 'view') {
-    if (ui.view === 'import' && plan.view !== 'import') ui.imp = null;
-    if (plan.view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
-    ui.view = plan.view;
-    ui.emojiFor = null;
-    exitGuard.noteStay(location.href);
-    render();
-    $('#main')?.focus({ preventScroll: true });
-    scrollMainTop();
-    return;
-  }
+  if (plan.kind === 'view') { showPlannedView(plan.view); return; }
   if (plan.kind === 'exit') {
+    // 시트가 아직 열려 있으면 종료 확인을 그 위에 띄우지 않고 시트만 닫는다.
+    if (isSheetOpen()) { closeSheet({ fromPop: true }); exitGuard.forgetSentinel(); return; }
+    if (hasModal()) { dismissTopModal(); exitGuard.forgetSentinel(); return; }
+    if (hashView() !== 'home' || ui.view !== 'home') {
+      exitGuard.forgetSentinel();
+      showPlannedView(hashView());
+      return;
+    }
     if (exitGuard.willTrap() || exitGuard.isLeaving() || exitGuard.isConfirming()) suppressViewHash = true;
     exitGuard.onPopState();
     queueMicrotask(() => { suppressViewHash = false; });
@@ -1005,7 +1029,9 @@ window.addEventListener('popstate', () => {
 });
 window.addEventListener('hashchange', () => {
   if (suppressViewHash) return;
+  if (exitGuard.isConfirming()) dismissTopModal();
   const view = hashView();
+  exitGuard.noteStay(location.href);
   if (view === ui.view) return;
   nav.adopt(view);
   ui.view = view;

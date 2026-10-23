@@ -21,6 +21,24 @@ export function parentView(view) {
   return SUB_PARENT[view] || 'home';
 }
 
+function knownView(view) {
+  return view === 'home' || isTab(view) || Object.prototype.hasOwnProperty.call(SUB_PARENT, view);
+}
+
+// 홈을 뺀 조상부터 자기까지. 자산 → [설정, 자산], 세액공제 → [설정, 자산, 세액공제]
+export function viewChain(view) {
+  const chain = [];
+  let v = view;
+  const seen = new Set();
+  while (!isTab(v) && SUB_PARENT[v] && !seen.has(v)) {
+    seen.add(v);
+    chain.unshift(v);
+    v = SUB_PARENT[v];
+  }
+  if (isTab(v) && v !== 'home') chain.unshift(v);
+  return chain;
+}
+
 export function createNavHistory(history, urlFor, { onStay } = {}) {
   const stack = [];
   let current = 'home';
@@ -152,7 +170,27 @@ export function createNavHistory(history, urlFor, { onStay } = {}) {
     return true;
   }
 
-  function onPop({ sheet = false, dialog = false, exitReady = false } = {}) {
+  // 기록 칸이 하나뿐인 하위 화면(북마크·첫 진입). 제스처 안에서만 부른다.
+  function prepareFreshTrail(historyLength) {
+    if (historyLength > 1 || stack.length || current === 'home') return false;
+    const chain = viewChain(current);
+    if (!chain.length) return false;
+    const home = urlFor('home');
+    history.replaceState({ gagyebuBase: 1 }, '', home);
+    history.pushState({ gagyebuExit: 1 }, '', home);
+    for (const view of chain) {
+      stack.push({ type: isTab(view) ? 'tab' : 'sub', view });
+      history.pushState({ gagyebuNav: view }, '', urlFor(view));
+    }
+    stay();
+    return true;
+  }
+
+  function atExitRoot() {
+    return current === 'home' && stack.length === 0;
+  }
+
+  function onPop({ sheet = false, dialog = false, exitReady = false, landed = null } = {}) {
     if (ignore) {
       ignore = false;
       const fn = afterPop;
@@ -168,6 +206,21 @@ export function createNavHistory(history, urlFor, { onStay } = {}) {
       return { kind };
     }
     if (!top) {
+      // 새로고침으로 메모리 스택이 비었다. 브라우저가 이미 옮긴 주소가 있으면 그 화면을 따른다.
+      if (knownView(landed) && landed !== current) {
+        const from = current;
+        current = landed;
+        const plan = { kind: 'view', view: landed };
+        if (exitReady && from !== 'home') plan.dropExit = true;
+        return plan;
+      }
+      // 같은 주소에 얹힌 종료 센티널만 걷힌 하위 화면 → 부모로. 종료 확인은 열지 않는다.
+      if (current !== 'home') {
+        const parent = isTab(current) ? 'home' : parentView(current);
+        current = parent;
+        history.replaceState({ gagyebuNav: parent }, '', urlFor(parent));
+        return { kind: 'view', view: parent, dropExit: true };
+      }
       if (exitReady) return { kind: 'exit' };
       return { kind: 'leave' };
     }
@@ -186,6 +239,8 @@ export function createNavHistory(history, urlFor, { onStay } = {}) {
   return {
     adopt(view) { current = view || 'home'; stack.length = 0; },
     show,
+    prepareFreshTrail,
+    atExitRoot,
     pushModal,
     closeModal,
     pushStep,
