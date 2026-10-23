@@ -233,6 +233,8 @@ describe('하단 쓱 버튼', () => {
     expect(main).toContain('data-action="add"');
     expect(main).toContain('aria-label="새 기록 추가 (지출·수입)"');
     expect(main).toContain("symbol('S', { cls: 'fab-mark', ink: true })");
+    const shot = readFileSync(new URL('../dev/shot-main.js', import.meta.url), 'utf8');
+    expect(shot).toContain('aria-label="새 기록 추가 (지출·수입)"');
     const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
     const root = varsIn(tokens, ':root');
     expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);
