@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
+import { symbol, KOK_D } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -108,6 +109,9 @@ describe('테마는 색만', () => {
     const sw = readFileSync(new URL('../../public/sw-cleanup.js', import.meta.url), 'utf8');
     expect(sw).toMatch(/addEventListener\(\s*'activate'/);
     expect(sw).toContain("caches.delete('theme-art')");
+    expect(sw).toContain("caches.delete('fonts')");
+    expect(cfg).toContain("cacheName: 'fonts-v2'");
+    expect(cfg).toContain("cacheId: 'gagyebu-v2'");
     expect(css).toMatch(/word-break:\s*keep-all/);
     expect(css).not.toMatch(/\.look-name\s*\{[^}]*overflow-wrap:\s*anywhere/);
   });
@@ -191,6 +195,38 @@ describe('설정·홈 표시', () => {
   });
 });
 
+describe('하단 콕 버튼', () => {
+  test('아이콘과 같은 콕 윤곽을 currentColor 로 채우고, 이름과 동작은 그대로다', () => {
+    const svg = symbol('S', { cls: 'fab-mark', ink: true });
+    expect(svg).toContain('class="fab-mark"');
+    expect(svg).toContain('fill="currentColor"');
+    expect(svg).toContain(KOK_D);
+    expect(svg).toContain('aria-hidden="true"');
+    expect(svg).not.toContain('linearGradient');
+    const painted = symbol('S', { label: '콕 가계부' });
+    expect(painted).toContain('linearGradient');
+    expect(painted).toContain('aria-label="콕 가계부"');
+    expect(painted).toContain(KOK_D);
+    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+    expect(main).toContain('data-action="add"');
+    expect(main).toContain('aria-label="새 기록 추가 (지출·수입)"');
+    expect(main).toContain("symbol('S', { cls: 'fab-mark', ink: true })");
+    expect(main).not.toMatch(/쓱/);
+    const shot = readFileSync(new URL('../dev/shot-main.js', import.meta.url), 'utf8');
+    expect(shot).toContain('aria-label="새 기록 추가 (지출·수입)"');
+    const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
+    expect(views).toContain('아래 콕을 눌러');
+    expect(views).not.toMatch(/쓱/);
+    const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
+    expect(fav).toContain(KOK_D);
+    expect(fav).toContain('콕 가계부');
+    const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
+    const root = varsIn(tokens, ':root');
+    expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#FFFFFF', root['--fab-2'])).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 function lin(c) { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; }
 function rgb(hex) { const h = hex.replace('#', ''); return [0, 2, 4].map((i) => parseInt(h.slice(i, i + 2), 16)); }
 function hex(c) { return `#${c.map((x) => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, '0')).join('')}`; }
@@ -244,8 +280,8 @@ describe('테마 글자 대비', () => {
     need('mood/bar', p['--mood'], bar);
     need('mood/head', p['--mood'], head);
     need('ink/head', n.ink, head);
-    need('fab1', '#FFFFFF', p['--mood-fab-1'], 3);
-    need('fab2', '#FFFFFF', p['--mood-fab-2'], 3);
+    need('fab1', '#FFFFFF', p['--mood-fab-1']);
+    need('fab2', '#FFFFFF', p['--mood-fab-2']);
     expect(fails, fails.join('\n')).toEqual([]);
   };
   test('톤은 메뉴·강조·카드에만 붙고 바탕 변수는 건드리지 않는다', () => {

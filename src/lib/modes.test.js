@@ -221,7 +221,7 @@ describe('백업 version 5', () => {
     expect(p.hasSettings).toBe(true);
     expect(p.settings.mode).toBe('student');
     expect(p.settings.allowanceAmount).toBe(200000);
-    expect(() => parseBackup({ app: 'other', version: 4 })).toThrow(/쓱 가계부/);
+    expect(() => parseBackup({ app: 'other', version: 4 })).toThrow(/콕 가계부/);
     expect(() => parseBackup({ app: 'gagyebu', version: 99 })).toThrow(/버전/);
     expect(() => parseBackup(null)).toThrow();
   });

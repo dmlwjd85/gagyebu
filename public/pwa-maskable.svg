@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <!-- 콕 윤곽: Pretendard Bold (SIL OFL 1.1), Copyright © 2023 Kil Hyung-jin. src/ui/brand.js KOK_D 와 같은 패스. 폰트 파일은 포함하지 않음. -->
+  <title>콕 가계부</title>
+  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7048F2"/><stop offset=".55" stop-color="#C2457E"/><stop offset="1" stop-color="#B85A3E"/></linearGradient></defs>
+  <rect width="512" height="512" rx="0" fill="url(#bg)"/>
+  <g transform="translate(127.14 117.63) scale(0.156)"><path d="M1466 0H186V206H1214L1212 326L136 350L168 558L1198 514C1191 581 1179 654 1162 734L1414 750C1466 518 1466 340 1466 170ZM1652 826H874V622H618V826H0V1028H1652ZM1454 1166H168V1366H1200V1774H1454Z" fill="#fff"/></g>
+</svg>

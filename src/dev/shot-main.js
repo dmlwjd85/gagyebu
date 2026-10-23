@@ -8,7 +8,8 @@ import { fitNums, confirmDialog } from '../ui/util.js';
 import { period, periodOf } from '../lib/dates.js';
 import { filterPeriod, totals, trend, moneyWeather } from '../lib/stats.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../lib/defaults.js';
-import { topBar, homeView, calendarView, chartView, budgetView, settingsView, onboardingView } from '../ui/views.js';
+import { topBar, homeView, calendarView, chartView, budgetView, settingsView, onboardingView, loginView } from '../ui/views.js';
+import { logo, symbol } from '../ui/brand.js';
 import { resolveMode, settingsForMode } from '../lib/modes.js';
 import { initSheet, openSheet } from '../ui/sheet.js';
 
@@ -85,6 +86,7 @@ if (mode === 'student') {
 m.trend = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'].map((ym) => ({ ym, expense: ym === '2026-10' ? tot.expense : 400000, income: ym === '2026-10' ? tot.income : 3100000, saved: 100000 }));
 
 const ui = { catKind: 'expense', chartKind: 'expense', envelopes: true, catMenu: null, emojiFor: null, accEmojiFor: null, barYm: null };
+if (q.get('empty') === '1') m.periodTxs = [];
 const nav = screen === 'home';
 const body = screen === 'onboard' ? onboardingView() : ({
   home: () => homeView(m),
@@ -94,13 +96,22 @@ const body = screen === 'onboard' ? onboardingView() : ({
   list: () => calendarView(m, { mode: 'list', ownerFilter: q.get('who') || null }),
 }[screen]?.() ?? homeView(m));
 
+const app = document.getElementById('app');
+if (screen === 'login') {
+  const gate = loginView({});
+  app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
+    <h1 class="flex justify-center">${logo({ cls: 'boot-logo' })}</h1>
+    <section class="hero-card p-6"><p class="text-caption font-semibold">${gate.caption}</p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
+    <section class="card-solid p-5 flex flex-col gap-3">${gate.card}</section></div></main>`;
+  document.documentElement.dataset.shotReady = '1';
+} else {
 document.body.classList.add('has-frame');
-document.getElementById('app').innerHTML = `
+app.innerHTML = `
   <div class="aurora" aria-hidden="true"></div>
   <div class="app-frame ${nav ? 'has-nav' : ''}">
     <div class="app-top"><div class="app-shell">${topBar(m, { month: screen !== 'settings', back: screen === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null })}</div></div>
     <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell">${body}</div></main>
-    ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" aria-label="새 기록 추가"><span>＋</span></button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav>` : ''}
+    ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">${symbol('S', { cls: 'fab-mark', ink: true })}</span></button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav>` : ''}
   </div>`;
 fitNums(document);
 document.fonts?.ready?.then(() => fitNums(document));
@@ -112,3 +123,4 @@ if (screen === 'sheet') {
 }
 if (screen === 'dialog') confirmDialog({ title: '이 기록을 저장할까요?', body: '점심 12,800원을 지출로 남깁니다.', ok: '저장', cancel: '취소' });
 document.documentElement.dataset.shotReady = '1';
+}
