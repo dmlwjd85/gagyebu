@@ -190,6 +190,8 @@
     .tab { min-width: 64px; min-height: 64px; font-size: 12px; }
   }
   .fab { @apply grid place-items-center w-16 h-16 -mt-7 rounded-full text-white text-3xl font-light shadow-glow transition-transform; background-image: linear-gradient(135deg, var(--fab-1), var(--fab-2)); }
+  .fab > span { display: contents; }
+  .fab .fab-mark { width: 72%; height: 72%; }
   .fab:active { transform: scale(.92); transition-duration: 90ms; }
   /* 높이가 낮은 화면(400% 확대, 가로 모드, 키보드가 올라와 창이 줄어든 안드로이드 등, WCAG 1.4.10):
      위 메뉴는 고정을 풀어 본문과 함께 스크롤되고, 아래 메뉴는 아이콘만 남긴 낮은 막대로 → 본문이 화면 대부분을 씀 */

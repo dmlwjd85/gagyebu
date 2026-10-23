@@ -2,6 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
+import { symbol } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -215,6 +216,30 @@ function varsIn(css, selector) {
   return out;
 }
 
+describe('하단 쓱 버튼', () => {
+  test('아이콘과 같은 획을 currentColor 로 그리고, 이름과 동작은 그대로다', () => {
+    const svg = symbol('S', { cls: 'fab-mark', ink: true });
+    expect(svg).toContain('class="fab-mark"');
+    expect(svg).toContain('stroke="currentColor"');
+    expect(svg).toContain('M15 28 Q22.5 10 28 7 Q33.5 10 41 28 M61 28 Q68.5 10 74 7 Q79.5 10 87 28');
+    expect(svg).toContain('M9 49 Q51 63.0 93 49');
+    expect(svg).toContain('M21 78 H70 Q81 78 81 89 V103');
+    expect(svg).toContain('aria-hidden="true"');
+    expect(svg).not.toContain('linearGradient');
+    const painted = symbol('S', { label: '쓱 가계부' });
+    expect(painted).toContain('linearGradient');
+    expect(painted).toContain('aria-label="쓱 가계부"');
+    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+    expect(main).toContain('data-action="add"');
+    expect(main).toContain('aria-label="새 기록 추가 (지출·수입)"');
+    expect(main).toContain("symbol('S', { cls: 'fab-mark', ink: true })");
+    const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
+    const root = varsIn(tokens, ':root');
+    expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);
+    expect(contrast('#FFFFFF', root['--fab-2'])).toBeGreaterThanOrEqual(4.5);
+  });
+});
+
 describe('테마 글자 대비', () => {
   const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
   const neutral = {
@@ -244,8 +269,8 @@ describe('테마 글자 대비', () => {
     need('mood/bar', p['--mood'], bar);
     need('mood/head', p['--mood'], head);
     need('ink/head', n.ink, head);
-    need('fab1', '#FFFFFF', p['--mood-fab-1'], 3);
-    need('fab2', '#FFFFFF', p['--mood-fab-2'], 3);
+    need('fab1', '#FFFFFF', p['--mood-fab-1']);
+    need('fab2', '#FFFFFF', p['--mood-fab-2']);
     expect(fails, fails.join('\n')).toEqual([]);
   };
   test('톤은 메뉴·강조·카드에만 붙고 바탕 변수는 건드리지 않는다', () => {

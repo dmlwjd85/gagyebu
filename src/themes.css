@@ -5,7 +5,7 @@
    data-tone-accent=on: 제목, 버튼 바탕(--primary·＋버튼). 버튼 글자는 --on-primary.
    data-tone-card=on: 카드 바탕을 --mood 8%만 섞음. 12%는 금액·수입·다크 버튼이 4.5:1 아래로 떨어진다.
    기본(data-theme=default)은 톤을 칠하지 않는다.
-   글자 대비는 중립 바탕·흰/어두운 면 기준 4.5:1, ＋버튼은 3:1. */
+   글자 대비는 중립 바탕·흰/어두운 면 기준 4.5:1. 하단 쓱(흰 획)도 그라데이션 양 끝 4.5:1. */
 
 html[data-theme="sakura"] {
   --mood: #A81850;
@@ -17,7 +17,7 @@ html.dark[data-theme="sakura"] {
   --mood: #FFA3C0;
   --mood-on: #3A1020;
   --mood-fab-1: #C43A68;
-  --mood-fab-2: #E06A90;
+  --mood-fab-2: #B75776;
 }
 
 html[data-theme="ocean"] {
@@ -30,7 +30,7 @@ html.dark[data-theme="ocean"] {
   --mood: #8AD4F0;
   --mood-on: #06202C;
   --mood-fab-1: #147898;
-  --mood-fab-2: #2A90B0;
+  --mood-fab-2: #257F9C;
 }
 
 html[data-theme="maple"] {
@@ -43,7 +43,7 @@ html.dark[data-theme="maple"] {
   --mood: #FFB07A;
   --mood-on: #2A1408;
   --mood-fab-1: #A84818;
-  --mood-fab-2: #C45A20;
+  --mood-fab-2: #BF581F;
 }
 
 html[data-theme="snow"] {
@@ -69,7 +69,7 @@ html.dark[data-theme="retro"] {
   --mood: #FFB4A8;
   --mood-on: #2A1214;
   --mood-fab-1: #C44A40;
-  --mood-fab-2: #D07030;
+  --mood-fab-2: #B36029;
 }
 
 /* 메뉴를 꺼도 강조 글씨가 --primary 를 바꿔도 활성 탭은 기본 색을 유지한다. */

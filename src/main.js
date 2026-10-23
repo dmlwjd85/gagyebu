@@ -138,7 +138,7 @@ function render() {
 const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
   <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쓱 가계부' })}</div>
   ${TABS.slice(0, 2).map(tabBtn).join('')}
-  <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">＋</span></button>
+  <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">${symbol('S', { cls: 'fab-mark', ink: true })}</span></button>
   ${TABS.slice(2).map(tabBtn).join('')}</nav>`;
 const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on' : ''}" data-nav="${id}" ${ui.view === id ? 'aria-current="page"' : ''}><span aria-hidden="true">${icon}</span><span>${label}</span></button>`;
 
