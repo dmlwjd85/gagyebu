@@ -320,7 +320,7 @@ service cloud.firestore {
         allow read, delete: if isOwner(uid);
         allow create, update: if isOwner(uid)
           && docId == 'prefs'
-          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'spouseName', 'splitMe', 'mood', 'font', 'decor', 'tone', 'updatedAt'])
+          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'monthStartDay', 'spouseName', 'splitMe', 'mood', 'font', 'decor', 'tone', 'updatedAt'])
           && (!('mode' in d()) || d().mode in ['single', 'couple', 'student'])
           && optBool('askMode')
           && (!('features' in d()) || featuresOk(d().features))
@@ -328,6 +328,7 @@ service cloud.firestore {
           && (!('allowanceCycle' in d()) || d().allowanceCycle in ['week', 'month'])
           && optInt('allowanceWeekday', 0, 6)
           && optInt('allowanceDay', 1, 28)
+          && optInt('monthStartDay', 1, 31)
           && (!('spouseName' in d()) || str(d().spouseName, 1, 20))
           && optInt('splitMe', 0, 100)
           && (!('mood' in d()) || d().mood in ['default', 'sakura', 'ocean', 'maple', 'snow', 'retro'])

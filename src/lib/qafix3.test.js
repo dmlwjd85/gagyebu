@@ -177,10 +177,12 @@ describe('N13 긴 이름(공백 없는 20자) 넘침 방지 구조', () => {
     // 이름표는 줄지 않고(shrink-0), 줄 전체 폭보다 길 때만(160px 같은 아주 좁은 폭) 이름표 안에서 줄바꿈(PR #9 QA)
     expect(css).toMatch(/\.opt-row > \.opt-k \{[^}]*shrink-0[^}]*max-w-full/);
   });
-  test('라벨+select 줄은 모두 opt-row(가져오기 결제수단·금액 부호, 설정 시작일)', () => {
+  test('라벨+select 줄은 모두 opt-row(가져오기 결제수단·금액 부호). 월급날은 타일', () => {
     const src = ['src/ui/importer.js', 'src/ui/views.js'].map((f) => readFileSync(f, 'utf8')).join('\n');
     expect(src).not.toMatch(/<label class="flex items-center justify-between[^"]*">[^<]+<select/);
-    expect(src.match(/<label class="opt-row"><span class="opt-k">/g).length).toBe(4);
+    expect(src.match(/<label class="opt-row"><span class="opt-k">/g).length).toBe(3);
+    expect(src).toContain('class="day-grid"');
+    expect(src).not.toContain('data-start-day aria-label');
   });
   test('반복 목록: 금액을 이름 아랫줄로(이름 칸이 금액에 눌리지 않음)', () => {
     const html = recurringView(model('2026-10', { extra: { recurring: [{ id: 'r', name: '가'.repeat(30), amount: 17000, kind: 'expense', categoryId: 'food', dayOfMonth: 5, active: true, startYm: '2026-10' }] } }));

@@ -100,6 +100,25 @@ export function effectiveStartDay(stored, features) {
   return clampStartDay(stored ?? 1);
 }
 
+/** settings/prefs.monthStartDay. 정수 1~31만. 없거나 범위 밖이면 null. */
+export function monthStartDayOf(settings) {
+  const n = settings?.monthStartDay;
+  return Number.isInteger(n) && n >= 1 && n <= 31 ? n : null;
+}
+
+/**
+ * 화면·조회에 쓰는 시작일.
+ * 월급날 메뉴가 꺼져 있으면 1. 설정에 값이 있으면 그 값(31일도 유지).
+ * 설정에 없으면 예전 프로필(1~28)을 그대로 쓰고, 그것도 없으면 1.
+ */
+export function activeStartDay(settings, profile, features) {
+  if (!featureOn(features, 'monthStart')) return 1;
+  const chosen = monthStartDayOf(settings);
+  if (chosen != null) return chosen;
+  if (Number.isInteger(profile?.monthStartDay)) return clampStartDay(profile.monthStartDay);
+  return 1;
+}
+
 export function settingsForMode(mode) {
   if (!MODE_IDS.has(mode)) throw new Error('unknown mode');
   return { mode, askMode: false, features: defaultsFor(mode) };
@@ -119,6 +138,7 @@ export function normalizeSettings(raw) {
   if (raw.allowanceCycle === 'week' || raw.allowanceCycle === 'month') out.allowanceCycle = raw.allowanceCycle;
   if (Number.isInteger(raw.allowanceWeekday) && raw.allowanceWeekday >= 0 && raw.allowanceWeekday <= 6) out.allowanceWeekday = raw.allowanceWeekday;
   if (Number.isInteger(raw.allowanceDay) && raw.allowanceDay >= 1 && raw.allowanceDay <= 28) out.allowanceDay = raw.allowanceDay;
+  if (Number.isInteger(raw.monthStartDay) && raw.monthStartDay >= 1 && raw.monthStartDay <= 31) out.monthStartDay = raw.monthStartDay;
   if (typeof raw.spouseName === 'string') {
     const name = raw.spouseName.trim();
     if (name.length >= 1 && name.length <= 20 && !/[\n\r]/.test(name)) out.spouseName = name;

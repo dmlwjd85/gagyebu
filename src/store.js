@@ -6,7 +6,7 @@ import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recTxId } from './lib/recurring.js';
-import { resolveMode, STUDENT_INCOME, effectiveStartDay } from './lib/modes.js';
+import { resolveMode, STUDENT_INCOME, activeStartDay } from './lib/modes.js';
 import { ownerToWrite } from './lib/couple.js';
 import { ackOrTimeout, RESTORE_ACK_MS } from './lib/restoreWait.js';
 
@@ -125,7 +125,7 @@ async function seedDefaults() {
 // 보고 있는 달 기준 6개 기간 거래 구독(차트 추이용)
 export function watchMonth(ym) {
   if (!state.user) return;
-  const sd = effectiveStartDay(state.profile?.monthStartDay ?? 1, state.features);
+  const sd = activeStartDay(state.settings, state.profile, state.features);
   const start = period(shiftYm(ym, -5), sd).start, end = period(ym, sd).end;
   const key = `${start}~${end}`;
   if (state.txWindow !== key) {

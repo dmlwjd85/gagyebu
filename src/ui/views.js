@@ -1,6 +1,6 @@
 import { esc, numSpan } from './util.js';
 import { formatWon, signedWon, shortWon, compactWon, isPlus, spendParts, spendText, minusWon, percents, rateNote } from '../lib/money.js';
-import { addDays, parseYmd, prettyDate, WEEK, monthLabel, period, shiftYm } from '../lib/dates.js';
+import { addDays, parseYmd, prettyDate, WEEK, monthLabel, period, periodRangeLabel, shiftYm } from '../lib/dates.js';
 import { byCategory, byDay, heatLevel, envelope, totals, trend } from '../lib/stats.js';
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
@@ -103,12 +103,15 @@ const empty = (icon, text, extra = '') => `<div class="py-8 text-center"><p clas
 
 // month: 달 이동 막대(가져오기·검색·반복·설정처럼 달과 상관없는 화면에서는 숨김)
 export function topBar(m, { month = true, back = null } = {}) {
+  const monthName = `${Number(String(m.viewYm || '').slice(5, 7))}월`;
+  const range = month && m.sd > 1 ? periodRangeLabel(m.viewYm, m.sd) : '';
+  const monthText = range ? `${monthName} (${range})` : monthName;
   return `<header class="flex flex-wrap items-center justify-between gap-x-2 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
     <div class="flex flex-wrap items-center gap-1 max-[419px]:gap-0 min-w-0">
       ${back ? `<button type="button" class="nav-home" data-nav="${esc(back.to)}" aria-label="${esc(back.label)}"><span aria-hidden="true">‹</span>${esc(back.text || '홈')}</button>` : ''}
       ${symbol('S', { cls: 'hsym mr-0.5', label: '콕 가계부' })}
       ${month ? `<button class="icon-btn" data-month="-1" aria-label="이전 달">‹</button>
-      <button class="month-btn" data-month="0" aria-label="${esc(monthLabel(m.viewYm, m.sd))}, 이번 달로 이동">${esc(monthLabel(m.viewYm, m.sd))}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary" aria-hidden="true"><span class="max-[479px]:hidden">이번 달로</span><span class="min-[480px]:hidden">↩</span></span>' : ''}</button>
+      <button class="month-btn" data-month="0" aria-label="${esc(monthText)}, 이번 달로 이동">${esc(monthName)}${m.viewYm !== m.curYm ? '<span class="ml-1 text-caption text-primary" aria-hidden="true"><span class="max-[479px]:hidden">이번 달로</span><span class="min-[480px]:hidden">↩</span></span>' : ''}</button>
       <button class="icon-btn" data-month="1" aria-label="다음 달" ${m.viewYm >= m.curYm ? 'disabled' : ''}>›</button>` : ''}
     </div>
     <div class="relative flex flex-wrap items-center gap-1 max-[419px]:gap-0 ml-auto">
@@ -116,7 +119,9 @@ export function topBar(m, { month = true, back = null } = {}) {
       <button class="icon-btn" data-nav="search" aria-label="검색">🔍</button>
       <button class="icon-btn" data-action="theme" aria-label="${m.dark ? '라이트 모드로 전환' : '다크 모드로 전환'}">${m.dark ? '☀️' : '🌙'}</button>
       <button class="icon-btn" data-nav="settings" aria-label="설정">⚙️</button>
-    </div></header>`;
+    </div>
+    ${range ? `<p class="period-label" data-period-range>${esc(range)}</p>` : ''}
+    </header>`;
 }
 
 export function homeView(m) {
@@ -457,6 +462,27 @@ function lookControls(m) {
     </div>`;
 }
 
+function selectedStartDay(m) {
+  const n = m.settings?.monthStartDay;
+  if (Number.isInteger(n) && n >= 1 && n <= 31) return n;
+  if (Number.isInteger(m.storedStart) && m.storedStart >= 1 && m.storedStart <= 28) return m.storedStart;
+  if (Number.isInteger(m.sd) && m.sd >= 1 && m.sd <= 31) return m.sd;
+  return 1;
+}
+
+function startDayPicker(m) {
+  const sel = selectedStartDay(m);
+  const tiles = Array.from({ length: 31 }, (_, i) => {
+    const n = i + 1;
+    return `<button type="button" class="day-tile" role="radio" data-start-day="${n}" aria-checked="${n === sel}">${n}</button>`;
+  }).join('');
+  return `<div class="flex flex-col gap-2 min-w-0">
+      <p id="s-start" class="text-body">한 달 시작일 (월급날)</p>
+      <div class="day-grid" role="radiogroup" aria-labelledby="s-start">${tiles}</div>
+      <p class="text-caption text-ink-sub">이 날부터 다음 달 전날까지를 한 달로 봐요. 그 날이 없는 달은 그 달 마지막 날부터예요.</p>
+    </div>`;
+}
+
 export function settingsView(m, ui) {
   const kind = ui.catKind ?? 'expense';
   const list = m.categories.filter((c) => c.kind === kind);
@@ -472,8 +498,7 @@ export function settingsView(m, ui) {
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-view"><h2 id="s-view" class="text-head">화면</h2>
       <div class="seg self-start" role="radiogroup" aria-label="테마">${[['system', '시스템'], ['light', '라이트'], ['dark', '다크']].map(([v, l]) => `<button role="radio" aria-checked="${m.themeMode === v}" data-theme="${v}">${l}</button>`).join('')}</div>
       ${lookControls(m)}
-      ${feat(m, 'monthStart') ? `<label class="opt-row"><span class="opt-k">한 달 시작일 (월급날)</span>
-        <select class="select" data-start-day aria-label="한 달 시작일">${Array.from({ length: 28 }, (_, i) => `<option value="${i + 1}" ${(m.storedStart ?? m.sd) === i + 1 ? 'selected' : ''}>${i + 1}일</option>`).join('')}</select></label>` : ''}
+      ${feat(m, 'monthStart') ? startDayPicker(m) : ''}
       <label class="flex items-center justify-between gap-2 text-body">진동 피드백<label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동 피드백"><span></span></label></label>
       ${scaleControl(m.contentScale ?? 1)}
       <button class="btn-ghost self-start" data-action="tips-reset">팁 다시 보기</button></section>

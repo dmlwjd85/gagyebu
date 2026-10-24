@@ -6,7 +6,7 @@ import { allowanceBounds, allowanceStatus, dailyAllowance, daysBetween } from '.
 import { limitWarnings } from './budget.js';
 import { buildBackup, parseBackup, BACKUP_VERSION } from './backup.js';
 import {
-  resolveMode, settingsForMode, normalizeSettings, coupleOwnerHook, COUPLE_OWNER_IMPLEMENTED, LEGACY_FEATURES, STUDENT_INCOME, effectiveStartDay,
+  resolveMode, settingsForMode, normalizeSettings, coupleOwnerHook, COUPLE_OWNER_IMPLEMENTED, LEGACY_FEATURES, STUDENT_INCOME, effectiveStartDay, activeStartDay,
 } from './modes.js';
 import { monthSummaryText, shareSummary } from './shareSummary.js';
 import { dueOccurrences, recTxId } from './recurring.js';
@@ -63,6 +63,11 @@ describe('모드', () => {
       mode: 'student', features: { allowance: true }, allowanceAmount: 200000, allowanceCycle: 'week', allowanceWeekday: 1, allowanceDay: 5,
     });
     expect(normalizeSettings({ mode: 'family', allowanceAmount: 1.5, allowanceDay: 31 })).toEqual({});
+    expect(normalizeSettings({ monthStartDay: 17 })).toEqual({ monthStartDay: 17 });
+    expect(normalizeSettings({ monthStartDay: 31 })).toEqual({ monthStartDay: 31 });
+    expect(normalizeSettings({ monthStartDay: 0 })).toEqual({});
+    expect(normalizeSettings({ monthStartDay: 32 })).toEqual({});
+    expect(normalizeSettings({ monthStartDay: 1.5 })).toEqual({});
     expect(normalizeSettings(null)).toBeNull();
   });
   test('알바·심부름 카테고리 id', () => {
@@ -87,7 +92,7 @@ describe('월급날 기간·윤년·하루 몫', () => {
     expect(period('2024-02', 15)).toMatchObject({ start: '2024-02-15', end: '2024-03-15', days: 29 });
     expect(period('2023-02', 15).days).toBe(28);
     expect(periodOf('2024-02-29', 1)).toBe('2024-02');
-    // 29일은 28일로 맞추고, 3월 1일은 아직 다음 월급날 전
+    // 29일은 2월에 있으니 3월 1일은 아직 그 기간 안
     expect(periodOf('2024-03-01', 29)).toBe('2024-02');
     expect(period('2024-02', 28)).toMatchObject({ start: '2024-02-28', end: '2024-03-28', days: 29 });
   });
@@ -338,7 +343,13 @@ describe('오늘 금액은 계산마다 이름이 다르다', () => {
     expect(single.sd).toBe(25);
     const singleSet = settingsView(single, { catKind: 'expense' });
     expect(singleSet).toContain('data-start-day');
-    expect(singleSet).toContain('value="25" selected');
+    expect(singleSet).toContain('data-start-day="25" aria-checked="true"');
+    expect(singleSet.match(/data-start-day="/g)).toHaveLength(31);
+    expect(singleSet).not.toContain('<select class="select" data-start-day');
+    expect(activeStartDay({ monthStartDay: 31 }, { monthStartDay: 25 }, resolveMode(settingsForMode('single')).features)).toBe(31);
+    expect(activeStartDay(null, { monthStartDay: 25 }, resolveMode(settingsForMode('single')).features)).toBe(25);
+    expect(activeStartDay(null, null, resolveMode(settingsForMode('single')).features)).toBe(1);
+    expect(activeStartDay({ monthStartDay: 17 }, { monthStartDay: 25 }, features)).toBe(1);
     const backed = buildBackup({ profile: { monthStartDay: m.storedStart }, settings });
     expect(backed.profile.monthStartDay).toBe(25);
   });

@@ -11,7 +11,7 @@ describe('기간(월 시작일)', () => {
   test('날짜가 속한 기간', () => { expect(periodOf('2026-10-24', 25)).toBe('2026-09'); expect(periodOf('2026-10-25', 25)).toBe('2026-10'); expect(periodOf('2026-01-03', 25)).toBe('2025-12'); });
   test('남은 일수(오늘 포함)', () => { const p = period('2026-10'); expect(daysLeftInclusive(p, '2026-10-19')).toBe(13); expect(daysLeftInclusive(p, '2026-10-31')).toBe(1); expect(daysLeftInclusive(p, '2026-11-02')).toBe(0); });
   test('월 이동', () => { expect(shiftYm('2026-01', -1)).toBe('2025-12'); expect(shiftYm('2026-12', 1)).toBe('2027-01'); });
-  test('월 이름', () => { expect(monthLabel('2026-10')).toBe('10월'); expect(monthLabel('2026-10', 25)).toBe('10월 (10.25~11.24)'); });
+  test('월 이름', () => { expect(monthLabel('2026-10')).toBe('10월'); expect(monthLabel('2026-10', 25)).toBe('10월 (10.25 ~ 11.24)'); });
   test('날짜 형식 검사', () => { expect(isYmd('2026-02-29')).toBe(false); expect(isYmd('2026-10-19')).toBe(true); expect(isYmd('2026-1-1')).toBe(false); });
 });
 
