@@ -98,6 +98,11 @@
   .icon-btn:hover:not(:disabled) { background: var(--line); }
   .icon-btn:disabled { opacity: .35; }
   .month-btn { @apply min-h-[44px] px-2 rounded-xl text-title whitespace-nowrap; }
+  /* 위 메뉴는 --fs가 1로 고정이라, 기간 글자만 본문 배율(--content-scale)을 --fs로 받는다. */
+  .period-label { --fs: var(--content-scale, 1); flex: 1 0 100%; margin: 0; font-size: calc(13px * var(--fs, 1)); line-height: calc(18px * var(--fs, 1)); font-weight: 700; color: var(--ink-sub); }
+  .day-grid { display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); gap: 4px; width: 100%; }
+  .day-tile { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-width: 44px; min-height: 44px; padding: 0; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-solid); color: var(--ink); font-size: calc(15px * var(--fs, 1)); line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; }
+  .day-tile[aria-checked="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
   .link-btn { @apply min-h-[44px] px-2 text-caption font-semibold; color: var(--primary); }
   .chip { @apply inline-flex items-center gap-1 min-h-[44px] px-3 rounded-full text-caption font-semibold border; border-color: var(--line); background: var(--surface-solid); }
   .chip:disabled { opacity: .4; }

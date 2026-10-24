@@ -22,7 +22,7 @@ const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup, parseBackup } from './lib/backup.js';
-import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, effectiveStartDay } from './lib/modes.js';
+import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay, monthStartDayOf } from './lib/modes.js';
 import { ownerToWrite, spouseLabel } from './lib/couple.js';
 import { installUpdatePrompt } from './lib/pwaUpdate.js';
 import { restoreMessage } from './lib/restoreWait.js';
@@ -52,7 +52,7 @@ const today = () => ymd(new Date());
 
 function model() {
   const storedStart = state.profile?.monthStartDay ?? 1;
-  const sd = effectiveStartDay(storedStart, state.features);
+  const sd = activeStartDay(state.settings, state.profile, state.features);
   const t = today();
   const curYm = periodOf(t, sd);
   const viewYm = ui.viewYm ?? curYm;
@@ -538,6 +538,15 @@ app.addEventListener('click', async (e) => {
   const d = t.dataset;
   if (d.scaleStep !== undefined) return setScale(stepScale(contentScale, Number(d.scaleStep)));
   if (d.scaleReset !== undefined) return setScale(1);
+  if (d.startDay !== undefined) {
+    const n = Number(d.startDay);
+    if (!Number.isInteger(n) || n < 1 || n > 31) return;
+    state.settings = { ...(state.settings || {}), monthStartDay: n };
+    data.saveSettings({ monthStartDay: n });
+    ui.viewYm = null;
+    render();
+    return toast(`한 달 시작일을 ${n}일로 바꿨어요.`);
+  }
   const m = state.user ? model() : null;
   if (d.assetAdd !== undefined || d.assetOpen || d.assetEdit || d.assetDel || d.holdingAdd || d.holdingEdit || d.holdingPrice || d.holdingDel || d.contribAdd || d.contribDel || d.taxRate || d.taxEdit !== undefined) return onAssetClick(d);
   if (d.nav) {
@@ -559,8 +568,10 @@ app.addEventListener('click', async (e) => {
   if (d.recPreset === 'rent' || d.recPreset === 'sub') {
     const housing = state.categories.some((c) => c.id === 'housing') ? 'housing' : 'etc';
     const telecom = state.categories.some((c) => c.id === 'telecom') ? 'telecom' : 'etc';
+    const profileDay = state.profile?.monthStartDay;
+    const payday = monthStartDayOf(state.settings) ?? (Number.isInteger(profileDay) && profileDay >= 1 && profileDay <= 31 ? profileDay : 1);
     return editRecurring(d.recPreset === 'rent'
-      ? { name: '월세', amount: 0, kind: 'expense', categoryId: housing, dayOfMonth: state.profile?.monthStartDay || 1, active: true }
+      ? { name: '월세', amount: 0, kind: 'expense', categoryId: housing, dayOfMonth: payday, active: true }
       : { name: '구독', amount: 0, kind: 'expense', categoryId: telecom, dayOfMonth: 1, active: true });
   }
   if (d.recFrom) {
@@ -760,7 +771,6 @@ app.addEventListener('change', (e) => {
     if (Number.isInteger(n) && n >= 0 && n <= 100) data.saveSettings({ splitMe: n });
     return;
   }
-  if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
   if (t.dataset.decor !== undefined && t.type === 'checkbox') return pushLook({ decor: t.checked });
   if (t.dataset.tonePart && t.type === 'checkbox') return pushLook({ tone: { ...readLook().tone, [t.dataset.tonePart]: t.checked } });

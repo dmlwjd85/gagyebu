@@ -30,7 +30,8 @@ const look = applyLook(readLook());
 ensureFont(look.font);
 
 const today = '2026-10-21';
-const sd = 1;
+const startParam = Number(q.get('start'));
+const sd = Number.isInteger(startParam) && startParam >= 1 && startParam <= 31 ? startParam : 1;
 const viewYm = periodOf(today, sd);
 const p = period(viewYm, sd);
 const txs = [
