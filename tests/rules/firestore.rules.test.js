@@ -594,6 +594,7 @@ describe('쓰는 방식 settings/prefs', () => {
     await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 0 }));
     await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 32 }));
     await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 1.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: '17' }));
   });
   test('타인·비로그인: 읽기·쓰기·삭제 거부', async () => {
     await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'users/alice/settings/prefs'), { mode: 'student', askMode: false }));

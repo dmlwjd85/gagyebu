@@ -84,5 +84,8 @@ describe('설정 타일', () => {
     expect(grid).not.toMatch(/overflow/);
     expect(tile).toMatch(/min-height:\s*44px/);
     expect(tile).toMatch(/min-width:\s*44px/);
+    expect(tile).toMatch(/font-size:\s*calc\(15px \* var\(--fs,\s*1\)\)/);
+    const label = css.match(/\.period-label \{[^}]*\}/)[0];
+    expect(label).toMatch(/font-size:\s*calc\(13px \* var\(--fs,\s*1\)\)/);
   });
 });

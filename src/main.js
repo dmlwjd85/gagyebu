@@ -22,7 +22,7 @@ const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup, parseBackup } from './lib/backup.js';
-import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay } from './lib/modes.js';
+import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay, monthStartDayOf } from './lib/modes.js';
 import { ownerToWrite, spouseLabel } from './lib/couple.js';
 import { installUpdatePrompt } from './lib/pwaUpdate.js';
 import { restoreMessage } from './lib/restoreWait.js';
@@ -568,8 +568,10 @@ app.addEventListener('click', async (e) => {
   if (d.recPreset === 'rent' || d.recPreset === 'sub') {
     const housing = state.categories.some((c) => c.id === 'housing') ? 'housing' : 'etc';
     const telecom = state.categories.some((c) => c.id === 'telecom') ? 'telecom' : 'etc';
+    const profileDay = state.profile?.monthStartDay;
+    const payday = monthStartDayOf(state.settings) ?? (Number.isInteger(profileDay) && profileDay >= 1 && profileDay <= 31 ? profileDay : 1);
     return editRecurring(d.recPreset === 'rent'
-      ? { name: '월세', amount: 0, kind: 'expense', categoryId: housing, dayOfMonth: state.profile?.monthStartDay || 1, active: true }
+      ? { name: '월세', amount: 0, kind: 'expense', categoryId: housing, dayOfMonth: payday, active: true }
       : { name: '구독', amount: 0, kind: 'expense', categoryId: telecom, dayOfMonth: 1, active: true });
   }
   if (d.recFrom) {
