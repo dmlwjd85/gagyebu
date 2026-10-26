@@ -250,6 +250,8 @@
   @keyframes cup-word { 0%, 38% { opacity: 0; transform: translateY(6px) scale(.5); } 52% { opacity: 1; transform: translateY(-10px) scale(1.12); } 72% { opacity: 1; transform: translateY(-6px) scale(1); } 88% { opacity: 1; transform: translateY(-6px) scale(1); } 100% { opacity: 0; transform: translateY(-4px) scale(.9); } }
   @keyframes cup-pp { 0%, 24% { opacity: 0; transform: scale(.3); } 36% { opacity: 1; transform: translate(calc(var(--px) * .55), calc(var(--py) * .55)) scale(1); } 100% { opacity: 0; transform: translate(var(--px), calc(var(--py) + 8px)) scale(.5); } }
   /* 움직임 줄이기: 터지는 동작·눌림 없이 짧은 색 변화만(접시에 빛 한 번), 시트는 바로 열림(fabPop.js) */
+  .fab.fab-ghost { position: fixed; z-index: 60; display: block; min-width: 0; margin: 0; pointer-events: none; } /* 시트 위에 겹친 컵 복사본: 터지는 연출만 보이고 누름은 아래 시트로(fabPop.js ghostOver) */
+  .fab-ghost .fab-disc { margin: 0; }
   .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-j1); opacity: 0; pointer-events: none; }
   .fab.is-flash .fab-disc::after { opacity: .3; } /* 움직임 없는 색 변화: 160ms 동안 접시에 쨈 색이 옅게 덮였다가 사라짐(fabPop.js가 켜고 끔). 애니메이션이 아니라 전역 '움직임 줄이기' 규칙(0.01ms)에 지워지지 않음 */
   @media (prefers-reduced-motion: reduce) {

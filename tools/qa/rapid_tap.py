@@ -1,8 +1,9 @@
 """쨈 컵 기록 버튼 연타 검사(QA 2차 D1 재현·회귀 방지). 실제 브라우저 포인터(mouse.click)로 버튼 자리를 연달아 누름.
-폭 320/339/360/390/1280 × 간격 40/80/120/200/300ms × 12번 → 시트가 한 번만 열리고, 닫히지 않고, 시트 안(바탕·저장·자판)에
-누름이 하나도 닿지 않고, 오류 문구·흔들림·토스트가 0이어야 통과. 보통 사용(잠시 뒤 바탕 눌러 닫기, 금액·분류 넣고 저장)도 확인.
+폭 320/339/360/390/1280 × 간격 40/80/120/200/300ms × 12번 → 시트가 한 번만 열리고, 닫히지 않고, '저장'·바탕·✕ 에
+누름이 하나도 닿지 않고, 오류 문구·흔들림·토스트가 0이어야 통과(5차: 자판은 막지 않음 → 320·339 에서는 컵 위 '8'·'0'이 입력될 수 있음, 금액도 출력. '8'이 10억 한도를 넘겨 생기는 금액 흔들림은 main 과 같은 입력 동작이라 허용).
+보통 사용(잠시 뒤 바탕 눌러 닫기, 금액·분류 넣고 저장)도 확인.
 컵 한 번 누른 뒤 0.25·0.3·0.35·0.4초에 자판 1·2·3·4(250ms·100ms 간격) → 금액 1,234원(QA 3차 N1 재현·회귀 방지).
-마우스(mouse.click)와 터치(touchscreen.tap) 두 가지로 모두 돌림. 폭마다 시트가 열렸을 때 컵 자리(버튼 + 24px)에 겹치는 시트 요소도 출력.
+마우스(mouse.click)와 터치(touchscreen.tap) 두 가지로 모두 돌림. 폭마다 시트가 열렸을 때 컵 누름 자리(반지름 25px)에 겹치는 시트 요소도 출력.
 사용: python3 tools/qa/rapid_tap.py [앱 주소] [--emu-host=… --auth-port=… --fs-port=… --project=demo-…] (emu.py 참고)
       움직임 줄이기: QA_REDUCED=1 / 일부만: QA_WIDTHS=360,1280 QA_GAPS=120 QA_INPUTS=touch"""
 import os, sys, json
@@ -25,7 +26,7 @@ WATCH = """() => { const t0 = performance.now(); const sr = document.getElementB
   new MutationObserver((ms) => { for (const m of ms) { const n = m.target; if (n.nodeType === 1) { if (n.id === 'toast' && n.classList.contains('show')) W.toast++; }
     for (const a of m.addedNodes || []) if (a.nodeType === 1) { if (a.id === 'toast') W.toast++; if (a.matches?.('.shake') || a.querySelector?.('.shake')) W.shake++; } } })
     .observe(document.body, { attributes: true, attributeFilter: ['class'], childList: true, subtree: true });
-  document.addEventListener('click', (e) => { if (e.composedPath().includes(sr)) W.reached.push([Math.round(performance.now() - t0), (e.target.closest('button,[data-close]') || e.target).outerHTML.slice(0, 50)]); });
+  document.addEventListener('click', (e) => { if (e.composedPath().includes(sr)) W.reached.push([Math.round(performance.now() - t0), (e.target.closest('[data-save]') ? 'SAVE ' : e.target.closest('[data-close]') ? 'CLOSE ' : '') + (e.target.closest('button,[data-close]') || e.target).outerHTML.slice(0, 50)]); });
   return true; }"""
 STATE = """() => ({ ...window.__w, open: document.getElementById('sheet-root').classList.contains('open'),
   err: /입력해 주세요|선택해 주세요/.test(document.querySelector('#sheet-root .sheet')?.innerText || '') })"""
@@ -57,8 +58,9 @@ def key_xy(pg, k, scroll=False):  # 시트가 올라오는 중이어도 지금 �
     return None
 
 AMOUNT = "() => document.querySelector('#sheet-root .amount-display')?.getAttribute('aria-label') || ''"
-ZONE = """() => { const f = [...document.querySelectorAll('.fab')].find((e) => e.offsetParent); const r = f.getBoundingClientRect(); const P = 24;
-  const z = { l: r.left - P, r: r.right + P, t: r.top - P, b: r.bottom + P }; const out = new Set();
+ZONE = """() => { const f = [...document.querySelectorAll('.fab')].find((e) => e.offsetParent); const r = f.getBoundingClientRect(); const P = 25;
+  const d = f.querySelector('.fab-disc').getBoundingClientRect(); const cx = r.x + r.width / 2, cy = d.y + d.height / 2;
+  const z = { l: cx - P, r: cx + P, t: cy - P, b: cy + P }; const out = new Set();
   for (const e of document.querySelectorAll('#sheet-root button, #sheet-root input, #sheet-root [data-close]')) { const q = e.getBoundingClientRect();
     if (q.width && q.right > z.l && q.left < z.r && q.bottom > z.t && q.top < z.b) out.add((e.getAttribute('aria-label') || e.dataset.key || e.innerText || e.className).trim().slice(0, 12)); }
   return [...out]; }"""
@@ -83,14 +85,16 @@ with sync_playwright() as p:
             pd = pg.evaluate("window.__pd"); mx = max((b2 - a2 for a2, b2 in zip(pd, pd[1:])), default=0)
             if mx > 400 and attempt < 2: rows.append(f"{T} {w}px {gap:>3}ms×12  실제 누름 간격 최대 {mx:.0f}ms(브라우저 지연) → 무효, 다시"); pg.close(); continue
             opens = sum(1 for _, o in r['ev'] if o); closes = sum(1 for _, o in r['ev'] if not o)
-            ok = r['open'] and opens == 1 and closes == 0 and not r['reached'] and not r['shake'] and not r['toast'] and not r['err']
-            rows.append(f"{T} {w}px {gap:>3}ms×12  (실제 간격 최대 {mx:.0f}ms)  열림 {opens} 닫힘 {closes} 끝상태 {'열림' if r['open'] else '닫힘'}  시트에 닿은 누름 {len(r['reached'])}  흔들림 {r['shake']} 토스트 {r['toast']} 오류문구 {int(r['err'])}  {'통과' if ok else '실패'}")
+            bad = [x for x in r['reached'] if x[1].startswith(('SAVE', 'CLOSE'))]; amt = pg.evaluate(AMOUNT)
+            keys = len(r['reached']) - len(bad)
+            ok = r['open'] and opens == 1 and closes == 0 and not bad and (not r['shake'] or keys >= 10) and not r['toast'] and not r['err']  # 흔들림은 자판이 10억 한도까지 입력됐을 때(main 과 같음)만 허용
+            rows.append(f"{T} {w}px {gap:>3}ms×12  (실제 간격 최대 {mx:.0f}ms)  열림 {opens} 닫힘 {closes} 끝상태 {'열림' if r['open'] else '닫힘'}  저장·바탕에 닿은 누름 {len(bad)} (자판 {len(r['reached']) - len(bad)}, 금액 {amt or '없음'})  흔들림 {r['shake']} 토스트 {r['toast']} 오류문구 {int(r['err'])}  {'통과' if ok else '실패'}")
             if not ok: fails.append(rows[-1]); pg.screenshot(path=f'/tmp/rapid-fail-{kind}-{w}-{gap}.png')
             pg.close(); break
         # 보통 사용 ① 한 번 누르고 잠시 뒤 바탕을 눌러 닫기
         c, pg = page(); pg.goto(URL); pg.wait_for_timeout(1500); x, y = fab_center(pg)
         tap(pg, kind, x, y); pg.wait_for_timeout(900)
-        rows.append(f"{T} {w}px 시트가 열렸을 때 컵 자리(버튼+24px)에 겹치는 시트 요소: {', '.join(pg.evaluate(ZONE)) or '없음'}")
+        rows.append(f"{T} {w}px 시트가 열렸을 때 컵 누름 자리(반지름 25px)에 겹치는 시트 요소: {', '.join(pg.evaluate(ZONE)) or '없음'}")
         top = pg.evaluate("document.querySelector('#sheet-root .sheet').getBoundingClientRect().top")
         bx, by = (w / 2, top / 2) if w < 1024 else (40, h / 2)  # 시트 밖에 보이는 바탕
         if kind == 'touch' and w < 1024 and top < 48:  # 바탕이 손가락보다 얇으면(터치 보정이 시트로 붙임, main 도 같음) ✕ 로 닫기
