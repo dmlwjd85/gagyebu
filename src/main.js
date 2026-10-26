@@ -71,7 +71,7 @@ function model() {
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale,
+    wide: window.matchMedia('(min-width: 768px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale,
     mode: state.mode ?? null, legacyMode: state.legacyMode !== false && !state.mode, features: state.features, settings: state.settings ?? null,
   };
 }
@@ -143,7 +143,8 @@ const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
   <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쨈 가계부' })}</div>
   ${TABS.slice(0, 2).map(tabBtn).join('')}
   <button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>
-  ${TABS.slice(2).map(tabBtn).join('')}</nav>`;
+  ${TABS.slice(2).map(tabBtn).join('')}</nav>
+<button class="desk-fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>`;
 const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on' : ''}" data-nav="${id}" ${ui.view === id ? 'aria-current="page"' : ''}><span aria-hidden="true">${icon}</span><span>${label}</span></button>`;
 
 // ── 구석 팁 ─────────────────────────────────────────
@@ -831,7 +832,7 @@ app.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.target.dataset?.nameFor || e.target.dataset?.accName || e.target.dataset?.ruleMatch)) e.target.blur();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.bar) { e.preventDefault(); ui.barYm = e.target.dataset.bar; render(); }
 });
-window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => state.user && render());
+['(min-width: 768px)', '(min-width: 1024px)', '(min-width: 1280px)'].forEach((q) => window.matchMedia(q).addEventListener?.('change', () => state.user && render()));
 document.addEventListener('keydown', (e) => {
   if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
   if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
