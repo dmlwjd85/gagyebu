@@ -1,6 +1,8 @@
 """쨈 컵 기록 버튼 연타 검사(QA 2차 D1 재현·회귀 방지). 실제 브라우저 포인터(mouse.click)로 버튼 자리를 연달아 누름.
 폭 320/339/360/390/1280 × 간격 40/80/120/200/300ms × 12번 → 시트가 한 번만 열리고, 닫히지 않고, '저장'·바탕·✕ 에
-누름이 하나도 닿지 않고, 오류 문구·흔들림·토스트가 0이어야 통과(5차: 자판은 막지 않음 → 320·339 에서는 컵 위 '8'·'0'이 입력될 수 있음, 금액도 출력. '8'이 10억 한도를 넘겨 생기는 금액 흔들림은 main 과 같은 입력 동작이라 허용).
+누름이 하나도 닿지 않고, 오류 문구·흔들림·토스트가 0이어야 통과. 6차(QA 5차 D1): 200ms 보다 짧은 간격(40·80·120)은 자판에도 하나도 닿지 않아야 통과
+(320 컵 연타 12번 → 0원). 200·300ms 간격은 일부러 숫자를 누르는 것과 구별되지 않아 자판 입력을 허용하고 금액만 출력.
+320·339: 컵 자리를 컵 뒤 300ms·600ms 에 두 번 누르면(320 이면 '8 8') 둘 다 입력돼야 통과(88원).
 보통 사용(잠시 뒤 바탕 눌러 닫기, 금액·분류 넣고 저장)도 확인.
 컵 한 번 누른 뒤 0.25·0.3·0.35·0.4초에 자판 1·2·3·4(250ms·100ms 간격) → 금액 1,234원(QA 3차 N1 재현·회귀 방지).
 마우스(mouse.click)와 터치(touchscreen.tap) 두 가지로 모두 돌림. 폭마다 시트가 열렸을 때 컵 누름 자리(반지름 25px)에 겹치는 시트 요소도 출력.
@@ -83,14 +85,26 @@ with sync_playwright() as p:
             for _ in range(12): tap(pg, kind, x, y); pg.wait_for_timeout(gap)
             pg.wait_for_timeout(900); r = pg.evaluate(STATE)
             pd = pg.evaluate("window.__pd"); mx = max((b2 - a2 for a2, b2 in zip(pd, pd[1:])), default=0)
-            if mx > 400 and attempt < 2: rows.append(f"{T} {w}px {gap:>3}ms×12  실제 누름 간격 최대 {mx:.0f}ms(브라우저 지연) → 무효, 다시"); pg.close(); continue
+            limit = 200 if gap < 200 else 400  # 짧은 간격 검사는 실제 간격이 200ms 를 넘으면 연타가 아니게 되므로 무효
+            if mx > limit and attempt < 2: rows.append(f"{T} {w}px {gap:>3}ms×12  실제 누름 간격 최대 {mx:.0f}ms(브라우저 지연) → 무효, 다시"); pg.close(); continue
             opens = sum(1 for _, o in r['ev'] if o); closes = sum(1 for _, o in r['ev'] if not o)
             bad = [x for x in r['reached'] if x[1].startswith(('SAVE', 'CLOSE'))]; amt = pg.evaluate(AMOUNT)
             keys = len(r['reached']) - len(bad)
-            ok = r['open'] and opens == 1 and closes == 0 and not bad and (not r['shake'] or keys >= 10) and not r['toast'] and not r['err']  # 흔들림은 자판이 10억 한도까지 입력됐을 때(main 과 같음)만 허용
+            ok = r['open'] and opens == 1 and closes == 0 and not bad and (keys == 0 if gap < 200 else (not r['shake'] or keys >= 10)) and not r['toast'] and not r['err']  # 200·300ms: 흔들림은 자판이 10억 한도까지 입력됐을 때(main 과 같음)만 허용
             rows.append(f"{T} {w}px {gap:>3}ms×12  (실제 간격 최대 {mx:.0f}ms)  열림 {opens} 닫힘 {closes} 끝상태 {'열림' if r['open'] else '닫힘'}  저장·바탕에 닿은 누름 {len(bad)} (자판 {len(r['reached']) - len(bad)}, 금액 {amt or '없음'})  흔들림 {r['shake']} 토스트 {r['toast']} 오류문구 {int(r['err'])}  {'통과' if ok else '실패'}")
             if not ok: fails.append(rows[-1]); pg.screenshot(path=f'/tmp/rapid-fail-{kind}-{w}-{gap}.png')
             pg.close(); break
+        # 컵 자리 '8 8'(300ms 간격): 컵 → 300ms → 같은 자리 → 300ms → 같은 자리. 일부러 누른 숫자는 받아야 함(QA 5차 D1)
+        if w in (320, 339):
+            c, pg = page(); pg.goto(URL); pg.wait_for_timeout(1500); x, y = fab_center(pg); pg.evaluate(WATCH)
+            tap(pg, kind, x, y); pg.wait_for_timeout(300)
+            under = pg.evaluate(f"document.elementFromPoint({x}, {y})?.closest('[data-key]')?.dataset.key || ''")
+            tap(pg, kind, x, y); pg.wait_for_timeout(300); tap(pg, kind, x, y); pg.wait_for_timeout(500)
+            r = pg.evaluate(STATE); a = pg.evaluate(AMOUNT); keys = len(r['reached'])
+            ok = bool(under) and keys == 2 and f"{int(under * 2):,}원" in a and r['open'] and not r['err']
+            rows.append(f"{T} {w}px 컵 자리 '{under} {under}'(300ms 간격): 자판에 닿은 누름 {keys}, {a or '시트 없음'}  {'통과' if ok else '실패'}")
+            if not ok: fails.append(rows[-1]); pg.screenshot(path=f'/tmp/rapid-fail-{kind}-{w}-88.png')
+            pg.close()
         # 보통 사용 ① 한 번 누르고 잠시 뒤 바탕을 눌러 닫기
         c, pg = page(); pg.goto(URL); pg.wait_for_timeout(1500); x, y = fab_center(pg)
         tap(pg, kind, x, y); pg.wait_for_timeout(900)

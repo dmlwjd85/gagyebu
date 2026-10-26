@@ -12,7 +12,7 @@ import {
 } from './smsSheet.js';
 import { ownerPickHtml } from './views.js';
 import { ownerOf, ownerForSave, spouseLabel } from '../lib/couple.js';
-import { createTapBurst } from './fabPop.js';
+import { createTapBurst, BURST_QUIET_MS, BURST_KEY_MS } from './fabPop.js';
 
 let el, ctx, s, lastFocus, longPressAt = 0;
 const burst = createTapBurst(), keyBurst = createTapBurst();
@@ -27,7 +27,8 @@ export function initSheet(context) {
   el.innerHTML = `<div class="sheet-backdrop" data-close></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"></section>`;
   document.body.append(el);
-  // 연타 보호(fabPop.js createTapBurst): 쨈 컵 버튼을 연달아 누른 손가락이 같은 자리로 시트의 '저장'·바탕(닫기)에 떨어지면 무시.
+  // 연타 보호(fabPop.js createTapBurst): 쨈 컵 버튼을 연달아 누른 손가락이 같은 자리로 시트에 떨어지면 무시.
+  // '저장'·바탕·✕ 는 앞 누름에서 400ms, 자판 등 나머지는 200ms 안에 이어진 누름만(320 '8'·339 '0' 이 컵 자리, QA 5차 D1).
   // 가장 먼저 도는 window 캡처 단계에서 pointerdown 을 끊고(길게 누르기 저장도 시작 안 됨) 뒤따르는 click 도 버림.
   let swallowClick = false;
   window.addEventListener('pointerdown', (e) => {
@@ -35,8 +36,8 @@ export function initSheet(context) {
     const fab = e.target.closest?.('.fab');
     if (fab) { burst.fromButton(e.timeStamp, e.clientX, e.clientY); return; }
     if (!el.contains(e.target)) return;
-    if (!e.target.closest('[data-save], [data-close]')) { burst.reset(); return; } // 자판·카테고리·입력칸은 언제나 받음(QA 4차 D2), 받으면 연타 묶음 끝
-    if (burst.swallow(e.timeStamp, e.clientX, e.clientY)) { swallowClick = true; e.preventDefault(); e.stopImmediatePropagation(); }
+    const gap = e.target.closest('[data-save], [data-close]') ? BURST_QUIET_MS : BURST_KEY_MS;
+    if (burst.swallow(e.timeStamp, e.clientX, e.clientY, gap)) { swallowClick = true; e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   // 키보드: 컵에서 시작된 Enter·Space 연타(키 반복 포함)가 시트로 넘어온 초점에 떨어져 저장 검사를 돌리지 않게(QA 3차 N2).
   // 마지막 Enter·Space 뒤 400ms 안의 Enter·Space 만 무시, 숫자·Tab 등 다른 키를 누르면 묶음이 끝나 그 뒤 Enter 저장은 정상.
