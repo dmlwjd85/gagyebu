@@ -308,3 +308,12 @@ describe('테마 글자 대비', () => {
     test(`다크 ${id}`, () => pairs(varsIn(css, `html.dark[data-theme="${id}"]`), neutral.dark, `dark ${id}`));
   }
 });
+
+// 디자인 스펙 17절 #5·#14: 과한 겸양 '~드릴게요' 대신 친구 말투 '~줄게요/둘게요'
+test('문구 17절: 드릴게요를 쓰지 않음', () => {
+  const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  expect(read('../main.js')).toContain('팁을 처음부터 다시 보여 줄게요.');
+  expect(read('../ui/views.js')).toContain('그래프를 그려 줄게요.');
+  expect(read('../ui/importer.js')).toContain('다음부터는 알아서 맞춰 둘게요.');
+  for (const f of ['../main.js', '../ui/views.js', '../ui/importer.js']) expect(read(f)).not.toMatch(/드릴게요/);
+});

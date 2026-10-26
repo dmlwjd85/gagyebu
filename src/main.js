@@ -700,7 +700,7 @@ app.addEventListener('click', async (e) => {
       return;
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
-    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 드릴게요.');
+    case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 줄게요.');
     case 'csv-month': return download(`쨈가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
       try { download(`쨈가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
