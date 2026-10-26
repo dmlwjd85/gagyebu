@@ -54,11 +54,16 @@ describe('쨈 버튼 소리·진동', () => {
     expect(ok).toBeLessThanOrEqual(MAX_VOICES);
     t = 1000; expect(feel.play('tok')).toBe(true);
   });
-  test('소리 봉투: 작은 음량, 끝은 0 근처(뚝 끊기는 소리 없음)', () => {
+  test('소리 봉투: 최고점 −14~−12 dBFS(들리되 과하지 않게), 3개가 겹쳐도 찢어지지 않음, 끝은 0 근처(뚝 끊기는 소리 없음)', () => {
     for (const v of Object.values(VOICES)) {
       const s = renderVoice(v);
       const peak = Math.max(...s.map(Math.abs));
-      expect(peak).toBeLessThan(0.25);
+      const db = 20 * Math.log10(peak);
+      expect(db).toBeGreaterThan(-14); expect(db).toBeLessThan(-12);
+      expect(peak * MAX_VOICES).toBeLessThan(0.8);
+      // 지직거림 방지: 샘플 사이 급격한 점프 없음(켜짐 3ms 안팎 부드럽게)
+      let jump = 0; for (let i = 1; i < s.length; i++) jump = Math.max(jump, Math.abs(s[i] - s[i - 1]));
+      expect(jump).toBeLessThan(0.12);
       expect(Math.abs(s[0])).toBeLessThan(0.01);
       expect(Math.max(...s.slice(-50).map(Math.abs))).toBeLessThan(0.002);
     }

@@ -175,4 +175,5 @@ for r in (bad_tabs[:4] + bad_amt[:12] + bad_tip[:4] + over[:4] + hdr2[:6]):
     print(' ', r['tag'], r['view'], 'tabs', [t['n'] for t in (r['tabs'] or []) if not t['ok']], 'amt', r['amt'], 'tip', r['tip'], 'over', r['docOver'], 'hdr', r['hdrLines'])
 qa = [r for r in res if MODE != 'matrix' or int(r['tag'].split('@')[1][:-1]) <= 200]
 fail = [r for r in qa if (r['tabs'] and not all(t['ok'] for t in r['tabs'])) or r['amtN'] or r['docOver'] > 0 or (r['tip'] and (r['tip']['pos'] == 'fixed' or r['tip']['overHeader'] or r['tip']['overTab'] or r['tip']['covered']))]
+fail += [r for r in bad_tabs if r not in fail]  # 300·400% 에서도 아래 메뉴가 가려지면 실패(PR #29 QA: 쨈 컵이 '차트' 탭을 덮음)
 sys.exit(1 if fail or shrink or labelbad else 0)

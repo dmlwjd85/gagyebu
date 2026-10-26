@@ -12,8 +12,10 @@ import {
 } from './smsSheet.js';
 import { ownerPickHtml } from './views.js';
 import { ownerOf, ownerForSave, spouseLabel } from '../lib/couple.js';
+import { isEarlyTap } from './fabPop.js';
 
-let el, ctx, s, lastFocus, longPressAt = 0;
+let el, ctx, s, lastFocus, longPressAt = 0, openedAt = -1e9;
+const sinceOpen = () => performance.now() - openedAt;
 const recentKey = 'recentCats';
 const recentIds = () => { try { return JSON.parse(localStorage.getItem(recentKey)) || []; } catch { return []; } };
 const pushRecent = (id) => localStorage.setItem(recentKey, JSON.stringify([id, ...recentIds().filter((x) => x !== id)].slice(0, 8)));
@@ -25,6 +27,8 @@ export function initSheet(context) {
   el.innerHTML = `<div class="sheet-backdrop" data-close></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"></section>`;
   document.body.append(el);
+  // 올라오는 동안의 누름은 바탕·저장·자판 어디에도 닿지 않게(캡처 단계에서 막음)
+  el.addEventListener('click', (e) => { if (isEarlyTap(sinceOpen(), e.detail)) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
   el.addEventListener('click', onClick);
   el.addEventListener('input', onInput);
   el.addEventListener('change', onInput);
@@ -32,7 +36,7 @@ export function initSheet(context) {
   // 저장 길게 누르기(0.6초) = 매달 반복으로 저장
   let lp;
   el.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('[data-save]') || s.id || ctx.getState().features?.recurring === false) return;
+    if (!e.target.closest('[data-save]') || isEarlyTap(sinceOpen()) || s.id || ctx.getState().features?.recurring === false) return;
     lp = setTimeout(() => { longPressAt = Date.now(); s.repeat = true; haptic(20); save(); }, 600);
   });
   const stop = () => clearTimeout(lp);
@@ -49,6 +53,7 @@ export function openSheet(tx = null, { date } = {}) {
     ? { id: tx.id, orig: tx, refund: tx.amount < 0, createdAt: tx.createdAt, kind: tx.kind, digits: String(Math.abs(tx.amount)), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', owner: ownerOf(tx), more: false, showOpts: true, error: '' }
     : { kind: 'expense', digits: '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', owner: '나', more: false, showOpts: false, error: '' };
   render();
+  openedAt = performance.now();
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
   document.getElementById('app').inert = true;

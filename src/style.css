@@ -185,7 +185,7 @@
     .tab { min-width: 0; width: 100%; max-width: 64px; }
     .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 48px; margin-top: 0; justify-content: center; }
     .tabbar .fab-disc { width: min(44px, 100%); height: 34px; border-radius: 17px; } /* 아주 좁으면 접시를 낮은 알약으로(버튼 전체 높이 48px 유지) + 아래 '기록' */
-    .tabbar .fab-disc .cup-svg { width: 36px; height: 36px; }
+    .tabbar .fab-disc .cup-svg { width: min(36px, 100cqi); height: min(36px, 100cqi); } /* 컵은 접시 폭을 넘지 않음(확대 시 옆 '차트' 칸을 덮지 않게) */
   }
   @media (max-width: 239px) {
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -200,31 +200,35 @@
     .tabbar .fab { order: -1; margin: 0 0 12px; gap: 0; width: 76px; min-height: 48px; padding: 4px 6px 8px; border-radius: 18px;
       color: var(--cup-label); font-size: 14px; line-height: 1.25; font-weight: 700; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
     .tabbar .fab-disc { width: 52px; height: auto; margin: 0; background: none; border: 0; box-shadow: none; } /* 폭을 정해 둬야 @container(inline-size)가 0으로 접히지 않음 */
-    .tabbar .fab-disc .cup-svg { width: 50px; height: 50px; }
+    .tabbar .fab-disc .cup-svg { width: min(52px, 100cqi); height: min(52px, 100cqi); } /* 모바일과 같은 52px → 'ㅉ' 사이 빈 칸이 같은 픽셀 격자에 맞음 */
     .tab { min-width: 64px; min-height: 64px; font-size: 12px; }
   }
   /* 추가 버튼(모바일): 위로 솟은 접시 위 조식 쨈 컵(시안 D, 극사실 호일 컵) + 그 아래 '기록' 글자 13px(다른 탭처럼 아이콘+이름, L1) */
   .fab { @apply flex flex-col items-center gap-0.5 min-w-[56px] -mt-7; font-size: 13px; line-height: 1.2; color: var(--cup-label); font-weight: 700; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
   .fab-disc { @apply grid place-items-center w-[60px] h-[60px] rounded-full shadow-glow; position: relative; background: var(--cup-plate); border: 1px solid var(--cup-rim);
     container: cupd / inline-size; } /* 접시 폭으로 컵 세부 묘사 단계를 고름(@container) */
-  .fab-disc .cup-svg { width: 52px; height: 52px; }
+  .fab-disc .cup-svg { width: min(52px, 100cqi); height: min(52px, 100cqi); }
   /* 쨈 맛(테마별) + 접시·테두리. 은박 컵 윤곽선(--cup-edge)은 접시 대비 3:1 이상, '기록' 글자(--cup-label)는 7:1 이상 */
   :root { --cup-j1: #2E43A8; --cup-j2: #18246A; --cup-j3: #5272D6; --cup-seed: #0E1748; --cup-pulp: #7F97E8; --cup-ink: #2B3FA0; /* 블루베리 */
     --cup-plate: #F2F3F6; --cup-rim: #8C95A3; --cup-edge: #6B7482; --cup-rimtop: #E9ECF0; --cup-rimside1: #C9CED6; --cup-rimside2: #98A1AE; --cup-label: #1E2230; }
   .dark { --cup-plate: #262833; --cup-rim: #5A6070; --cup-edge: #A3ABB8; --cup-rimtop: #DDE1E7; --cup-rimside1: #B5BCC6; --cup-rimside2: #7E8794; --cup-label: #F2F3F7; }
-  html[data-theme="sakura"] { --cup-j1: #9E1630; --cup-j2: #5E0A1C; --cup-j3: #C02A42; --cup-seed: #F2C14E; --cup-pulp: #D0545F; --cup-ink: #8A1129; } /* 딸기 루비 */
-  html[data-theme="snow"] { --cup-j1: #55246F; --cup-j2: #311244; --cup-j3: #7A3B97; --cup-seed: #22092F; --cup-pulp: #9C6BB8; --cup-ink: #55246F; } /* 포도 */
+  html[data-theme="sakura"] { --cup-j1: #7A1F34; --cup-j2: #480C1C; --cup-j3: #8C2A40; --cup-seed: #F2C14E; --cup-pulp: #B98894; --cup-ink: #6B1427; } /* 딸기 루비(진한 버건디): 흰 반사와 섞인 색까지 금지 코랄·핑크·보라와 ΔE2000 13.7 이상 */
+  html[data-theme="snow"] { --cup-j1: #55246F; --cup-j2: #311244; --cup-j3: #7A3B97; --cup-seed: #22092F; --cup-pulp: #9A74B0; --cup-ink: #55246F; } /* 포도(과육은 차분한 연보라: 금지 보라와 섞인 색까지 ΔE 13.5 이상) */
   html[data-theme="maple"] { --cup-j1: #D97F14; --cup-j2: #9C540A; --cup-j3: #F2A73E; --cup-seed: #7A3F06; --cup-pulp: #F8C66E; --cup-ink: #7E4204; } /* 살구 */
   html[data-theme="retro"] { --cup-j1: #5F9420; --cup-j2: #3A6410; --cup-j3: #8DBD36; --cup-seed: #15160C; --cup-pulp: #BFE07A; --cup-ink: #33580C; } /* 키위 */
-  .cup-svg { display: block; overflow: visible; }
+  .cup-svg { display: block; overflow: visible; pointer-events: none; } /* 그림·튀는 방울은 누름을 받지 않음: 누르는 자리는 버튼 칸(.fab)뿐 → 옆 탭을 가로채지 않음 */
+  .fab-disc > * { pointer-events: none; }
   .cup-seed { fill: var(--cup-seed); } .cup-pulp { fill: url(#cupd-pulp); }
   .cup-edge { stroke: var(--cup-edge); } .cup-rimtop { fill: var(--cup-rimtop); }
   .cup-ink { fill: var(--cup-ink); stroke: var(--cup-ink); stroke-linejoin: round; } .cup-ink-f { fill: var(--cup-ink); }
   .cup-wback { fill: #FFFDF8; stroke: #FFFDF8; stroke-linejoin: round; } .cup-wsh { fill: #000; stroke: #000; stroke-linejoin: round; opacity: .18; }
   .cup-pp circle:first-child { fill: var(--cup-j1); }
-  /* 세부 묘사 단계: 기본(작은 1배)은 깔끔하게 → 접시가 49px 이상이면 중간 묘사, 80px 이상이면 호일 주름·씨·과육 결·큰 글자 */
+  /* 세부 묘사 단계: 기본(실제 크기 36~52px, 1배)도 굵은 반사 띠·접힌 면·뚜껑 위 쨈 방울·큰 씨·과육이 보임 →
+     접시 49px 이상이면 중간 묘사(.cup-d2) → 고해상도 화면(2dppx 이상)은 크기와 상관없이 엠보 점·가는 주름·씨 반사까지(.cup-d1).
+     1배 화면에서 가는 선·점 무늬는 픽셀보다 가늘어 뭉개지고 'ㅉ' 빈 칸을 흐리므로 숨김. 80px 이상(확대 미리보기)이면 큰 글자 */
   .cup-d1, .cup-d2, .cup-lbl2 { display: none; }
   @container cupd (min-width: 49px) { .cup-d2 { display: inline; } }
+  @media (min-resolution: 2dppx), (-webkit-min-device-pixel-ratio: 2) { .cup-d1, .cup-d2 { display: inline; } }
   @container cupd (min-width: 80px) { .cup-d1, .cup-lbl2 { display: inline; } .cup-lbl1 { display: none; } }
   /* 손맛(말랑이처럼): 누르는 동안 살짝 눌린 채(.is-pressed) → 놓으면 통 튀었다 늘어났다 가라앉음(되튐 곡선 전환). 키보드도 같음(main.js) */
   .cup-squish { display: block; transform-origin: 50% 92%; transition: transform .46s cubic-bezier(.28, 1.9, .42, .9); }
@@ -247,8 +251,7 @@
   @keyframes cup-pp { 0%, 24% { opacity: 0; transform: scale(.3); } 36% { opacity: 1; transform: translate(calc(var(--px) * .55), calc(var(--py) * .55)) scale(1); } 100% { opacity: 0; transform: translate(var(--px), calc(var(--py) + 8px)) scale(.5); } }
   /* 움직임 줄이기: 터지는 동작·눌림 없이 짧은 색 변화만(접시에 빛 한 번), 시트는 바로 열림(fabPop.js) */
   .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-j1); opacity: 0; pointer-events: none; }
-  .fab.is-flash .fab-disc::after { animation: cup-flash .16s ease-out; }
-  @keyframes cup-flash { 0% { opacity: 0; } 40% { opacity: .28; } 100% { opacity: 0; } }
+  .fab.is-flash .fab-disc::after { opacity: .3; } /* 움직임 없는 색 변화: 160ms 동안 접시에 쨈 색이 옅게 덮였다가 사라짐(fabPop.js가 켜고 끔). 애니메이션이 아니라 전역 '움직임 줄이기' 규칙(0.01ms)에 지워지지 않음 */
   @media (prefers-reduced-motion: reduce) {
     .cup-squish, .fab.is-pressed .cup-squish { transition: none; transform: none; }
     .fab.is-popping .cup-body, .fab.is-popping .cup-lid, .fab.is-popping .cup-blob, .fab.is-popping .cup-word, .fab.is-popping .cup-pp { animation: none; }
@@ -271,7 +274,7 @@
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 44px; margin-top: 0; justify-content: center; }
     .tabbar .fab-disc { width: min(44px, 100%); height: 44px; border-radius: 22px; }
-    .tabbar .fab-disc .cup-svg { width: 40px; height: 40px; }
+    .tabbar .fab-disc .cup-svg { width: min(40px, 100cqi); height: min(40px, 100cqi); }
     .tabbar .fab-txt { display: none; }
     /* 본문을 내리는 동안은 아래 메뉴도 화면 밖으로(올리거나 맨 끝에 닿으면 다시 보임, 키보드로 메뉴에 들어가면 보임) — main.js */
     .tabbar { transition: transform .2s ease-out; }
