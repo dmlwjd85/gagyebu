@@ -214,7 +214,8 @@ describe('하단 추가 버튼', () => {
     const shot = readFileSync(new URL('../dev/shot-main.js', import.meta.url), 'utf8');
     expect(shot).toContain('aria-label="새 기록 추가 (지출·수입)"');
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
-    expect(views).toContain('아래 가운데 둥근 버튼을 눌러');
+    expect(views).toContain('동그란 ‘쨈’ 버튼을 눌러 첫 기록을');
+    expect(views).not.toMatch(/아래 가운데|왼쪽 위/); // 화면 폭마다 버튼 위치가 달라 위치를 말하지 않음
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
     expect(fav).toContain(JJAEM_D);
     expect(fav).toContain('쨈 가계부');

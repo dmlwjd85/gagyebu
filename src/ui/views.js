@@ -168,7 +168,7 @@ export function homeView(m) {
       <div class="flex items-center justify-between"><h2 id="recent-h" class="text-head">최근 기록</h2>
         ${m.periodTxs.length ? '<button class="link-btn" data-nav="calendar" data-mode="list">전체 보기 ›</button>' : ''}</div>
       ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
-        : empty('🐣', isCur ? '아직 기록이 없어요. 아래 가운데 둥근 버튼을 눌러 첫 지출을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
+        : empty('🐣', isCur ? '아직 기록이 없어요. 동그란 ‘쨈’ 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
     </section></div>`;
 }
 // 지출 칸: 환불이 더 많은 달은 '0원' + 아랫줄 '환불 +49,000원'(빼기 기호 겹침·말줄임 없음, QA N10)
