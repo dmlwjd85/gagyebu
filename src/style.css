@@ -183,7 +183,7 @@
     .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; justify-items: center; padding-top: 4px;
       padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
     .tab { min-width: 0; width: 100%; max-width: 64px; }
-    .tabbar .fab { width: 100%; max-width: 64px; min-height: 48px; margin-top: 0; justify-content: center; }
+    .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 48px; margin-top: 0; justify-content: center; }
     .tabbar .fab-disc { width: min(48px, 100%); height: 32px; border-radius: 16px; } /* 아주 좁으면 원을 낮은 알약으로(버튼 전체 높이 48px 유지) + 아래 '기록' */
   }
   @media (max-width: 239px) {
@@ -224,7 +224,7 @@
       padding-top: 2px; padding-bottom: max(2px, env(safe-area-inset-bottom)); }
     .tab { min-height: 44px; min-width: 0; width: 100%; max-width: 64px; }
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
-    .tabbar .fab { width: 100%; max-width: 64px; min-height: 44px; margin-top: 0; justify-content: center; }
+    .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 44px; margin-top: 0; justify-content: center; }
     .tabbar .fab-disc { width: min(44px, 100%); height: 44px; border-radius: 22px; }
     .tabbar .fab-txt { display: none; }
     /* 본문을 내리는 동안은 아래 메뉴도 화면 밖으로(올리거나 맨 끝에 닿으면 다시 보임, 키보드로 메뉴에 들어가면 보임) — main.js */
