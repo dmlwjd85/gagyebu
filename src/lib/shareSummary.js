@@ -3,7 +3,7 @@ import { formatWon, spendText } from './money.js';
 
 export function monthSummaryText(d) {
   const lines = [
-    `콕 가계부 ${String(d.ym).slice(0, 4)}년 ${d.month}월`,
+    `쨈 가계부 ${String(d.ym).slice(0, 4)}년 ${d.month}월`,
     `남긴 돈 ${formatWon(d.saved)}`,
     `수입 ${formatWon(d.income)} · 지출 ${spendText(d.expense)}`,
   ];

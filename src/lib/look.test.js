@@ -2,7 +2,7 @@ import { readFileSync } from 'node:fs';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
-import { symbol, KOK_D } from '../ui/brand.js';
+import { symbol, JJAEM_D } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -195,31 +195,29 @@ describe('설정·홈 표시', () => {
   });
 });
 
-describe('하단 콕 버튼', () => {
-  test('아이콘과 같은 콕 윤곽을 currentColor 로 채우고, 이름과 동작은 그대로다', () => {
+describe('하단 추가 버튼', () => {
+  test('아이콘과 같은 쨈 윤곽을 currentColor 로 채우고, 이름과 동작은 그대로다', () => {
     const svg = symbol('S', { cls: 'fab-mark', ink: true });
     expect(svg).toContain('class="fab-mark"');
     expect(svg).toContain('fill="currentColor"');
-    expect(svg).toContain(KOK_D);
+    expect(svg).toContain(JJAEM_D);
     expect(svg).toContain('aria-hidden="true"');
     expect(svg).not.toContain('linearGradient');
-    const painted = symbol('S', { label: '콕 가계부' });
+    const painted = symbol('S', { label: '쨈 가계부' });
     expect(painted).toContain('linearGradient');
-    expect(painted).toContain('aria-label="콕 가계부"');
-    expect(painted).toContain(KOK_D);
+    expect(painted).toContain('aria-label="쨈 가계부"');
+    expect(painted).toContain(JJAEM_D);
     const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
     expect(main).toContain('data-action="add"');
     expect(main).toContain('aria-label="새 기록 추가 (지출·수입)"');
     expect(main).toContain("symbol('S', { cls: 'fab-mark', ink: true })");
-    expect(main).not.toMatch(/쓱/);
     const shot = readFileSync(new URL('../dev/shot-main.js', import.meta.url), 'utf8');
     expect(shot).toContain('aria-label="새 기록 추가 (지출·수입)"');
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
-    expect(views).toContain('아래 콕을 눌러');
-    expect(views).not.toMatch(/쓱/);
+    expect(views).toContain('아래 가운데 둥근 버튼을 눌러');
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
-    expect(fav).toContain(KOK_D);
-    expect(fav).toContain('콕 가계부');
+    expect(fav).toContain(JJAEM_D);
+    expect(fav).toContain('쨈 가계부');
     const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
     const root = varsIn(tokens, ':root');
     expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);
