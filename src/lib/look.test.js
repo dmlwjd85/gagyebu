@@ -1,8 +1,10 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
-import { symbol, KOK_D } from '../ui/brand.js';
+import { symbol, JJAEM_D } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -195,31 +197,30 @@ describe('설정·홈 표시', () => {
   });
 });
 
-describe('하단 콕 버튼', () => {
-  test('아이콘과 같은 콕 윤곽을 currentColor 로 채우고, 이름과 동작은 그대로다', () => {
+describe('하단 추가 버튼', () => {
+  test('아이콘과 같은 쨈 윤곽을 currentColor 로 채우고, 이름과 동작은 그대로다', () => {
     const svg = symbol('S', { cls: 'fab-mark', ink: true });
     expect(svg).toContain('class="fab-mark"');
     expect(svg).toContain('fill="currentColor"');
-    expect(svg).toContain(KOK_D);
+    expect(svg).toContain(JJAEM_D);
     expect(svg).toContain('aria-hidden="true"');
     expect(svg).not.toContain('linearGradient');
-    const painted = symbol('S', { label: '콕 가계부' });
+    const painted = symbol('S', { label: '쨈 가계부' });
     expect(painted).toContain('linearGradient');
-    expect(painted).toContain('aria-label="콕 가계부"');
-    expect(painted).toContain(KOK_D);
+    expect(painted).toContain('aria-label="쨈 가계부"');
+    expect(painted).toContain(JJAEM_D);
     const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
     expect(main).toContain('data-action="add"');
     expect(main).toContain('aria-label="새 기록 추가 (지출·수입)"');
     expect(main).toContain("symbol('S', { cls: 'fab-mark', ink: true })");
-    expect(main).not.toMatch(/쓱/);
     const shot = readFileSync(new URL('../dev/shot-main.js', import.meta.url), 'utf8');
     expect(shot).toContain('aria-label="새 기록 추가 (지출·수입)"');
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
-    expect(views).toContain('아래 콕을 눌러');
-    expect(views).not.toMatch(/쓱/);
+    expect(views).toContain('동그란 ‘쨈’ 버튼을 눌러 첫 기록을');
+    expect(views).not.toMatch(/아래 가운데|왼쪽 위/); // 화면 폭마다 버튼 위치가 달라 위치를 말하지 않음
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
-    expect(fav).toContain(KOK_D);
-    expect(fav).toContain('콕 가계부');
+    expect(fav).toContain(JJAEM_D);
+    expect(fav).toContain('쨈 가계부');
     const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
     const root = varsIn(tokens, ':root');
     expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);
@@ -308,4 +309,18 @@ describe('테마 글자 대비', () => {
     test(`라이트 ${id}`, () => pairs(varsIn(css, `html[data-theme="${id}"]`), neutral.light, `light ${id}`));
     test(`다크 ${id}`, () => pairs(varsIn(css, `html.dark[data-theme="${id}"]`), neutral.dark, `dark ${id}`));
   }
+});
+
+// 디자인 스펙 17절 #5·#14: 과한 겸양 '~드릴게요/~드려요' 대신 친구 말투 '~줄게요/둘게요/줘요'
+test('문구 17절: src 전체에 드릴게요·드려요를 쓰지 않음', () => {
+  const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
+  expect(read('../main.js')).toContain('팁을 처음부터 다시 보여 줄게요.');
+  expect(read('../ui/views.js')).toContain('그래프를 그려 줄게요.');
+  expect(read('../ui/importer.js')).toContain('다음부터는 알아서 맞춰 둘게요.');
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
+  const files = walk(root).filter((f) => /\.(js|css|html)$/.test(f) && !f.endsWith('look.test.js'));
+  expect(files.length).toBeGreaterThan(20);
+  const bad = files.flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l, i) => /드릴게요|드려요/.test(l) ? `${f.slice(root.length)}:${i + 1}` : null).filter(Boolean));
+  expect(bad).toEqual([]);
 });

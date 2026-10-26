@@ -3,7 +3,7 @@
  - 에뮬레이터 빌드(VITE_USE_EMULATOR=true) 미리보기 주소. 기본 http://127.0.0.1:4174/gagyebu/
  - 데모 데이터 + 아주 긴 이름(목표·반복·카테고리·결제수단·메모)을 넣고
    360·1280px × 라이트·다크로 모든 화면(+가져오기 단계·입력 시트)을 열어
-   document 가로 스크롤(scrollWidth - clientWidth)과 화면 밖으로 나간 요소를 잼. 하나라도 있으면 종료 코드 1
+   document 가로 스크롤(scrollWidth - clientWidth)과 화면 밖으로 나간 요소를 잰다. 하나라도 있으면 종료 코드 1
  - 본문(#main)은 세로 스크롤 상자(overflow-x: hidden)라서, 그 안에서 넘친 요소는 '잘린 것'으로 보고 넘침으로 셈
  - 환경변수 QA_SCALE=1.6 → 설정의 '본문 글자 크기'를 바꿔서 검사, QA_WIDTHS=320,360,1280 → 검사할 폭
 """

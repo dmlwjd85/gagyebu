@@ -1,4 +1,4 @@
-// PR #9 2차 재검수(9.0점) 지적 재발 방지 — 실제 크기·비율은 tools/qa/zoom_check.py(브라우저)에서 잼
+// PR #9 2차 재검수(9.0점) 지적 재발 방지 — 실제 크기·비율은 tools/qa/zoom_check.py(브라우저)에서 잰다
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 

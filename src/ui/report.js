@@ -34,7 +34,7 @@ function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w,
 
 /** 캔버스에 그리기 → PNG Blob */
 export async function drawReport(d, { dark = false } = {}) {
-  try { await Promise.all(['800', '700', '500'].map((w) => document.fonts.load(`${w} 40px "Pretendard Variable"`, '콕가계부월리포트0123456789원'))); } catch {}
+  try { await Promise.all(['800', '700', '500'].map((w) => document.fonts.load(`${w} 40px "Pretendard Variable"`, '쨈가계부월리포트0123456789원'))); } catch {}
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#1C1A2E' : '#FFFFFF';
@@ -42,16 +42,16 @@ export async function drawReport(d, { dark = false } = {}) {
   ctx.fillStyle = dark ? '#0F0E1A' : '#F6F4FF'; ctx.fillRect(0, 0, W, H);
   // 'transparent'는 검은 투명으로 섞여 회색 띠가 생기므로 같은 색의 알파 0으로 끝냄
   const glow = (x, y, r, rgb, a) => { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); };
-  glow(120, 60, 620, dark ? '112,72,242' : '176,156,255', dark ? 0.35 : 0.55);
-  glow(1000, 200, 560, dark ? '194,69,126' : '255,170,205', dark ? 0.28 : 0.5);
+  glow(120, 60, 620, dark ? '109,74,255' : '176,156,255', dark ? 0.35 : 0.55);
+  glow(1000, 200, 560, dark ? '47,111,214' : '160,195,255', dark ? 0.28 : 0.5);
   glow(540, 1350, 700, dark ? '63,209,190' : '160,230,220', dark ? 0.15 : 0.45);
-  // 머리: 콕 가계부 · N월 리포트
+  // 머리: 쨈 가계부 · N월 리포트
   ctx.fillStyle = ink; ctx.font = `800 44px ${FONT}`; ctx.textBaseline = 'alphabetic';
-  ctx.fillText('콕 가계부', 80, 130);
+  ctx.fillText('쨈 가계부', 80, 130);
   ctx.fillStyle = sub; ctx.font = `600 36px ${FONT}`; ctx.textAlign = 'right';
   ctx.fillText(`${d.ym.slice(0, 4)}년 ${d.month}월 리포트`, W - 80, 130); ctx.textAlign = 'left';
-  // 큰 카드: 그라데이션 + 남긴 돈
-  const g = ctx.createLinearGradient(80, 190, W - 80, 640); g.addColorStop(0, '#7048F2'); g.addColorStop(.55, '#C2457E'); g.addColorStop(1, '#B85A3E');
+  // 큰 카드: 아이콘과 같은 색 계열(보라 #6D4AFF → 파랑 #2F6FD6 → 청록 #16897C) + 남긴 돈
+  const g = ctx.createLinearGradient(80, 190, W - 80, 640); g.addColorStop(0, '#6D4AFF'); g.addColorStop(.55, '#2F6FD6'); g.addColorStop(1, '#16897C');
   roundRect(ctx, 80, 190, W - 160, 450, 56); ctx.fillStyle = g; ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = `600 40px ${FONT}`; ctx.fillText(`${d.month}월에 남긴 돈`, 140, 290);
   // 큰 금액(수십억)도 카드 밖으로 넘치지 않게 글자 크기를 폭에 맞춤(QA L1)
@@ -76,7 +76,7 @@ export async function drawReport(d, { dark = false } = {}) {
     // 긴 카테고리 이름(공백 없는 20자)이 금액과 겹치지 않게 이름 칸 폭을 정함
     ctx.fillStyle = ink; ctx.textAlign = 'right'; const amt = fit(ctx, formatWon(t.amount), 700, 36, 360); const aw = ctx.measureText(amt).width; ctx.fillText(amt, W - 140, y + 8); ctx.textAlign = 'left';
     ctx.fillText(fit(ctx, t.name, 600, 36, W - 140 - aw - 40 - 210), 210, y + 8);
-    roundRect(ctx, 210, y + 24, (W - 350) * (t.amount / max), 12, 6); ctx.fillStyle = ['#6D4AFF', '#D63F73', '#C4621A'][i]; ctx.fill(); ctx.fillStyle = ink;
+    roundRect(ctx, 210, y + 24, (W - 350) * (t.amount / max), 12, 6); ctx.fillStyle = ['#6D4AFF', '#2F6FD6', '#16897C'][i]; ctx.fill(); ctx.fillStyle = ink;
   });
   if (!d.top.length) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText(d.refund ? `이 달에는 환불만 있었어요(+${formatWon(d.refund)}).` : '이 달에는 지출 기록이 없어요.', 140, 860); }
   // 스티커: 무지출·연속 기록·기록 수
@@ -99,7 +99,7 @@ export async function openReport(m, { toast }) {
   const d = reportData(m);
   const blob = await drawReport(d, { dark: m.dark });
   const url = URL.createObjectURL(blob);
-  const name = `콕가계부_${d.ym}_리포트.png`;
+  const name = `쨈가계부_${d.ym}_리포트.png`;
   const file = new File([blob], name, { type: 'image/png' });
   const canShare = navigator.canShare?.({ files: [file] });
   const wrap = document.createElement('div');

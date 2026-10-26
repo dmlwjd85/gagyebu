@@ -41,7 +41,7 @@
     .app-main { scrollbar-gutter: stable both-edges; }
     .app-top { overflow: hidden; scrollbar-gutter: stable both-edges; }
   }
-  .app-main > .app-shell { padding-top: 12px; padding-bottom: 40px; } /* 아래 40px: 가운데 콕 버튼(위로 28px 솟음)에 마지막 줄이 가리지 않게 */
+  .app-main > .app-shell { padding-top: 12px; padding-bottom: 40px; } /* 아래 40px: 가운데 추가 버튼(위로 28px 솟음)에 마지막 줄이 가리지 않게 */
   .app-main.no-nav > .app-shell { padding-bottom: max(24px, env(safe-area-inset-bottom)); }
   .app-shell { @apply mx-auto w-full; max-width: var(--shell-max); padding-left: max(12px, env(safe-area-inset-left)); padding-right: max(12px, env(safe-area-inset-right)); }
   @media (min-width: 640px) { .app-shell { padding-left: max(20px, env(safe-area-inset-left)); padding-right: max(20px, env(safe-area-inset-right)); } }
@@ -178,7 +178,7 @@
   .tab.on > span:first-child { filter: none; opacity: 1; }
   /* 좁은 폭(작은 폰에서 브라우저 150~200% 확대 등): 5칸을 똑같이 나눠 어떤 폭에서도 5개 모두 보이고 눌리게.
      228px까지는 칸마다 44px 이상, 그보다 좁으면 칸이 화면 폭에 맞춰 줄어듦(높이는 48px 유지).
-     240px 미만은 글자 라벨을 숨기고 아이콘만(이름은 화면 읽기 프로그램용으로 남김), 콕도 칸 크기에 맞춤 */
+     240px 미만은 글자 라벨을 숨기고 아이콘만(이름은 화면 읽기 프로그램용으로 남김), 추가 버튼도 칸 크기에 맞춤 */
   @media (max-width: 339px) {
     .tabbar { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); align-items: center; justify-items: center; padding-top: 4px;
       padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
@@ -379,8 +379,8 @@
 .bar-g:focus-visible > rect:first-child { stroke: var(--primary); stroke-width: 2; }
 
 /* ── 로고(design-spec 16-3): 색은 변수로 라이트·다크 자동 전환 ── */
-:root { --lg1: #7048F2; --lg2: #C2457E; --lg3: #B85A3E; --logo-ink: #2A2540; }
-.dark { --lg1: #B9A6FF; --lg2: #F59AC4; --lg3: #F7B48A; --logo-ink: #F2EEFF; }
+:root { --lg1: #6D4AFF; --lg2: #2F6FD6; --lg3: #16897C; --logo-ink: #2A2540; }
+.dark { --lg1: #A994FF; --lg2: #7FAEFF; --lg3: #3FD1BE; --logo-ink: #F2EEFF; }
 /* 가로 로고: 높이 40px 이상만 허용 → 상자 72px(여백 포함, 글자 잉크 약 50px) */
 .boot-logo { height: 72px; width: auto; }
 /* 40px 미만 자리는 심볼만: 모바일 헤더 28px(S), 설정 아래 버전 24px(S), PC 탭 48px(M) */

@@ -33,7 +33,7 @@ const listOf = (raw, key) => (Array.isArray(raw?.[key]) ? raw[key].map(strip) : 
  */
 export function parseBackup(raw) {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) throw new Error('백업 파일을 읽지 못했어요.');
-  if (raw.app !== 'gagyebu') throw new Error('콕 가계부 백업 파일이 아니에요.');
+  if (raw.app !== 'gagyebu') throw new Error('쨈 가계부 백업 파일이 아니에요.');
   if (!Number.isInteger(raw.version) || raw.version < 1 || raw.version > BACKUP_VERSION) throw new Error('이 버전의 백업은 열 수 없어요.');
   const out = {
     version: raw.version,

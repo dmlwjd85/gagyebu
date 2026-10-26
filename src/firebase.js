@@ -14,7 +14,7 @@ if (isFirebaseConfigured) {
     connectAuthEmulator(auth, `http://${emu.host}:${emu.authPort}`, { disableWarnings: true });
   }
 } else {
-  console.info('[콕 가계부] Firebase 설정값이 없어 설정 안내 화면을 보여 줍니다. (.env.example 참고)');
+  console.info('[쨈 가계부] Firebase 설정값이 없어 설정 안내 화면을 보여 줍니다. (.env.example 참고)');
 }
 export { app, auth };
 export const googleProvider = new GoogleAuthProvider();

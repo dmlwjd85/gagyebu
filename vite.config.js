@@ -4,7 +4,7 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
-// 첫 화면 글자(콕 가계부, 로그인 안내)가 많이 든 Pretendard 조각만 미리 받기.
+// 첫 화면 글자(쨈 가계부, 로그인 안내)가 많이 든 Pretendard 조각만 미리 받기.
 // 91: 영문·숫자·가장 흔한 한글, 90: 그다음 흔한 한글. 나머지 조각은 필요할 때 받음.
 const BASE = '/gagyebu/';
 const PRELOAD_FONT_SUBSETS = [91, 90];
@@ -35,9 +35,9 @@ export default defineConfig({
 
       includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
       manifest: {
-        name: '콕 가계부',
-        short_name: '콕 가계부',
-        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 콕 가계부.',
+        name: '쨈 가계부',
+        short_name: '쨈 가계부',
+        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 쨈 가계부.',
         lang: 'ko',
         start_url: '/gagyebu/',
         scope: '/gagyebu/',
