@@ -261,7 +261,7 @@ function step4(m, imp) {
 function step5(m, imp) {
   return `<div class="card-solid p-6 text-center" role="status">
     <div class="done-check mx-auto" aria-hidden="true"><svg viewBox="0 0 56 56" width="56" height="56"><path d="M14 29l9 9 19-20"/></svg></div>
-    <h2 class="mt-3 text-title tabular-nums">${imp.result.count}건을 가져왔어요!</h2>
+    <h2 class="mt-3 text-title tabular-nums">${imp.result.count}건 가져왔어요</h2>
     ${imp.result.pending ? '<p class="mt-2 text-body font-semibold" role="alert">📴 지금은 오프라인이라 이 기기에 먼저 저장했어요. 연결되면 자동으로 올릴게요.</p>' : ''}
     <p class="mt-2 text-body text-ink-sub">분류를 한 번 고치면<br />다음부터는 알아서 맞춰 둘게요.</p>
     <div class="mt-5 flex gap-2 justify-center"><button class="btn-primary" data-nav="calendar" data-mode="list" ${imp.result.to ? `data-date="${esc(imp.result.to)}"` : ''}>목록에서 보기</button><button class="btn-ghost" data-imp-undo="${esc(imp.result.id)}">되돌리기</button></div></div>`;

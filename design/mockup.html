@@ -515,7 +515,7 @@ button.chip{cursor:pointer;font-family:inherit}
 
  <div class="istep" data-s="5">
   <div class="done"><div class="ok"><svg viewBox="0 0 56 56" width="56" height="56"><path d="M14 29l9 9 19-20"/></svg></div>
-   <h2 class="num">128건을 가져왔어요!</h2><p>분류를 한 번 고치면<br>다음부터는 알아서 맞춰 드릴게요.</p>
+   <h2 class="num">128건 가져왔어요</h2><p>분류를 한 번 고치면<br>다음부터는 알아서 맞춰 둘게요.</p>
    <div style="display:flex;gap:8px;justify-content:center;margin-top:18px"><button class="btn2" onclick="go('cal')">달력에서 보기</button><button class="lnk" id="iundo" style="padding:0 12px">되돌리기</button></div></div>
  </div>
 </section>
@@ -719,7 +719,7 @@ function download(name,text,type){const a=document.createElement('a');a.href=URL
 function exportCSV(){const rows=[['날짜','구분','카테고리','내용','금액(원)','결제수단']];for(const d of Object.keys(TX))for(const x of TX[d])rows.push([`2026-10-${String(d).padStart(2,'0')}`,x[3]<0?'지출':'수입',x[4],x[1],Math.abs(x[3]),x[2]]);
  download('가계부_예시_2026-10.csv','\ufeff'+rows.map(r=>r.join(',')).join('\n'),'text/csv');toast('CSV 파일을 저장했어요. (예시 데이터)')}
 function exportJSON(){download('가계부_백업_예시.json',JSON.stringify({예시:true,예산:BUD,카테고리:EC,거래:TX},null,1),'application/json');toast('전체 백업 파일을 저장했어요. (예시 데이터)')}
-function resetTips(){ti=0;nextTip();toast('팁을 처음부터 다시 보여 드릴게요.')}
+function resetTips(){ti=0;nextTip();toast('팁을 처음부터 다시 보여 줄게요.')}
 $('#dlgdel').onclick=()=>{$('#dlg').classList.remove('on');$('#dlgi').value='';$('#dlgdel').disabled=true;toast('목업이라 실제로는 지우지 않았어요.')};
 // --- 가져오기: 파일 선택/끌어놓기 · 감지 칩 · 열 바꾸기 · 모두 건너뛰기 · 되돌리기 ---
 $('#ifile').onchange=function(){if(this.files[0]){$('#fname').textContent=this.files[0].name;setStep(2)}};
