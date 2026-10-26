@@ -184,7 +184,8 @@
       padding-left: max(4px, env(safe-area-inset-left)); padding-right: max(4px, env(safe-area-inset-right)); }
     .tab { min-width: 0; width: 100%; max-width: 64px; }
     .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 48px; margin-top: 0; justify-content: center; }
-    .tabbar .fab-disc { width: min(48px, 100%); height: 32px; border-radius: 16px; } /* 아주 좁으면 원을 낮은 알약으로(버튼 전체 높이 48px 유지) + 아래 '기록' */
+    .tabbar .fab-disc { width: min(44px, 100%); height: 34px; border-radius: 17px; } /* 아주 좁으면 접시를 낮은 알약으로(버튼 전체 높이 48px 유지) + 아래 '기록' */
+    .tabbar .fab-disc .cup-svg { width: 36px; height: 36px; }
   }
   @media (max-width: 239px) {
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
@@ -195,19 +196,44 @@
     /* 왼쪽 세로 메뉴: 화면이 아무리 넓어도 본문 덩어리의 왼쪽에 붙어 있음 */
     .tabbar { position: fixed; top: max(16px, env(safe-area-inset-top)); bottom: 16px; left: max(calc(16px + var(--rail-shift, 0px)), calc(50% - (var(--shell-max) + var(--rail-space) + 16px) / 2 + 16px)); right: auto; /* --rail-shift: 본문 스크롤 막대 자리(양쪽)만큼 → 좌우 여백이 같게(main.js) */
       width: 88px; overflow-y: auto; overscroll-behavior: contain; flex-direction: column; justify-content: flex-start; align-items: center; gap: 8px; padding: 16px 0; border-radius: 28px; border: 1px solid var(--glass-border); }
-    /* PC: 로고 아래 '＋ 기록' 넓은 버튼(둥근 사각) → 동그란 로고와 헷갈리지 않게(QA I1). 글자가 넘치면 ＋가 위 줄로 */
-    .tabbar .fab { order: -1; margin: 0 0 12px; flex-direction: row; flex-wrap: wrap; justify-content: center; align-items: center; gap: 2px 4px;
-      width: 76px; min-height: 48px; padding: 6px 8px; border-radius: 16px; color: #fff; font-size: 15px; line-height: 1.25; font-weight: 700;
-      background-image: linear-gradient(135deg, var(--fab-1), var(--fab-2)); @apply shadow-glow; }
-    .tabbar .fab-disc { width: auto; height: auto; margin: 0; background: none; box-shadow: none; }
-    .tabbar .fab-plus { width: 18px; height: 18px; }
+    /* PC: 로고 아래 연보라 둥근 사각 안에 쨈 컵 + '기록'(진한 글자, 대비 4.5:1 넉넉히) → 동그란 로고와 헷갈리지 않게(QA I1) */
+    .tabbar .fab { order: -1; margin: 0 0 12px; gap: 0; width: 76px; min-height: 48px; padding: 4px 6px 8px; border-radius: 18px;
+      color: var(--ink); font-size: 14px; line-height: 1.25; font-weight: 700; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
+    .tabbar .fab-disc { width: auto; height: auto; margin: 0; background: none; border: 0; box-shadow: none; }
+    .tabbar .fab-disc .cup-svg { width: 50px; height: 50px; }
     .tab { min-width: 64px; min-height: 64px; font-size: 12px; }
   }
-  /* 추가 버튼(모바일): 위로 솟은 ＋ 원 + 그 아래 '기록' 글자(다른 탭처럼 아이콘+이름) */
-  .fab { @apply flex flex-col items-center gap-0.5 min-w-[56px] -mt-7 text-micro transition-transform; color: var(--ink); font-weight: 700; }
-  .fab-disc { @apply grid place-items-center w-14 h-14 rounded-full text-white shadow-glow; background-image: linear-gradient(135deg, var(--fab-1), var(--fab-2)); }
-  .fab-plus { width: 28px; height: 28px; }
-  .fab:active { transform: scale(.92); transition-duration: 90ms; }
+  /* 추가 버튼(모바일): 위로 솟은 접시 위 조식 쨈 컵 + 그 아래 '기록' 글자 13px(다른 탭처럼 아이콘+이름, L1) */
+  .fab { @apply flex flex-col items-center gap-0.5 min-w-[56px] -mt-7 transition-transform; font-size: 13px; line-height: 1.2; color: var(--ink); font-weight: 700; }
+  .fab-disc { @apply grid place-items-center w-[60px] h-[60px] rounded-full shadow-glow; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
+  .fab-disc .cup-svg { width: 52px; height: 52px; }
+  .fab:active { transform: scale(.94); transition-duration: 90ms; }
+  /* 조식 쨈 컵(브랜드 보라·파랑 계열 블루베리 쨈, SSG 코랄·핑크 피함). 다크는 컵을 밝혀 어두운 바탕에서 또렷하게 */
+  :root { --cup-jar: #5B3BD6; --cup-deep: #3B2793; --cup-rim: #CFC5FF; --cup-foil: #FBFAFF; --cup-tab: #DCD3FF; --cup-ink: #4A2BC2; --cup-drop: #6D4AFF; --cup-plate: #F1EDFF; }
+  .dark { --cup-jar: #7A60FF; --cup-deep: #5539E6; --cup-rim: #B7A8FF; --cup-foil: #F1EDFF; --cup-tab: #C9BCFF; --cup-ink: #4527B8; --cup-drop: #9C87FF; --cup-plate: #2A2550; }
+  .cup-svg { display: block; overflow: visible; }
+  .cup-jar { fill: var(--cup-jar); } .cup-deep { fill: var(--cup-deep); } .cup-gloss { stroke: rgba(255, 255, 255, .45); }
+  .cup-rim { fill: var(--cup-rim); } .cup-foil { fill: var(--cup-foil); } .cup-tab { fill: var(--cup-tab); }
+  .cup-ink { stroke: var(--cup-ink); } .cup-ink-fill { fill: var(--cup-ink); } .cup-shine { stroke: rgba(255, 255, 255, .9); }
+  .cup-drops circle { fill: var(--cup-drop); opacity: 0; }
+  .cup-body, .cup-film, .cup-drops circle { transform-box: fill-box; }
+  .cup-body { transform-origin: 50% 100%; } .cup-film { transform-origin: 85% 60%; } .cup-drops circle { transform-origin: center; }
+  /* '탁': 눌림(0~25%) → 필름이 튀어 오르고 방울이 퍼짐(30~70%) → 제자리(100%). transform·opacity 만 */
+  .fab.is-popping .cup-body { animation: cup-squash .45s cubic-bezier(.3, .7, .4, 1); }
+  .fab.is-popping .cup-film { animation: cup-pop .45s cubic-bezier(.3, .7, .4, 1); }
+  .fab.is-popping .cup-drops circle { animation: cup-drop .45s ease-out; }
+  .fab.is-popping .cup-drops circle:nth-child(1) { --dx: -13px; --dy: -15px; }
+  .fab.is-popping .cup-drops circle:nth-child(2) { --dx: 0px; --dy: -21px; animation-delay: 15ms; }
+  .fab.is-popping .cup-drops circle:nth-child(3) { --dx: 13px; --dy: -13px; animation-delay: 30ms; }
+  @keyframes cup-squash { 0% { transform: none; } 25% { transform: scale(1.08, .86); } 50% { transform: scale(.96, 1.06); } 75% { transform: scale(1.02, .98); } 100% { transform: none; } }
+  @keyframes cup-pop { 0% { transform: none; } 25% { transform: translateY(3px) scale(1.04, .9); } 45% { transform: translate(3px, -12px) rotate(-16deg); } 70% { transform: translate(1px, -5px) rotate(-6deg); } 100% { transform: none; } }
+  @keyframes cup-drop { 0%, 28% { opacity: 0; transform: scale(.4); } 40% { opacity: 1; transform: translate(calc(var(--dx) * .5), calc(var(--dy) * .6)) scale(1); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.6); } }
+  /* 움직임 줄이기: 터지는 동작 없이 짧은 색 변화만(접시에 빛 한 번) */
+  .fab-disc { position: relative; }
+  .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-drop); opacity: 0; pointer-events: none; }
+  .fab.is-flash .fab-disc::after { animation: cup-flash .16s ease-out; }
+  @keyframes cup-flash { 0% { opacity: 0; } 40% { opacity: .28; } 100% { opacity: 0; } }
+  @media (prefers-reduced-motion: reduce) { .fab.is-popping .cup-body, .fab.is-popping .cup-film, .fab.is-popping .cup-drops circle { animation: none; } }
   /* 높이가 낮은 화면(400% 확대, 가로 모드, 키보드가 올라와 창이 줄어든 안드로이드 등, WCAG 1.4.10):
      위 메뉴는 고정을 풀어 본문과 함께 스크롤되고, 아래 메뉴는 아이콘만 남긴 낮은 막대로 → 본문이 화면 대부분을 씀 */
   @media (max-height: 500px) {
@@ -226,6 +252,7 @@
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
     .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 44px; margin-top: 0; justify-content: center; }
     .tabbar .fab-disc { width: min(44px, 100%); height: 44px; border-radius: 22px; }
+    .tabbar .fab-disc .cup-svg { width: 40px; height: 40px; }
     .tabbar .fab-txt { display: none; }
     /* 본문을 내리는 동안은 아래 메뉴도 화면 밖으로(올리거나 맨 끝에 닿으면 다시 보임, 키보드로 메뉴에 들어가면 보임) — main.js */
     .tabbar { transition: transform .2s ease-out; }

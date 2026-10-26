@@ -155,7 +155,7 @@ export function homeView(m) {
       <div class="flex items-center justify-between"><h2 id="recent-h" class="text-head">최근 기록</h2>
         ${m.periodTxs.length ? '<button class="link-btn" data-nav="calendar" data-mode="list">전체 보기 ›</button>' : ''}</div>
       ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
-        : empty('🐣', isCur ? '아직 기록이 없어요. ＋ 기록 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
+        : empty('🐣', isCur ? '아직 기록이 없어요. 쨈 컵 모양 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
     </section>`;
   return `<h1 class="sr-only">홈</h1><div class="view-grid">
     <div class="flex flex-col gap-3">

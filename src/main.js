@@ -30,6 +30,8 @@ import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, closeSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol, FAB_INNER } from './ui/brand.js';
+import { createAddPop } from './ui/fabPop.js';
+const addPop = createAddPop({ open: () => openSheet(), isOpen: () => isSheetOpen(), reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches });
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
 import { assetsView, taxView } from './ui/assetsView.js';
 import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
@@ -661,7 +663,7 @@ app.addEventListener('click', async (e) => {
   }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
-    case 'add': haptic(); return openSheet();
+    case 'add': haptic(); return t.matches('.fab') ? addPop(t) : openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번)
     case 'add-rec': return editRecurring(null);
     case 'add-goal': return editGoal(null);
     case 'add-rule': return editRule();
