@@ -44,3 +44,7 @@ QA 도구(`tools/qa/*.py`)는 실행마다 따로 쓰는 에뮬레이터 프로�
 | `FIREBASE_SERVICE_ACCOUNT` | Firebase 콘솔 → 프로젝트 설정 → 서비스 계정 → 새 비공개 키 JSON 전체. base64 한 줄도 됩니다. 시세 동기화와 Firestore 규칙 배포가 같은 시크릿을 씁니다. 규칙 배포에는 Firebase Rules Admin 또는 Firebase Admin 역할이 필요합니다. |
 
 `VITE_FIREBASE_*` 는 웹 설정이라 규칙 배포나 Admin SDK로 쓸 수 없어요. 시크릿이 없으면 시세 동기화와 규칙 배포 모두 쓰기를 하지 않고 성공으로 끝납니다.
+
+## 글꼴 출처
+
+- 쨈 컵 버튼 호일 위 '쨈' 글자 윤곽(`src/ui/cupD.js`): 글꼴: 쨈 제목 — © 2026 쨈 폰트 팀. 개인·상업 무료, 수정·임베딩 허용, 글꼴 파일 단독 판매 금지, 저작권 표시 유지. 글꼴 파일은 넣지 않고 다듬은 SVG 경로만 씁니다.

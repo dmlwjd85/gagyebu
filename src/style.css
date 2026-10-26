@@ -196,44 +196,63 @@
     /* 왼쪽 세로 메뉴: 화면이 아무리 넓어도 본문 덩어리의 왼쪽에 붙어 있음 */
     .tabbar { position: fixed; top: max(16px, env(safe-area-inset-top)); bottom: 16px; left: max(calc(16px + var(--rail-shift, 0px)), calc(50% - (var(--shell-max) + var(--rail-space) + 16px) / 2 + 16px)); right: auto; /* --rail-shift: 본문 스크롤 막대 자리(양쪽)만큼 → 좌우 여백이 같게(main.js) */
       width: 88px; overflow-y: auto; overscroll-behavior: contain; flex-direction: column; justify-content: flex-start; align-items: center; gap: 8px; padding: 16px 0; border-radius: 28px; border: 1px solid var(--glass-border); }
-    /* PC: 로고 아래 연보라 둥근 사각 안에 쨈 컵 + '기록'(진한 글자, 대비 4.5:1 넉넉히) → 동그란 로고와 헷갈리지 않게(QA I1) */
+    /* PC: 로고 아래 은빛 둥근 사각 안에 쨈 컵 + '기록'(진한 글자, 대비 4.5:1 넉넉히) → 동그란 로고와 헷갈리지 않게(QA I1) */
     .tabbar .fab { order: -1; margin: 0 0 12px; gap: 0; width: 76px; min-height: 48px; padding: 4px 6px 8px; border-radius: 18px;
-      color: var(--ink); font-size: 14px; line-height: 1.25; font-weight: 700; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
-    .tabbar .fab-disc { width: auto; height: auto; margin: 0; background: none; border: 0; box-shadow: none; }
+      color: var(--cup-label); font-size: 14px; line-height: 1.25; font-weight: 700; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
+    .tabbar .fab-disc { width: 52px; height: auto; margin: 0; background: none; border: 0; box-shadow: none; } /* 폭을 정해 둬야 @container(inline-size)가 0으로 접히지 않음 */
     .tabbar .fab-disc .cup-svg { width: 50px; height: 50px; }
     .tab { min-width: 64px; min-height: 64px; font-size: 12px; }
   }
-  /* 추가 버튼(모바일): 위로 솟은 접시 위 조식 쨈 컵 + 그 아래 '기록' 글자 13px(다른 탭처럼 아이콘+이름, L1) */
-  .fab { @apply flex flex-col items-center gap-0.5 min-w-[56px] -mt-7 transition-transform; font-size: 13px; line-height: 1.2; color: var(--ink); font-weight: 700; }
-  .fab-disc { @apply grid place-items-center w-[60px] h-[60px] rounded-full shadow-glow; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
+  /* 추가 버튼(모바일): 위로 솟은 접시 위 조식 쨈 컵(시안 D, 극사실 호일 컵) + 그 아래 '기록' 글자 13px(다른 탭처럼 아이콘+이름, L1) */
+  .fab { @apply flex flex-col items-center gap-0.5 min-w-[56px] -mt-7; font-size: 13px; line-height: 1.2; color: var(--cup-label); font-weight: 700; touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
+  .fab-disc { @apply grid place-items-center w-[60px] h-[60px] rounded-full shadow-glow; position: relative; background: var(--cup-plate); border: 1px solid var(--cup-rim);
+    container: cupd / inline-size; } /* 접시 폭으로 컵 세부 묘사 단계를 고름(@container) */
   .fab-disc .cup-svg { width: 52px; height: 52px; }
-  .fab:active { transform: scale(.94); transition-duration: 90ms; }
-  /* 조식 쨈 컵(브랜드 보라·파랑 계열 블루베리 쨈, SSG 코랄·핑크 피함). 다크는 컵을 밝혀 어두운 바탕에서 또렷하게 */
-  :root { --cup-jar: #5B3BD6; --cup-deep: #3B2793; --cup-rim: #CFC5FF; --cup-foil: #FBFAFF; --cup-tab: #DCD3FF; --cup-ink: #4A2BC2; --cup-drop: #6D4AFF; --cup-plate: #F1EDFF; }
-  .dark { --cup-jar: #7A60FF; --cup-deep: #5539E6; --cup-rim: #B7A8FF; --cup-foil: #F1EDFF; --cup-tab: #C9BCFF; --cup-ink: #4527B8; --cup-drop: #9C87FF; --cup-plate: #2A2550; }
+  /* 쨈 맛(테마별) + 접시·테두리. 은박 컵 윤곽선(--cup-edge)은 접시 대비 3:1 이상, '기록' 글자(--cup-label)는 7:1 이상 */
+  :root { --cup-j1: #2E43A8; --cup-j2: #18246A; --cup-j3: #5272D6; --cup-seed: #0E1748; --cup-pulp: #7F97E8; --cup-ink: #2B3FA0; /* 블루베리 */
+    --cup-plate: #F2F3F6; --cup-rim: #8C95A3; --cup-edge: #6B7482; --cup-rimtop: #E9ECF0; --cup-rimside1: #C9CED6; --cup-rimside2: #98A1AE; --cup-label: #1E2230; }
+  .dark { --cup-plate: #262833; --cup-rim: #5A6070; --cup-edge: #A3ABB8; --cup-rimtop: #DDE1E7; --cup-rimside1: #B5BCC6; --cup-rimside2: #7E8794; --cup-label: #F2F3F7; }
+  html[data-theme="sakura"] { --cup-j1: #9E1630; --cup-j2: #5E0A1C; --cup-j3: #C02A42; --cup-seed: #F2C14E; --cup-pulp: #D0545F; --cup-ink: #8A1129; } /* 딸기 루비 */
+  html[data-theme="snow"] { --cup-j1: #55246F; --cup-j2: #311244; --cup-j3: #7A3B97; --cup-seed: #22092F; --cup-pulp: #9C6BB8; --cup-ink: #55246F; } /* 포도 */
+  html[data-theme="maple"] { --cup-j1: #D97F14; --cup-j2: #9C540A; --cup-j3: #F2A73E; --cup-seed: #7A3F06; --cup-pulp: #F8C66E; --cup-ink: #7E4204; } /* 살구 */
+  html[data-theme="retro"] { --cup-j1: #5F9420; --cup-j2: #3A6410; --cup-j3: #8DBD36; --cup-seed: #15160C; --cup-pulp: #BFE07A; --cup-ink: #33580C; } /* 키위 */
   .cup-svg { display: block; overflow: visible; }
-  .cup-jar { fill: var(--cup-jar); } .cup-deep { fill: var(--cup-deep); } .cup-gloss { stroke: rgba(255, 255, 255, .45); }
-  .cup-rim { fill: var(--cup-rim); } .cup-foil { fill: var(--cup-foil); } .cup-tab { fill: var(--cup-tab); }
-  .cup-ink { stroke: var(--cup-ink); } .cup-ink-fill { fill: var(--cup-ink); } .cup-shine { stroke: rgba(255, 255, 255, .9); }
-  .cup-drops circle { fill: var(--cup-drop); opacity: 0; }
-  .cup-body, .cup-film, .cup-drops circle { transform-box: fill-box; }
-  .cup-body { transform-origin: 50% 100%; } .cup-film { transform-origin: 85% 60%; } .cup-drops circle { transform-origin: center; }
-  /* '탁': 눌림(0~25%) → 필름이 튀어 오르고 방울이 퍼짐(30~70%) → 제자리(100%). transform·opacity 만 */
-  .fab.is-popping .cup-body { animation: cup-squash .45s cubic-bezier(.3, .7, .4, 1); }
-  .fab.is-popping .cup-film { animation: cup-pop .45s cubic-bezier(.3, .7, .4, 1); }
-  .fab.is-popping .cup-drops circle { animation: cup-drop .45s ease-out; }
-  .fab.is-popping .cup-drops circle:nth-child(1) { --dx: -13px; --dy: -15px; }
-  .fab.is-popping .cup-drops circle:nth-child(2) { --dx: 0px; --dy: -21px; animation-delay: 15ms; }
-  .fab.is-popping .cup-drops circle:nth-child(3) { --dx: 13px; --dy: -13px; animation-delay: 30ms; }
-  @keyframes cup-squash { 0% { transform: none; } 25% { transform: scale(1.08, .86); } 50% { transform: scale(.96, 1.06); } 75% { transform: scale(1.02, .98); } 100% { transform: none; } }
-  @keyframes cup-pop { 0% { transform: none; } 25% { transform: translateY(3px) scale(1.04, .9); } 45% { transform: translate(3px, -12px) rotate(-16deg); } 70% { transform: translate(1px, -5px) rotate(-6deg); } 100% { transform: none; } }
-  @keyframes cup-drop { 0%, 28% { opacity: 0; transform: scale(.4); } 40% { opacity: 1; transform: translate(calc(var(--dx) * .5), calc(var(--dy) * .6)) scale(1); } 100% { opacity: 0; transform: translate(var(--dx), var(--dy)) scale(.6); } }
-  /* 움직임 줄이기: 터지는 동작 없이 짧은 색 변화만(접시에 빛 한 번) */
-  .fab-disc { position: relative; }
-  .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-drop); opacity: 0; pointer-events: none; }
+  .cup-seed { fill: var(--cup-seed); } .cup-pulp { fill: url(#cupd-pulp); }
+  .cup-edge { stroke: var(--cup-edge); } .cup-rimtop { fill: var(--cup-rimtop); }
+  .cup-ink { fill: var(--cup-ink); stroke: var(--cup-ink); stroke-linejoin: round; } .cup-ink-f { fill: var(--cup-ink); }
+  .cup-wback { fill: #FFFDF8; stroke: #FFFDF8; stroke-linejoin: round; } .cup-wsh { fill: #000; stroke: #000; stroke-linejoin: round; opacity: .18; }
+  .cup-pp circle:first-child { fill: var(--cup-j1); }
+  /* 세부 묘사 단계: 기본(작은 1배)은 깔끔하게 → 접시가 49px 이상이면 중간 묘사, 80px 이상이면 호일 주름·씨·과육 결·큰 글자 */
+  .cup-d1, .cup-d2, .cup-lbl2 { display: none; }
+  @container cupd (min-width: 49px) { .cup-d2 { display: inline; } }
+  @container cupd (min-width: 80px) { .cup-d1, .cup-lbl2 { display: inline; } .cup-lbl1 { display: none; } }
+  /* 손맛(말랑이처럼): 누르는 동안 살짝 눌린 채(.is-pressed) → 놓으면 통 튀었다 늘어났다 가라앉음(되튐 곡선 전환). 키보드도 같음(main.js) */
+  .cup-squish { display: block; transform-origin: 50% 92%; transition: transform .46s cubic-bezier(.28, 1.9, .42, .9); }
+  .fab.is-pressed .cup-squish { transform: scale(1.1, .86); transition: transform .07s cubic-bezier(.2, .8, .3, 1); }
+  .cup-body, .cup-lid, .cup-blob, .cup-word, .cup-pp { transform-box: view-box; }
+  .cup-body { transform-origin: 50% 92%; } .cup-lid { transform-origin: 8% 50%; } .cup-blob { transform-origin: 50% 50%; } .cup-word { transform-origin: 50% 30%; }
+  .cup-pp { transform-origin: 50% 40%; }
+  .cup-blob, .cup-word, .cup-pp { opacity: 0; }
+  /* '탁'(0.52s): 컵 눌림·되튐 → 호일이 벗겨짐 → 쨈 방울이 퐁 → '쨈' 글자가 뛰어오름 → 제자리. transform·opacity 만 */
+  .fab.is-popping .cup-body { animation: cup-squash .52s cubic-bezier(.3, .7, .4, 1); }
+  .fab.is-popping .cup-lid { animation: cup-peel .52s cubic-bezier(.3, .7, .4, 1); }
+  .fab.is-popping .cup-blob { animation: cup-blob .52s cubic-bezier(.2, .9, .3, 1.2); }
+  .fab.is-popping .cup-word { animation: cup-word .52s cubic-bezier(.3, 1.5, .5, 1); }
+  .fab.is-popping .cup-pp { animation: cup-pp .52s ease-out var(--pd, 0ms) both; }
+  @keyframes cup-squash { 0% { transform: none; } 14% { transform: scale(1.06, .9); } 32% { transform: scale(.97, 1.05); } 50% { transform: scale(1.01, .99); } 64%, 100% { transform: none; } }
+  @keyframes cup-peel { 0% { transform: none; opacity: 1; } 16% { transform: translateY(1px) scale(1.02, .94); opacity: 1; } 32% { transform: translate(-2px, -6px) rotate(-28deg); opacity: 1; }
+    48% { transform: translate(-4px, -10px) rotate(-38deg); opacity: 0; } 86% { transform: none; opacity: 0; } 100% { transform: none; opacity: 1; } }
+  @keyframes cup-blob { 0%, 18% { opacity: 0; transform: translateY(8px) scale(.4, .3); } 30% { opacity: 1; transform: translateY(-3px) scale(1.06, 1.1); } 40% { opacity: 1; transform: scale(.98, .96); } 50%, 100% { opacity: 0; transform: translateY(-2px) scale(1.04); } }
+  @keyframes cup-word { 0%, 38% { opacity: 0; transform: translateY(6px) scale(.5); } 52% { opacity: 1; transform: translateY(-10px) scale(1.12); } 72% { opacity: 1; transform: translateY(-6px) scale(1); } 88% { opacity: 1; transform: translateY(-6px) scale(1); } 100% { opacity: 0; transform: translateY(-4px) scale(.9); } }
+  @keyframes cup-pp { 0%, 24% { opacity: 0; transform: scale(.3); } 36% { opacity: 1; transform: translate(calc(var(--px) * .55), calc(var(--py) * .55)) scale(1); } 100% { opacity: 0; transform: translate(var(--px), calc(var(--py) + 8px)) scale(.5); } }
+  /* 움직임 줄이기: 터지는 동작·눌림 없이 짧은 색 변화만(접시에 빛 한 번), 시트는 바로 열림(fabPop.js) */
+  .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-j1); opacity: 0; pointer-events: none; }
   .fab.is-flash .fab-disc::after { animation: cup-flash .16s ease-out; }
   @keyframes cup-flash { 0% { opacity: 0; } 40% { opacity: .28; } 100% { opacity: 0; } }
-  @media (prefers-reduced-motion: reduce) { .fab.is-popping .cup-body, .fab.is-popping .cup-film, .fab.is-popping .cup-drops circle { animation: none; } }
+  @media (prefers-reduced-motion: reduce) {
+    .cup-squish, .fab.is-pressed .cup-squish { transition: none; transform: none; }
+    .fab.is-popping .cup-body, .fab.is-popping .cup-lid, .fab.is-popping .cup-blob, .fab.is-popping .cup-word, .fab.is-popping .cup-pp { animation: none; }
+  }
   /* 높이가 낮은 화면(400% 확대, 가로 모드, 키보드가 올라와 창이 줄어든 안드로이드 등, WCAG 1.4.10):
      위 메뉴는 고정을 풀어 본문과 함께 스크롤되고, 아래 메뉴는 아이콘만 남긴 낮은 막대로 → 본문이 화면 대부분을 씀 */
   @media (max-height: 500px) {

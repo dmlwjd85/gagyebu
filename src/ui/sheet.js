@@ -1,4 +1,4 @@
-// 10초 입력 시트: ＋ → 숫자 → 카테고리 → 저장
+// 10초 입력 시트: 쨈 컵 버튼 → 숫자 → 카테고리 → 저장
 import { esc, $, $$, haptic, confirmDialog, fitNums } from './util.js';
 import { formatWon } from '../lib/money.js';
 import { ymd, prettyDate, parseYmd, WEEK } from '../lib/dates.js';
