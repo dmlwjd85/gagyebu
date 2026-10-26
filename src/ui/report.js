@@ -76,7 +76,8 @@ export async function drawReport(d, { dark = false } = {}) {
     // 긴 카테고리 이름(공백 없는 20자)이 금액과 겹치지 않게 이름 칸 폭을 정함
     ctx.fillStyle = ink; ctx.textAlign = 'right'; const amt = fit(ctx, formatWon(t.amount), 700, 36, 360); const aw = ctx.measureText(amt).width; ctx.fillText(amt, W - 140, y + 8); ctx.textAlign = 'left';
     ctx.fillText(fit(ctx, t.name, 600, 36, W - 140 - aw - 40 - 210), 210, y + 8);
-    roundRect(ctx, 210, y + 24, (W - 350) * (t.amount / max), 12, 6); ctx.fillStyle = ['#6D4AFF', '#2F6FD6', '#16897C'][i]; ctx.fill(); ctx.fillStyle = ink;
+    // 1위 보라는 테마별 명도: 흰 카드 #4F2FD6 7.75:1(L* 35), 다크 카드 #B3A3FF 7.76:1(L* 72) → 2위 파랑(L* 48)과 밝기로도 갈림(QA R1)
+    roundRect(ctx, 210, y + 24, (W - 350) * (t.amount / max), 12, 6); ctx.fillStyle = (dark ? ['#B3A3FF', '#2F6FD6', '#16897C'] : ['#4F2FD6', '#2F6FD6', '#16897C'])[i]; ctx.fill(); ctx.fillStyle = ink;
   });
   if (!d.top.length) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText(d.refund ? `이 달에는 환불만 있었어요(+${formatWon(d.refund)}).` : '이 달에는 지출 기록이 없어요.', 140, 860); }
   // 스티커: 무지출·연속 기록·기록 수

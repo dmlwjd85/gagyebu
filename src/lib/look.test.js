@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
-import { symbol, JJAEM_D } from '../ui/brand.js';
+import { symbol, JJAEM_D, FAB_INNER } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -197,8 +197,8 @@ describe('설정·홈 표시', () => {
   });
 });
 
-describe('하단 추가 버튼', () => {
-  test('아이콘과 같은 쨈 윤곽을 currentColor 로 채우고, 이름과 동작은 그대로다', () => {
+describe('쨈 심볼과 추가 버튼', () => {
+  test('심볼은 아이콘과 같은 쨈 윤곽(단색은 currentColor)이다', () => {
     const svg = symbol('S', { cls: 'fab-mark', ink: true });
     expect(svg).toContain('class="fab-mark"');
     expect(svg).toContain('fill="currentColor"');
@@ -209,14 +209,7 @@ describe('하단 추가 버튼', () => {
     expect(painted).toContain('linearGradient');
     expect(painted).toContain('aria-label="쨈 가계부"');
     expect(painted).toContain(JJAEM_D);
-    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
-    expect(main).toContain('data-action="add"');
-    expect(main).toContain('aria-label="새 기록 추가 (지출·수입)"');
-    expect(main).toContain("symbol('S', { cls: 'fab-mark', ink: true })");
-    const shot = readFileSync(new URL('../dev/shot-main.js', import.meta.url), 'utf8');
-    expect(shot).toContain('aria-label="새 기록 추가 (지출·수입)"');
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
-    expect(views).toContain('동그란 ‘쨈’ 버튼을 눌러 첫 기록을');
     expect(views).not.toMatch(/아래 가운데|왼쪽 위/); // 화면 폭마다 버튼 위치가 달라 위치를 말하지 않음
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
     expect(fav).toContain(JJAEM_D);
@@ -323,4 +316,35 @@ test('문구 17절: src 전체에 드릴게요·드려요를 쓰지 않음', () 
   expect(files.length).toBeGreaterThan(20);
   const bad = files.flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l, i) => /드릴게요|드려요/.test(l) ? `${f.slice(root.length)}:${i + 1}` : null).filter(Boolean));
   expect(bad).toEqual([]);
+});
+
+describe('추가 버튼: ＋ 기록', () => {
+  const EMPTY = '아직 기록이 없어요. ＋ 기록 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.';
+  test('버튼 안에 ＋ 아이콘과 보이는 글자 "기록"이 있고, 접근 이름이 "기록"으로 시작한다(WCAG 2.5.3)', () => {
+    expect(FAB_INNER).toContain('class="fab-plus"');
+    expect(FAB_INNER).toMatch(/<span class="fab-txt"[^>]*>기록<\/span>/);
+    expect(FAB_INNER).not.toContain('fab-mark');
+    for (const f of ['../main.js', '../dev/shot-main.js']) {
+      const src = readFileSync(new URL(f, import.meta.url), 'utf8');
+      const btn = src.match(/<button class="fab"[^>]*>[^<]*<\/button>/)?.[0] ?? '';
+      expect(btn).toContain('data-action="add"');
+      expect(btn).toContain('${FAB_INNER}');
+      const name = btn.match(/aria-label="([^"]+)"/)?.[1] ?? '';
+      expect(name.startsWith('기록')).toBe(true);
+      expect(name).toContain('기록');
+    }
+  });
+  test('빈 화면 안내는 정해진 문장이고 설계 문서와 같다', () => {
+    const html = homeView(homeFixture(null));
+    expect(html).toContain(EMPTY);
+    const spec = readFileSync(new URL('../../design/design-spec.md', import.meta.url), 'utf8');
+    expect(spec).toContain(`"${EMPTY}"`);
+  });
+  test('첫 실행(모바일)은 안내 카드를 요약 바로 아래에 둬 아래 메뉴에 가리지 않는다(QA L4), PC는 오른쪽 칸 그대로', () => {
+    const mob = homeView(homeFixture(null));
+    expect(mob.indexOf(EMPTY)).toBeLessThan(mob.indexOf('stat-grid'));
+    expect(mob.match(/id="recent-h"/g)).toHaveLength(1);
+    const pc = homeView({ ...homeFixture(null), wide: true });
+    expect(pc.indexOf(EMPTY)).toBeGreaterThan(pc.indexOf('stat-grid'));
+  });
 });

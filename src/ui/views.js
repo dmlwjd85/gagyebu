@@ -149,9 +149,18 @@ export function homeView(m) {
   }
   const recent = m.periodTxs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)).slice(0, m.wide ? 6 : 3);
   const top3 = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3);
+  // 첫 실행(이번 달 기록 0, 모바일): 안내가 아래 메뉴·추가 버튼에 가리지 않게 요약 카드 바로 아래로 올림(QA L4, 360×780)
+  const firstRun = isCur && m.txLoaded && !m.periodTxs.length && !m.wide;
+  const recentSec = `<section class="card-solid p-4" aria-labelledby="recent-h">
+      <div class="flex items-center justify-between"><h2 id="recent-h" class="text-head">최근 기록</h2>
+        ${m.periodTxs.length ? '<button class="link-btn" data-nav="calendar" data-mode="list">전체 보기 ›</button>' : ''}</div>
+      ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
+        : empty('🐣', isCur ? '아직 기록이 없어요. ＋ 기록 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
+    </section>`;
   return `<h1 class="sr-only">홈</h1><div class="view-grid">
     <div class="flex flex-col gap-3">
       <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
+      ${firstRun ? recentSec : ''}
       <section class="stat-grid" aria-label="이번 달 통계">
         ${spendStat(m.tot.expense)}
         ${stat('수입', (m.tot.income ? '+' : '') + compactWon(m.tot.income), formatWon(m.tot.income), 'text-income')}
@@ -163,13 +172,7 @@ export function homeView(m) {
       <div id="tip-slot"></div>
       ${m.wide && top3.length ? `<section class="card-solid p-4" aria-labelledby="top-h"><h2 id="top-h" class="text-head">많이 쓴 곳 TOP 3</h2>
         <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''}
-    </div>
-    <section class="card-solid p-4" aria-labelledby="recent-h">
-      <div class="flex items-center justify-between"><h2 id="recent-h" class="text-head">최근 기록</h2>
-        ${m.periodTxs.length ? '<button class="link-btn" data-nav="calendar" data-mode="list">전체 보기 ›</button>' : ''}</div>
-      ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
-        : empty('🐣', isCur ? '아직 기록이 없어요. 동그란 ‘쨈’ 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
-    </section></div>`;
+  </div>${firstRun ? '' : recentSec}</div>`;
 }
 // 지출 칸: 환불이 더 많은 달은 '0원' + 아랫줄 '환불 +49,000원'(빼기 기호 겹침·말줄임 없음, QA N10)
 // 환불이 더 많은 달: 짧은 '+4.9만'으로 한 줄 유지 → 세 칸 높이 68px(360px, QA R4)

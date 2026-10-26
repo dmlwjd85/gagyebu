@@ -43,3 +43,7 @@ export function logo({ cls = '' } = {}) {
   const id = `lgL${++n}`;
   return `<svg class="${cls}" role="img" aria-label="쨈 가계부" xmlns="http://www.w3.org/2000/svg" viewBox="-23.88 -22.38 303.86 152.25">${grad(id)}<g transform="${MARK}"><path d="${JJAEM_D}" fill="url(#${id})"/></g>${GAGYEBU}</svg>`;
 }
+
+// 추가 버튼 속: ＋ 아이콘(원) + 눈에 보이는 '기록' 글자. 접근 이름 '기록 추가 (지출·수입)'이 보이는 글자 '기록'으로 시작(WCAG 2.5.3)
+// 모바일은 원 아래 '기록', PC(1024px~ 세로 메뉴)는 '＋ 기록' 넓은 버튼(style.css)
+export const FAB_INNER = '<span class="fab-disc" aria-hidden="true"><svg class="fab-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="fab-txt" aria-hidden="true">기록</span>';
