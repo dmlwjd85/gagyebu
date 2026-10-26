@@ -763,7 +763,7 @@ app.addEventListener('change', (e) => {
     const name = t.value.trim();
     if (name.length > 20) { toast('배우자 이름은 20자까지예요.'); t.value = state.settings?.spouseName || ''; return; }
     data.saveSettings({ spouseName: name || null });
-    toast(name ? `배우자 이름을 ${name}(으)로 보여 드려요.` : '배우자 이름을 기본으로 돌렸어요.');
+    toast(name ? `배우자 이름을 ${name}(으)로 보여 줄게요.` : '배우자 이름을 기본으로 돌렸어요.');
     return;
   }
   if (t.dataset.splitMe !== undefined) {

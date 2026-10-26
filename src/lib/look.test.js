@@ -1,4 +1,6 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
@@ -309,11 +311,16 @@ describe('테마 글자 대비', () => {
   }
 });
 
-// 디자인 스펙 17절 #5·#14: 과한 겸양 '~드릴게요' 대신 친구 말투 '~줄게요/둘게요'
-test('문구 17절: 드릴게요를 쓰지 않음', () => {
+// 디자인 스펙 17절 #5·#14: 과한 겸양 '~드릴게요/~드려요' 대신 친구 말투 '~줄게요/둘게요/줘요'
+test('문구 17절: src 전체에 드릴게요·드려요를 쓰지 않음', () => {
   const read = (f) => readFileSync(new URL(f, import.meta.url), 'utf8');
   expect(read('../main.js')).toContain('팁을 처음부터 다시 보여 줄게요.');
   expect(read('../ui/views.js')).toContain('그래프를 그려 줄게요.');
   expect(read('../ui/importer.js')).toContain('다음부터는 알아서 맞춰 둘게요.');
-  for (const f of ['../main.js', '../ui/views.js', '../ui/importer.js']) expect(read(f)).not.toMatch(/드릴게요/);
+  const root = fileURLToPath(new URL('..', import.meta.url));
+  const walk = (d) => readdirSync(d, { withFileTypes: true }).flatMap((e) => e.isDirectory() ? walk(join(d, e.name)) : [join(d, e.name)]);
+  const files = walk(root).filter((f) => /\.(js|css|html)$/.test(f) && !f.endsWith('look.test.js'));
+  expect(files.length).toBeGreaterThan(20);
+  const bad = files.flatMap((f) => readFileSync(f, 'utf8').split('\n').map((l, i) => /드릴게요|드려요/.test(l) ? `${f.slice(root.length)}:${i + 1}` : null).filter(Boolean));
+  expect(bad).toEqual([]);
 });

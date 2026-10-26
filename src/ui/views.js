@@ -196,7 +196,7 @@ function paceCells(leftLabel, leftValue, leftCls, rightLabel, rightValue, rightC
 }
 function paceCard(m) {
   const total = m.budget?.total ?? 0;
-  if (!(total > 0)) return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주 몫</h2><p class="mt-1 text-body text-ink-sub break-words">예산을 정하면 이번 주 몫과 오늘 몫에서 쓴 돈을 뺀 남은 돈을 보여 드려요.</p><button class="btn-ghost mt-3" data-action="budget">예산 정하기</button></section>`;
+  if (!(total > 0)) return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주 몫</h2><p class="mt-1 text-body text-ink-sub break-words">예산을 정하면 이번 주 몫과 오늘 몫에서 쓴 돈을 뺀 남은 돈을 보여 줘요.</p><button class="btn-ghost mt-3" data-action="budget">예산 정하기</button></section>`;
   const w = weekDailyLeft({ budget: total, p: m.p, today: m.today, spentByDate: spentByDateFrom(m.periodTxs) });
   if (!w.inPeriod) return '';
   const tone = (n) => (n < 0 ? 'text-expense' : '');
@@ -206,7 +206,7 @@ function paceCard(m) {
 }
 function allowanceCard(m) {
   const a = allowanceFrom(m.settings);
-  if (!(a.amount > 0)) return `<section class="card-solid p-4" aria-labelledby="alw-h"><h2 id="alw-h" class="text-head">용돈</h2><p class="mt-1 text-body text-ink-sub break-words">용돈 날과 금액을 정하면 다음 용돈까지 하루 몫을 보여 드려요.</p><button class="btn-ghost mt-3" data-action="allowance">용돈 정하기</button></section>`;
+  if (!(a.amount > 0)) return `<section class="card-solid p-4" aria-labelledby="alw-h"><h2 id="alw-h" class="text-head">용돈</h2><p class="mt-1 text-body text-ink-sub break-words">용돈 날과 금액을 정하면 다음 용돈까지 하루 몫을 보여 줘요.</p><button class="btn-ghost mt-3" data-action="allowance">용돈 정하기</button></section>`;
   const st = allowanceStatus({ ...a, today: m.today, txs: m.txs ?? m.periodTxs });
   const when = a.cycle === 'week' ? `매주 ${WEEKDAY[a.weekday]}요일` : `매달 ${a.day}일`;
   const next = `${Number(st.next.slice(5, 7))}월 ${Number(st.next.slice(8))}일`;
@@ -356,7 +356,7 @@ const savedCard = (m) => {
     </dl>
     ${rate != null ? `<div class="mt-4"><div class="flex justify-between text-caption text-ink-sub"><span>저축률</span><span class="tabular-nums font-semibold text-ink">${rate}%</span></div>
       <div class="mt-1.5 h-3 rounded-full bg-line" role="progressbar" aria-label="저축률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, rate))}"><div class="h-3 rounded-full ${saved < 0 ? 'bg-expense' : 'bg-income'}" style="width:${Math.max(0, Math.min(100, rate))}%"></div></div>
-      ${rateNote(m.tot) ? `<p class="mt-2 text-caption text-ink-sub">💡 ${esc(rateNote(m.tot))}</p>` : ''}</div>` : `<p class="mt-4 text-caption text-ink-sub">수입을 기록하면 저축률을 계산해 드려요.</p>`}
+      ${rateNote(m.tot) ? `<p class="mt-2 text-caption text-ink-sub">💡 ${esc(rateNote(m.tot))}</p>` : ''}</div>` : `<p class="mt-4 text-caption text-ink-sub">수입을 기록하면 저축률을 계산해 줘요.</p>`}
     ${avgSaved != null ? `<p class="mt-4 glass px-4 py-3 text-body">지난 ${avg.length}개월 평균보다 <b class="tabular-nums ${saved - avgSaved < 0 ? 'text-expense' : 'text-income'}">${saved - avgSaved < 0 ? '' : '+'}${formatWon(saved - avgSaved)}</b> ${saved - avgSaved < 0 ? '덜 남겼어요' : '더 남겼어요'}.</p>` : ''}
   </section>`;
 };
@@ -578,7 +578,7 @@ function modeSettings(m) {
 
 export function onboardingView() {
   return `<div class="max-w-[420px] mx-auto flex flex-col gap-3"><h1 class="text-title">어떻게 쓰시나요?</h1>
-    <p class="text-body text-ink-sub break-words">쓰는 방식에 맞춰 메뉴를 줄여 드려요. 설정에서 언제든 바꿀 수 있고, 기능은 하나씩 섞을 수 있어요.</p>
+    <p class="text-body text-ink-sub break-words">쓰는 방식에 맞춰 메뉴를 줄여 줘요. 설정에서 언제든 바꿀 수 있고, 기능은 하나씩 섞을 수 있어요.</p>
     <div class="mode-grid">${MODES.map((md) => `<button type="button" class="mode-pick" data-pick-mode="${md.id}">
       <span class="text-2xl shrink-0" aria-hidden="true">${md.emoji}</span>
       <span class="mode-copy"><span class="text-body font-semibold">${md.label}</span><span class="text-caption text-ink-sub">${md.blurb}</span></span>
