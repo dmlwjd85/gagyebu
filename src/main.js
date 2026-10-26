@@ -31,7 +31,17 @@ import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, closeSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol, FAB_INNER } from './ui/brand.js';
 import { createAddPop } from './ui/fabPop.js';
-const addPop = createAddPop({ open: () => openSheet(), isOpen: () => isSheetOpen(), reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches });
+import { createFeel } from './ui/feel.js';
+const feel = createFeel();
+const addPop = createAddPop({ open: () => openSheet(), isOpen: () => isSheetOpen(), reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches, onBurst: () => feel.play('tok') });
+// 쨈 컵 손맛: 누르는 동안 말랑하게 눌린 채(.is-pressed) + '뽁'·짧은 진동 → 놓으면 되튐(style.css). 키보드 Enter·Space 도 같음
+const pressFab = (fab) => { if (fab.classList.contains('is-pressed')) return; fab.classList.add('is-pressed'); feel.play('bbok'); feel.buzz(); };
+const releaseFab = () => document.querySelectorAll('.fab.is-pressed').forEach((f) => f.classList.remove('is-pressed'));
+document.addEventListener('pointerdown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.button) pressFab(f); });
+['pointerup', 'pointercancel', 'blur'].forEach((ev) => window.addEventListener(ev, releaseFab));
+document.addEventListener('pointerout', (e) => { if (e.target.closest?.('.fab') && !e.relatedTarget?.closest?.('.fab')) releaseFab(); });
+document.addEventListener('keydown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.repeat && (e.key === 'Enter' || e.key === ' ')) pressFab(f); });
+document.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') releaseFab(); });
 import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
 import { assetsView, taxView } from './ui/assetsView.js';
 import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
@@ -663,7 +673,7 @@ app.addEventListener('click', async (e) => {
   }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
-    case 'add': haptic(); return t.matches('.fab') ? addPop(t) : openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번)
+    case 'add': if (t.matches('.fab')) return addPop(t); haptic(); return openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번), 진동·소리는 누를 때(feel.js)
     case 'add-rec': return editRecurring(null);
     case 'add-goal': return editGoal(null);
     case 'add-rule': return editRule();
@@ -774,6 +784,7 @@ app.addEventListener('change', (e) => {
     return;
   }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
+  if (t.dataset.btnSound !== undefined) localStorage.setItem('btnSound', t.checked ? 'on' : 'off');
   if (t.dataset.decor !== undefined && t.type === 'checkbox') return pushLook({ decor: t.checked });
   if (t.dataset.tonePart && t.type === 'checkbox') return pushLook({ tone: { ...readLook().tone, [t.dataset.tonePart]: t.checked } });
   // 가져오기
