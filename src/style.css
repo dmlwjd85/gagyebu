@@ -166,6 +166,10 @@
   .tx-emoji { @apply grid place-items-center w-10 h-10 rounded-2xl text-xl shrink-0; background: var(--heat-1); }
   .legend-row { @apply flex w-full items-center gap-2 min-h-[44px] px-2 rounded-xl text-body; }
   .legend-row:hover:not(:disabled) { background: var(--bg); }
+  /* 차트 범례: 글자를 키워도 금액은 한 줄, 이름만 줄임표로 줄어듦(QA #30). 넓은 화면은 줄마다 구분선 */
+  .legend-list .legend-row { flex-wrap: nowrap; }
+  .legend-list .legend-row > span.flex-1 { min-width: 0; }
+  @media (min-width: 768px) { .legend-list > li + li > .legend-row { border-top: 1px solid var(--line); border-radius: 0; } }
   .skeleton { background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 
   .cal-cell { @apply flex flex-col items-center justify-start gap-0.5 rounded-xl pt-1.5 min-h-[52px] min-w-0 transition-colors; } /* 폭은 칸(1/7)에 맞춤: 넓을 때 44px 이상, 아주 좁은 폭에서 이웃 칸과 겹치지 않게 */
