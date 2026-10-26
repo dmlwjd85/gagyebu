@@ -33,15 +33,21 @@ export function createAddPop({ open, isOpen = () => false, reduced = () => false
   };
 }
 
-// 연타 보호: 쨈 컵 버튼에서 시작된 누름이 이어지는 동안(누름과 누름 사이가 400ms 안) 시트에 떨어지는 손가락은 모두 같은 연타로 보고 무시.
-// 시트가 열린 시각이 아니라 '마지막 누름'부터 세므로, 120·200·300ms 간격으로 계속 눌러도 바탕(닫기)·'저장'·자판에 닿지 않음(QA 2차 D1).
-// 400ms 동안 손을 떼고 있으면 끝 → 그 뒤 시트 안에서 새로 누른 것만 받음. 키보드 click(detail 0)은 포인터가 아니라 그대로 받음.
+// 연타 보호: 쨈 컵 버튼을 연달아 누르는 손가락이 막 열린 시트에 떨어져도 '저장'·바탕(닫기)에 닿지 않게(QA 2차 D1).
+// 무시하는 것은 '컵 자리(버튼 사각형 + 사방 24px) 안의 누름'뿐이고, 창(마지막 누름 뒤 400ms)도 그 누름만 늘림(QA 3차 N1).
+// 컵 자리 밖(자판·입력칸·카테고리·닫기…)은 시트가 열린 직후라도 바로 받음 → 컵 한 번 누르고 곧장 숫자를 쳐도 그대로 입력.
+// 연타하는 손가락은 같은 자리에 떨어지므로 폰에서 컵 자리에 겹친 '저장'·바탕 연타는 계속 막힘.
+// 키보드(Enter·Space) 연타는 자리 대신 키로 묶음: createTapBurst() 를 자리 없이 쓰고, 다른 키를 누르면 reset(QA 3차 N2).
 export const BURST_QUIET_MS = 400;
-export function createTapBurst(quiet = BURST_QUIET_MS) {
-  let until = -Infinity;
+export const BURST_PAD_PX = 24;
+export function createTapBurst(quiet = BURST_QUIET_MS, pad = BURST_PAD_PX) {
+  let until = -Infinity, zone = null;
+  const inZone = (x, y) => !zone || (x >= zone.left - pad && x <= zone.right + pad && y >= zone.top - pad && y <= zone.bottom + pad);
   return {
-    fromButton(t) { until = t + quiet; }, // 버튼에서 누름 시작
-    swallow(t) { if (t < until) { until = t + quiet; return true; } return false; }, // 버튼 밖 누름: 연타 중이면 무시하고 창을 늘림
-    reset() { until = -Infinity; },
+    // 버튼에서 누름 시작. rect(버튼 사각형)를 주면 그 자리 안의 누름만 연타로 봄
+    fromButton(t, rect = null) { until = t + quiet; zone = rect && { left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom }; },
+    // 버튼 밖 누름: 연타 창 안이고 컵 자리 안이면 무시하고 창을 늘림. 자리 밖이면 받음(창은 그대로)
+    swallow(t, x, y) { if (t < until && inZone(x, y)) { until = t + quiet; return true; } return false; },
+    reset() { until = -Infinity; zone = null; },
   };
 }

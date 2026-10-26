@@ -15,7 +15,7 @@ import { ownerOf, ownerForSave, spouseLabel } from '../lib/couple.js';
 import { createTapBurst } from './fabPop.js';
 
 let el, ctx, s, lastFocus, longPressAt = 0;
-const burst = createTapBurst();
+const burst = createTapBurst(), keyBurst = createTapBurst();
 const recentKey = 'recentCats';
 const recentIds = () => { try { return JSON.parse(localStorage.getItem(recentKey)) || []; } catch { return []; } };
 const pushRecent = (id) => localStorage.setItem(recentKey, JSON.stringify([id, ...recentIds().filter((x) => x !== id)].slice(0, 8)));
@@ -32,8 +32,17 @@ export function initSheet(context) {
   let swallowClick = false;
   window.addEventListener('pointerdown', (e) => {
     swallowClick = false;
-    if (e.target.closest?.('.fab')) { burst.fromButton(e.timeStamp); return; }
-    if (el.contains(e.target) && burst.swallow(e.timeStamp)) { swallowClick = true; e.preventDefault(); e.stopImmediatePropagation(); }
+    const fab = e.target.closest?.('.fab');
+    if (fab) { burst.fromButton(e.timeStamp, fab.getBoundingClientRect()); return; }
+    if (el.contains(e.target) && burst.swallow(e.timeStamp, e.clientX, e.clientY)) { swallowClick = true; e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  // 키보드: 컵에서 시작된 Enter·Space 연타(키 반복 포함)가 시트로 넘어온 초점에 떨어져 저장 검사를 돌리지 않게(QA 3차 N2).
+  // 마지막 Enter·Space 뒤 400ms 안의 Enter·Space 만 무시, 숫자·Tab 등 다른 키를 누르면 묶음이 끝나 그 뒤 Enter 저장은 정상.
+  window.addEventListener('keydown', (e) => {
+    const act = e.key === 'Enter' || e.key === ' ';
+    if (!act) { keyBurst.reset(); return; }
+    if (e.target.closest?.('.fab')) { keyBurst.fromButton(e.timeStamp); return; }
+    if (el.contains(e.target) && keyBurst.swallow(e.timeStamp)) { e.preventDefault(); e.stopImmediatePropagation(); }
   }, true);
   el.addEventListener('click', (e) => { if (swallowClick && e.detail > 0) { swallowClick = false; e.preventDefault(); e.stopImmediatePropagation(); } }, true);
   el.addEventListener('click', onClick);

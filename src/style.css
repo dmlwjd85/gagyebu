@@ -185,7 +185,7 @@
     .tab { min-width: 0; width: 100%; max-width: 64px; }
     .tabbar .fab { width: 100%; min-width: 0; max-width: 64px; min-height: 48px; margin-top: 0; justify-content: center; }
     .tabbar .fab-disc { width: min(44px, 100%); height: 34px; border-radius: 17px; } /* 아주 좁으면 접시를 낮은 알약으로(버튼 전체 높이 48px 유지) + 아래 '기록' */
-    .tabbar .fab-disc .cup-svg { width: min(30px, 100cqi); height: min(30px, 100cqi); } /* 컵(그린 부분 0.96배 ≈ 29px)이 34px 알약 안에 위아래 2px씩 남기고 들어감(QA 2차 D2), 폭도 접시를 넘지 않음(확대 시 옆 '차트' 칸을 덮지 않게) */
+    .tabbar .fab-disc .cup-svg { width: min(30px, 100cqi); height: min(30px, 100cqi); } /* 컵(그린 부분 약 28.3×28.5px)이 34px 알약 안에 위 2.5·아래 3.0px 남기고 들어감(QA 2차 D2, 3차 실측), 폭도 접시를 넘지 않음(확대 시 옆 '차트' 칸을 덮지 않게) */
   }
   @media (max-width: 239px) {
     .tab > span:last-child { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
