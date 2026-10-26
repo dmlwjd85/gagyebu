@@ -332,7 +332,7 @@ export function chartView(m0, ui) {
       : sel.length ? `<div class="relative mt-3">${donut(items, { total, center: kind === 'expense' ? '총지출' : '총수입' })}</div>
       ${refundOver ? `<p class="mt-3 text-caption text-ink-sub">환불이 지출보다 ${numSpan(formatWon(refundOver))} 많아서 이 달 총지출은 0원으로 봐요. 비율은 지출이 남은 카테고리 합 ${numSpan(formatWon(posSum))} 기준이에요.</p>`
         : overs.length || posSum !== total ? `<p class="mt-3 text-caption text-ink-sub">비율은 환불을 뺀 뒤 지출이 남은 카테고리 합 ${numSpan(formatWon(posSum))} 기준이에요.</p>` : ''}
-      <ol class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-2 -mx-2">${items.map((it, i) => `<li><button class="legend-row" ${it.categoryId === '__rest' ? 'disabled' : `data-filter-cat="${esc(it.categoryId)}"`}>
+      <ol class="mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-x-2 -mx-2">${items.map((it, i) => `<li><button class="legend-row" ${it.categoryId === '__rest' ? 'disabled' : `data-filter-cat="${esc(it.categoryId)}"`}>
         <span class="w-3 h-3 rounded-full shrink-0" style="background:${it.color}" aria-hidden="true"></span>
         <span aria-hidden="true">${esc(it.emoji)}</span><span class="flex-1 text-left truncate">${esc(it.label)}</span>
         <span class="num text-caption text-ink-sub tabular-nums min-w-[2.5rem] text-right">${it.pct}%</span>

@@ -57,6 +57,12 @@
   @media (min-width: 768px) {
     .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "main recent" "main side"; grid-template-rows: auto 1fr; align-content: start; }
     .home-main { grid-area: main; } .home-recent { grid-area: recent; } .home-side { grid-area: side; }
+    /* 넓은 화면 홈: 글자를 키워도 금액이 다음 줄로 떨어지지 않게 이름 칸만 줄어듦, TOP 3는 줄마다 구분선(QA #30) */
+    .home-grid .tx-row, .home-grid .legend-row { flex-wrap: nowrap; }
+    .home-grid .tx-row > span.flex-1, .home-grid .legend-row > span.flex-1 { min-width: 0; }
+    .home-grid .legend-row > span.flex-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .home-grid ol > li + li > .legend-row { border-top: 1px solid var(--line); border-radius: 0; }
+    .home-grid .pace-grid > * { overflow-wrap: normal; word-break: keep-all; text-wrap: balance; }
   }
   @media (min-width: 1280px) {
     .home-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .85fr); grid-template-areas: "main recent side"; grid-template-rows: auto; }

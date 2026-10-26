@@ -832,7 +832,7 @@ app.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.target.dataset?.nameFor || e.target.dataset?.accName || e.target.dataset?.ruleMatch)) e.target.blur();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.bar) { e.preventDefault(); ui.barYm = e.target.dataset.bar; render(); }
 });
-window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => state.user && render());
+['(min-width: 768px)', '(min-width: 1024px)', '(min-width: 1280px)'].forEach((q) => window.matchMedia(q).addEventListener?.('change', () => state.user && render()));
 document.addEventListener('keydown', (e) => {
   if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
   if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
