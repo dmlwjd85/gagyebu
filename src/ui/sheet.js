@@ -12,10 +12,10 @@ import {
 } from './smsSheet.js';
 import { ownerPickHtml } from './views.js';
 import { ownerOf, ownerForSave, spouseLabel } from '../lib/couple.js';
-import { isEarlyTap } from './fabPop.js';
+import { createTapBurst } from './fabPop.js';
 
-let el, ctx, s, lastFocus, longPressAt = 0, openedAt = -1e9;
-const sinceOpen = () => performance.now() - openedAt;
+let el, ctx, s, lastFocus, longPressAt = 0;
+const burst = createTapBurst();
 const recentKey = 'recentCats';
 const recentIds = () => { try { return JSON.parse(localStorage.getItem(recentKey)) || []; } catch { return []; } };
 const pushRecent = (id) => localStorage.setItem(recentKey, JSON.stringify([id, ...recentIds().filter((x) => x !== id)].slice(0, 8)));
@@ -27,8 +27,15 @@ export function initSheet(context) {
   el.innerHTML = `<div class="sheet-backdrop" data-close></div>
     <section class="sheet" role="dialog" aria-modal="true" aria-labelledby="sheet-title" tabindex="-1"></section>`;
   document.body.append(el);
-  // 올라오는 동안의 누름은 바탕·저장·자판 어디에도 닿지 않게(캡처 단계에서 막음)
-  el.addEventListener('click', (e) => { if (isEarlyTap(sinceOpen(), e.detail)) { e.preventDefault(); e.stopImmediatePropagation(); } }, true);
+  // 연타 보호(fabPop.js createTapBurst): 쨈 컵 버튼을 누른 손가락이 이어서 시트에 떨어지면 바탕·저장·자판 어디에도 닿지 않게.
+  // 가장 먼저 도는 window 캡처 단계에서 pointerdown 을 끊고(길게 누르기 저장도 시작 안 됨) 뒤따르는 click 도 버림.
+  let swallowClick = false;
+  window.addEventListener('pointerdown', (e) => {
+    swallowClick = false;
+    if (e.target.closest?.('.fab')) { burst.fromButton(e.timeStamp); return; }
+    if (el.contains(e.target) && burst.swallow(e.timeStamp)) { swallowClick = true; e.preventDefault(); e.stopImmediatePropagation(); }
+  }, true);
+  el.addEventListener('click', (e) => { if (swallowClick && e.detail > 0) { swallowClick = false; e.preventDefault(); e.stopImmediatePropagation(); } }, true);
   el.addEventListener('click', onClick);
   el.addEventListener('input', onInput);
   el.addEventListener('change', onInput);
@@ -36,7 +43,7 @@ export function initSheet(context) {
   // 저장 길게 누르기(0.6초) = 매달 반복으로 저장
   let lp;
   el.addEventListener('pointerdown', (e) => {
-    if (!e.target.closest('[data-save]') || isEarlyTap(sinceOpen()) || s.id || ctx.getState().features?.recurring === false) return;
+    if (!e.target.closest('[data-save]') || s.id || ctx.getState().features?.recurring === false) return;
     lp = setTimeout(() => { longPressAt = Date.now(); s.repeat = true; haptic(20); save(); }, 600);
   });
   const stop = () => clearTimeout(lp);
@@ -53,7 +60,6 @@ export function openSheet(tx = null, { date } = {}) {
     ? { id: tx.id, orig: tx, refund: tx.amount < 0, createdAt: tx.createdAt, kind: tx.kind, digits: String(Math.abs(tx.amount)), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', owner: ownerOf(tx), more: false, showOpts: true, error: '' }
     : { kind: 'expense', digits: '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', owner: '나', more: false, showOpts: false, error: '' };
   render();
-  openedAt = performance.now();
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
   document.getElementById('app').inert = true;
