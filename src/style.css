@@ -526,6 +526,8 @@
 @media (max-height: 700px) {
   .dlg-wrap.dlg-wrap { padding-top: 8px; padding-bottom: 8px; }
   .dlg-wrap > [role="dialog"] { padding-top: 16px; padding-bottom: 16px; }
+  /* 기록 시트 자판 키 56→44px(터치 대상 최소 44px 유지): 320×640 에서 0·000·⌫ 줄이 화면 밖(y622~678)으로 밀리던 것을 화면 안으로 */
+  .key { height: 44px; }
 }
 .versym { width: 24px; height: 24px; flex: none; }
 .pclogo { display: none; }
