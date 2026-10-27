@@ -1,13 +1,12 @@
 # 앱 아이콘(은박 호일 컵) 일괄 생성: 저장소 맨 위에서 `python3 tools/icon/make-icons.py`
 # 필요: Python 3, playwright(+ chromium), Pillow, pyoxipng  (pip install playwright pillow pyoxipng && playwright install chromium)
 # 원본: tools/icon/A.svg(큰 크기용), tools/icon/A-small.svg(48px 이하용, 디테일을 줄이고 글자를 키움)
-#   글자 윤곽은 SVG 안에 벡터로 들어 있음(쨈 제목 평면 v1.0.1 © 2026 JJAEM Font Team, fonttools로 추출). 폰트 파일은 저장소에 넣지 않음.
+#   글자 윤곽은 SVG 안에 벡터로 들어 있음(쨈 제목 평면 v1.0.1 © 2026 JJAEM Font Team, fonttools로 추출, 곡선 구간을 매끄럽게 다듬음). 폰트 파일은 저장소에 넣지 않음.
 # 만드는 파일(public/, 기존 파일 이름 그대로 덮어씀):
 #   pwa-512.png, pwa-192.png, apple-touch-icon.png(180)  ← A.svg, 꽉 찬 정사각형·투명 없음(모서리는 OS가 깎음)
 #   pwa-maskable-512.png, pwa-maskable.svg                ← A.svg를 90%로 줄여 뚜껑 모서리까지 80% 안전 원 안에 둠
 #   favicon.svg, favicon.ico의 24/48                     ← A-small.svg, 기존처럼 둥근 모서리(rx 114/512)
 #   favicon-16.png, favicon-32.png, favicon.ico의 16/32  ← 픽셀 격자에 맞춘 힌팅판(아래 G16·G32)
-# tools/icon/preview.png: 기존 vs 새 아이콘 비교(마스크·작은 크기·홈 화면·탭), 생성 결과 확인용
 # SVG 필터(feSpecularLighting 등)를 정확히 그리려고 Chromium으로 1024px를 그린 뒤 Lanczos로 줄임.
 import base64, io, pathlib, re
 from PIL import Image, ImageDraw
