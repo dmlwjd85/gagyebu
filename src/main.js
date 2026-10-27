@@ -35,18 +35,12 @@ import { createFeel } from './ui/feel.js';
 const feel = createFeel();
 const addPop = createAddPop({ open: () => openSheet(), isOpen: () => isSheetOpen(), reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches, onBurst: () => feel.play('tok') });
 // 쨈 컵 손맛: 누르는 동안 말랑하게 눌린 채(.is-pressed) + '뽁'·짧은 진동 → 놓으면 되튐(style.css). 키보드 Enter·Space 도 같음
-// 누르는 순간(pointerdown)에는 AudioContext 를 만들지 않음(QA 6차 D2: 시트가 누름을 받는 첫 프레임이 늦어짐).
-// 소리 잠금 풀기(feel.installUnlock): 첫 touchend·pointerup·click·keydown 처리기 안에서 만들기+resume 만 동기로(iOS 는 처리기 밖 rAF·setTimeout 에서 풀어 주지 않음, QA 7차).
-// 컵 위에서는 건너뛰고 뒤따르는 click(시트 열기) 다음에 풀며, 그때 기다리던 첫 '뽁'을 바로 냄(QA 7차: 다음 프레임까지 미루면 33~42ms 늦음).
-// 소리가 이미 풀려 있으면 '뽁'은 누르는 처리기 끝(마이크로태스크)에서 바로, 진동은 다음 프레임 뒤.
-let bbokAt = -1; // 소리가 아직 안 풀렸을 때 컵을 누른 시각(풀리는 순간 '뽁', 1초 넘게 지나면 버림)
-const pressFab = (fab) => {
-  if (fab.classList.contains('is-pressed')) return;
-  fab.classList.add('is-pressed');
-  if (feel.ready()) queueMicrotask(() => feel.play('bbok')); else bbokAt = performance.now();
-  afterFrame(() => feel.buzz());
-};
-feel.installUnlock({ skip: (t) => !!t?.closest?.('.fab'), onUnlock: () => { if (bbokAt >= 0 && performance.now() - bbokAt < 1000) feel.play('bbok'); bbokAt = -1; } });
+// 누르는 순간에는 클래스만, '뽁'·진동은 다음 프레임 뒤(QA 6차 D2: pointerdown 에서 소리를 만들면 시트가 누름을 받는 첫 프레임이 늦어짐)
+const pressFab = (fab) => { if (fab.classList.contains('is-pressed')) return; fab.classList.add('is-pressed'); afterFrame(() => { feel.play('bbok'); feel.buzz(); }); };
+// 소리 준비: 앱 어디든 첫 누름·키 뒤 프레임 다음에 AudioContext 를 미리 만듦(첫 컵 누름에서 만들지 않게)
+let feelPrimed = false;
+const primeFeel = () => { if (feelPrimed) return; feelPrimed = true; afterFrame(() => feel.prime()); };
+['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, primeFeel, true));
 const releaseFab = () => document.querySelectorAll('.fab.is-pressed').forEach((f) => f.classList.remove('is-pressed'));
 document.addEventListener('pointerdown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.button) pressFab(f); });
 ['pointerup', 'pointercancel', 'blur'].forEach((ev) => window.addEventListener(ev, releaseFab));

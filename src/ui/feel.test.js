@@ -2,28 +2,21 @@ import { describe, test, expect } from 'vitest';
 import { createFeel, renderVoice, VOICES, MAX_VOICES } from './feel.js';
 
 const mem = (o = {}) => ({ getItem: (k) => (k in o ? o[k] : null), setItem: (k, v) => { o[k] = String(v); } });
-const fakeAudio = ({ state = 'running', resume = 'now' } = {}) => {
-  const made = { ctx: 0, osc: 0, resume: 0, silent: [], list: [] };
+const fakeAudio = () => {
+  const made = { ctx: 0, osc: 0 };
   const param = () => ({ setValueAtTime() {}, linearRampToValueAtTime() {}, exponentialRampToValueAtTime() {} });
-  class AC extends EventTarget {
-    constructor() { super(); made.ctx++; made.list.push(this); this.currentTime = 0; this.state = state; this.sampleRate = 48000; this.destination = {}; }
-    resume() { made.resume++; if (resume === 'now') { this.state = 'running'; return Promise.resolve(); } return new Promise(() => {}); }
+  class AC {
+    constructor() { made.ctx++; this.currentTime = 0; this.state = 'running'; this.destination = {}; }
     createGain() { return { gain: param(), connect() {}, disconnect() {} }; }
     createOscillator() { made.osc++; return { frequency: param(), connect() {}, disconnect() {}, start() {}, stop() {} }; }
-    createBuffer(ch, len, sr) { return { ch, len, sr }; }
-    createBufferSource() { const b = { connect() {}, disconnect() {}, start(at) { made.silent.push([b.buffer, at]); } }; return b; }
   }
   return { AC, made };
 };
-// 사용자 동작이 들어오는 문서·창 흉내(EventTarget)
-const fakeDom = () => { const doc = new EventTarget(), win = new EventTarget(); return { doc, win }; };
-const fire = (t, type, target = {}) => { const e = new Event(type); Object.defineProperty(e, 'target', { value: target }); t.dispatchEvent(e); };
 
 describe('쨈 버튼 소리·진동', () => {
-  test('버튼 소리를 끄면 소리를 내지 않고 AudioContext 도 만들지 않는다(잠금 풀기도 안 함)', () => {
+  test('버튼 소리를 끄면 소리를 내지 않고 AudioContext 도 만들지 않는다', () => {
     const { AC, made } = fakeAudio();
     const feel = createFeel({ store: mem({ btnSound: 'off' }), win: { AudioContext: AC, navigator: {} }, now: () => 0 });
-    expect(feel.unlock()).toBe(false);
     expect(feel.play('bbok')).toBe(false);
     expect(made.ctx).toBe(0);
   });
@@ -42,82 +35,27 @@ describe('쨈 버튼 소리·진동', () => {
     expect(broken.play('bbok')).toBe(false);
     expect(broken.buzz()).toBe(false);
   });
-  test('QA 7차: play() 는 AudioContext 를 만들지 않음(사용자 동작 밖 rAF·setTimeout 에서 만들면 iOS 가 풀어 주지 않음) → unlock() 뒤에만 소리', () => {
+  test('AudioContext 는 처음 누를 때 한 번만 만들고, 진동은 12ms', () => {
     const { AC, made } = fakeAudio(); let t = 0; const got = [];
     const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: { vibrate: (ms) => got.push(ms) } }, now: () => t });
-    expect(feel.play('bbok')).toBe(false); expect(made.ctx).toBe(0); expect(feel.ready()).toBe(false);
-    expect(feel.unlock()).toBe(true); expect(feel.unlock()).toBe(true); expect(made.ctx).toBe(1);
-    expect(feel.ready()).toBe(true);
-    t = 200; expect(feel.play('bbok')).toBe(true); t = 400; feel.play('tok');
+    expect(made.ctx).toBe(0);
+    feel.play('bbok'); t = 200; feel.play('tok'); t = 400; feel.play('bbok');
     expect(made.ctx).toBe(1);
     expect(feel.buzz()).toBe(true);
     expect(got).toEqual([12]);
   });
-  test('QA 7차: unlock() 은 동기로 만들기 + resume() + 1샘플 무음 재생(iOS 잠금 풀기), running 이면 다시 하지 않음', () => {
-    const { AC, made } = fakeAudio({ state: 'suspended' });
-    const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: {} }, now: () => 0 });
-    expect(feel.unlock()).toBe(true); // 흉내 resume 은 바로 running
-    expect(made.resume).toBe(1);
-    expect(made.silent).toEqual([[{ ch: 1, len: 1, sr: 48000 }, 0]]);
-    feel.unlock(); expect(made.resume).toBe(1); expect(made.silent).toHaveLength(1);
-    expect(createFeel({ store: mem(), win: { navigator: {} } }).unlock()).toBe(false); // Web Audio 없음
-    const broken = createFeel({ store: mem(), win: { AudioContext: function () { throw new Error('막힘'); }, navigator: {} } });
-    expect(broken.unlock()).toBe(false);
-  });
-  test('QA 7차: iOS 처럼 resume 이 비동기면 그 사이(사용자 동작 안) 예약한 소리는 냄(풀리자마자 남)', () => {
-    const { AC, made } = fakeAudio({ state: 'suspended', resume: 'later' });
-    const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: {} }, now: () => 0 });
-    expect(feel.unlock()).toBe(false); // 아직 running 아님
-    expect(feel.ready()).toBe(true); // resume 중 → 바로 예약(풀리면 남)
-    expect(feel.play('bbok')).toBe(true);
-    expect(made.resume).toBe(1); expect(made.ctx).toBe(1);
-  });
-  test('QA 7차: installUnlock — pointerdown 에서는 안 풀고, 컵 위 touchend·pointerup·keydown 은 건너뛰고 click(창 거품 단계, 시트 열기 뒤)에서 풂, running 이면 듣개를 뗌', () => {
-    const { AC, made } = fakeAudio();
-    const { doc, win } = fakeDom(); win.AudioContext = AC; win.navigator = {};
-    const feel = createFeel({ store: mem(), win, now: () => 0 });
-    const cup = { cup: true }, other = {};
-    const seen = [];
-    feel.installUnlock({ doc, skip: (t) => !!t.cup, onUnlock: () => seen.push(made.ctx) });
-    fire(doc, 'pointerdown', cup); fire(doc, 'touchstart', cup);
-    expect(made.ctx).toBe(0);
-    fire(doc, 'touchend', cup); fire(doc, 'pointerup', cup); fire(doc, 'keydown', cup);
-    expect(made.ctx).toBe(0); expect(seen).toEqual([]);
-    // 앱 click 처리기(시트 열기)가 먼저 돌고 나서 창 거품 단계에서 풂
-    const order = [];
-    doc.addEventListener('click', () => order.push('open'));
-    doc.addEventListener('click', (e) => win.dispatchEvent(new e.constructor('click'))); // 문서 → 창으로 거품
-    win.addEventListener('click', () => order.push(made.ctx ? 'unlocked' : 'not-yet'));
-    fire(doc, 'click', cup);
-    expect(made.ctx).toBe(1); expect(seen).toEqual([1]); // onUnlock 은 만든 직후 처리기 안에서
-    expect(order[0]).toBe('open');
-    // running → 듣개를 뗌: 더 이상 onUnlock 안 부름
-    fire(doc, 'touchend', other); fire(win, 'click', other); fire(doc, 'keydown', other);
-    expect(seen).toEqual([1]); expect(made.ctx).toBe(1);
-  });
-  test('QA 7차: installUnlock — 컵이 아닌 곳의 첫 touchend·keydown 에서 풀고, 전화 등으로 다시 멈추면(statechange) 다음 동작에서 다시 resume', () => {
-    const { AC, made } = fakeAudio();
-    const { doc, win } = fakeDom(); win.AudioContext = AC; win.navigator = {};
-    const feel = createFeel({ store: mem(), win, now: () => 0 });
-    feel.installUnlock({ doc, skip: () => false });
-    fire(doc, 'keydown', {}); expect(made.ctx).toBe(1); expect(made.resume).toBe(0); // 동작 안에서 만들면 이미 running
-    const c = made.list[0];
-    c.state = 'interrupted'; c.dispatchEvent(new Event('statechange'));
-    expect(feel.ready()).toBe(false); expect(feel.play('bbok')).toBe(false);
-    fire(doc, 'touchend', {}); expect(made.resume).toBe(1); expect(c.state).toBe('running'); expect(made.ctx).toBe(1);
-    expect(feel.play('bbok')).toBe(true);
-  });
-  test('QA 7차: 버튼 소리가 꺼져 있으면 동작마다 AudioContext 를 만들지 않음(듣개만 남고 가벼움)', () => {
-    const { AC, made } = fakeAudio(); const { doc, win } = fakeDom(); win.AudioContext = AC; win.navigator = {};
-    const feel = createFeel({ store: mem({ btnSound: 'off' }), win, now: () => 0 });
-    let n = 0; feel.installUnlock({ doc, onUnlock: () => n++ });
-    fire(doc, 'touchend', {}); fire(win, 'click', {});
-    expect(made.ctx).toBe(0); expect(n).toBe(2);
+  test('prime(): 첫 누름 전에 AudioContext 를 한 번만 미리 만들고, 버튼 소리를 끄면 만들지 않음(QA 6차 D2)', () => {
+    const { AC, made } = fakeAudio(); let t = 0;
+    const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: {} }, now: () => t });
+    expect(feel.prime()).toBe(true); expect(feel.prime()).toBe(true); expect(made.ctx).toBe(1);
+    feel.play('bbok'); expect(made.ctx).toBe(1); // 첫 소리에서는 새로 만들지 않음
+    const off = fakeAudio();
+    expect(createFeel({ store: mem({ btnSound: 'off' }), win: { AudioContext: off.AC, navigator: {} } }).prime()).toBe(false); expect(off.made.ctx).toBe(0);
+    expect(createFeel({ store: mem(), win: { navigator: {} } }).prime()).toBe(false); // Web Audio 없음
   });
   test('연타: 같은 소리는 45ms 안에 다시 안 내고, 동시에 최대 3개까지만', () => {
     const { AC } = fakeAudio(); let t = 0;
     const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: {} }, now: () => t });
-    feel.unlock();
     expect(feel.play('bbok')).toBe(true);
     t = 20; expect(feel.play('bbok')).toBe(false);
     let ok = 0;
