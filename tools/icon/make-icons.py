@@ -5,8 +5,8 @@
 # 만드는 파일(public/, 기존 파일 이름 그대로 덮어씀):
 #   pwa-512.png, pwa-192.png, apple-touch-icon.png(180)  ← A.svg, 꽉 찬 정사각형·투명 없음(모서리는 OS가 깎음)
 #   pwa-maskable-512.png, pwa-maskable.svg                ← A.svg를 90%로 줄여 뚜껑 모서리까지 80% 안전 원 안에 둠
-#   favicon.svg, favicon-32.png, favicon.ico(16/24/32/48) ← A-small.svg, 기존처럼 둥근 모서리(rx 114/512)
-#   favicon-16.png, favicon.ico의 16                     ← 픽셀 격자에 맞춘 힌팅판(아래 G16)
+#   favicon.svg, favicon.ico의 24/48                     ← A-small.svg, 기존처럼 둥근 모서리(rx 114/512)
+#   favicon-16.png, favicon-32.png, favicon.ico의 16/32  ← 픽셀 격자에 맞춘 힌팅판(아래 G16·G32)
 # tools/icon/preview.png: 기존 vs 새 아이콘 비교(마스크·작은 크기·홈 화면·탭), 생성 결과 확인용
 # SVG 필터(feSpecularLighting 등)를 정확히 그리려고 Chromium으로 1024px를 그린 뒤 Lanczos로 줄임.
 import base64, io, pathlib, re
@@ -52,52 +52,88 @@ def save_png(im, path):
     if oxipng:
         oxipng.optimize(path, level=6, strip=oxipng.StripChunks.safe())
 
-# 16px 힌팅판: 보라 둥근 바탕 + 은박 뚜껑(1~14px) + 남색 잉크 '쨈'(#=잉크 1px, o=반 잉크)
+# 16·32px 힌팅판: 픽셀 격자에 맞춰 손으로 찍은 '쨈'(#=잉크, o=반 잉크). 탭 크기에서 흐려지지 않게 벡터 축소 대신 씀.
+#   테두리 #8466FF: 밝은 탭(#FFFFFF 3.94:1, #DEE1E6 3.01:1)·어두운 탭(#35363A 3.06:1, #202124 4.08:1) 모두 3:1 이상
+#   잉크 #1D2C86, 뚜껑은 밝은 은박(잉크 대비 7:1 이상)
+#   16px: ㅐ의 짧은 가로획은 왼쪽 세로획에서 1px 나오고 오른쪽 세로획과 1px 띄움('H'로 안 보이게)
 G16 = [
 "................",
 "................",
 "................",
-"...###.###.#.#..",
-"....#...#..#.#..",
-"...#.#.#.#.###..",
-"...........#.#..",
-"...........#.#..",
+"..###.###.#..#..",
+"...#...#..#..#..",
+"..#.#.#.#.##.#..",
+"..........#..#..",
+"..........#..#..",
 "................",
-"....#########...",
-"....#.......#...",
-"....#.......#...",
-"....#########...",
+"...##########...",
+"...#........#...",
+"...#........#...",
+"...##########...",
 "................",
 "................",
 "................"]
+G32 = [
+"................................",
+"................................",
+"................................",
+"................................",
+"........................##......",
+"......o####o.o####o.##..##......",
+"......######.######.##..##......",
+"........##.....##...##..##......",
+"........##.....##...##..##......",
+"........##.....##...##..##......",
+"........##.....##...###.##......",
+".......####...####..###.##......",
+".......####...####..##..##......",
+"......######.######.##..##......",
+"......##..##.##..##.##..##......",
+"......##..##.##..##.##..##......",
+"....................##..##......",
+"........................##......",
+"................................",
+"................................",
+"......o##################o......",
+"......####################......",
+"......##................##......",
+"......##................##......",
+"......##................##......",
+"......##................##......",
+"......####################......",
+"......o##################o......",
+"................................",
+"................................",
+"................................",
+"................................"]
 assert all(len(r) == 16 for r in G16) and len(G16) == 16
+assert all(len(r) == 32 for r in G32) and len(G32) == 32
+RING = (0x84, 0x66, 0xFF)
+INK = (0x1D, 0x2C, 0x86)
 
-def hinted16():
-    S = 16 * 16
+def hinted(grid, ring, tile_r, lid_r, lid_light=(0xF6, 0xF7, 0xFA), lid_dark=(0xC4, 0xCA, 0xD4)):
+    """grid 크기 n: 둥근 바탕(테두리 ring px, 색 RING) + 은박 뚜껑 + 잉크 글자."""
+    n = len(grid); k = 16; S = n * k
     def lerp(c0, c1, t): return tuple(round(a + (b - a) * t) for a, b in zip(c0, c1))
-    bg = Image.new('RGBA', (S, S))
-    px = bg.load()
-    for y in range(S):
-        for x in range(S):
-            px[x, y] = lerp((0x7A, 0x5C, 0xFA), (0x4A, 0x2C, 0xD0), (x + y) / (2 * S - 2)) + (255,)
-    lid = Image.new('RGBA', (S, S))
-    lp = lid.load()
-    for y in range(S):
-        for x in range(S):
-            lp[x, y] = lerp((0xF6, 0xF7, 0xFA), (0xC4, 0xCA, 0xD4), (x + y) / (2 * S - 2)) + (255,)
-    out = Image.new('RGBA', (S, S), (0, 0, 0, 0))
-    m = Image.new('L', (S, S), 0); ImageDraw.Draw(m).rounded_rectangle([0, 0, S - 1, S - 1], radius=int(3.5 * 16), fill=255)
-    out.paste(bg, (0, 0), m)
-    m2 = Image.new('L', (S, S), 0); ImageDraw.Draw(m2).rounded_rectangle([16, 16, 15 * 16 - 1, 15 * 16 - 1], radius=int(2.5 * 16), fill=255)
-    out.paste(lid, (0, 0), m2)
-    im = out.resize((16, 16), Image.LANCZOS)
+    # 모양(바탕·뚜껑)은 16배로 그려 BOX로 줄인 덮임 비율만 쓰고, 색은 n px에서 바로 칠함(Lanczos 번짐 없이 테두리 색을 정확히 유지)
+    m = Image.new('L', (S, S), 0); ImageDraw.Draw(m).rounded_rectangle([0, 0, S - 1, S - 1], radius=int(tile_r * k), fill=255)
+    m2 = Image.new('L', (S, S), 0); ImageDraw.Draw(m2).rounded_rectangle([ring * k, ring * k, (n - ring) * k - 1, (n - ring) * k - 1], radius=int(lid_r * k), fill=255)
+    ta, la = m.resize((n, n), Image.BOX).load(), m2.resize((n, n), Image.BOX).load()
+    im = Image.new('RGBA', (n, n), (0, 0, 0, 0))
+    q = im.load()
+    for y in range(n):
+        for x in range(n):
+            lidc = lerp(lid_light, lid_dark, (x + y) / (2 * n - 2))
+            q[x, y] = lerp(RING, lidc, la[x, y] / 255) + (ta[x, y],)
     p = im.load()
-    ink = (0x1D, 0x2C, 0x86)
-    for y, r in enumerate(G16):
+    for y, r in enumerate(grid):
         for x, ch in enumerate(r):
-            if ch == '#': p[x, y] = ink + (255,)
-            elif ch == 'o': p[x, y] = lerp(p[x, y][:3], ink, .55) + (255,)
+            if ch == '#': p[x, y] = INK + (255,)
+            elif ch == 'o': p[x, y] = lerp(p[x, y][:3], INK, .55) + (255,)
     return im
+
+def hinted16(): return hinted(G16, 1, 3.5, 2.5)
+def hinted32(): return hinted(G32, 2, 7, 5, lid_dark=(0xD0, 0xD5, 0xDE))
 
 def main():
     big = (SRC / 'A.svg').read_text()
@@ -113,12 +149,12 @@ def main():
     for name, s in [('pwa-512.png', 512), ('pwa-192.png', 192), ('apple-touch-icon.png', 180)]:
         save_png(down(full, s).convert('RGB'), PUB / name)
     save_png(down(mask, 512).convert('RGB'), PUB / 'pwa-maskable-512.png')
-    save_png(down(fav, 32), PUB / 'favicon-32.png')
-    h16 = hinted16()
+    h16, h32 = hinted16(), hinted32()
+    save_png(h32, PUB / 'favicon-32.png')
     save_png(h16, PUB / 'favicon-16.png')
     # Pillow ICO: 첫 그림보다 큰 크기는 버리므로 48을 앞에 둠
-    fr = {s: down(fav, s) for s in (24, 32, 48)}
-    fr[48].save(PUB / 'favicon.ico', format='ICO', sizes=[(16, 16), (24, 24), (32, 32), (48, 48)], append_images=[h16, fr[24], fr[32]])
+    fr = {s: down(fav, s) for s in (24, 48)}
+    fr[48].save(PUB / 'favicon.ico', format='ICO', sizes=[(16, 16), (24, 24), (32, 32), (48, 48)], append_images=[h16, fr[24], h32])
     print('done', 'oxipng' if oxipng else '(oxipng 없음: Pillow optimize만)')
 
 if __name__ == '__main__':
