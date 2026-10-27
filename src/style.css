@@ -8,9 +8,10 @@
   html { color-scheme: light; -webkit-tap-highlight-color: transparent; }
   /* --shell-max: 본문 가운데 폭 / --fs: 글자 배율(본문 #main 안에서만 설정값 --content-scale을 따름, 위·아래 메뉴는 늘 1) */
   :root { --shell-max: 448px; --rail-space: 112px; --fs: 1; --content-scale: 1; }
-  @media (min-width: 768px) { :root { --shell-max: 600px; } }
+  @media (min-width: 768px) { :root { --shell-max: 960px; } }
   @media (min-width: 1024px) { :root { --shell-max: 1040px; } }
-  @media (min-width: 1600px) { :root { --shell-max: 1200px; } }
+  @media (min-width: 1280px) { :root { --shell-max: 1160px; } }
+  @media (min-width: 1600px) { :root { --shell-max: 1320px; } }
   html.dark { color-scheme: dark; }
   body { @apply bg-bg text-ink font-sans antialiased text-body; min-height: 100dvh; word-break: keep-all; overflow-wrap: anywhere; }
   html.sheet-open body { overflow: hidden; }
@@ -50,7 +51,22 @@
     .app-frame:not(.has-nav) .app-shell { max-width: calc(var(--shell-max) + 64px); padding-left: 32px; padding-right: 32px; }
     .app-main > .app-shell { padding-bottom: 32px; }
   }
-  .view-grid { @apply flex flex-col gap-3 lg:grid lg:grid-cols-2 lg:gap-5 lg:items-start; }
+  .view-grid { @apply flex flex-col gap-3 md:grid md:grid-cols-2 md:gap-4 md:items-start lg:gap-5; }
+  /* 홈(태블릿·PC): 양옆이 비지 않게 요약 | 최근 기록 | 많이 쓴 곳을 나란히. 폰(768px 미만)은 예전과 같은 한 줄 */
+  .home-col { display: flex; flex-direction: column; gap: 12px; min-width: 0; }
+  @media (min-width: 768px) {
+    .home-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-areas: "main recent" "main side"; grid-template-rows: auto 1fr; align-content: start; }
+    .home-main { grid-area: main; } .home-recent { grid-area: recent; } .home-side { grid-area: side; }
+    /* 넓은 화면 홈: 글자를 키워도 금액이 다음 줄로 떨어지지 않게 이름 칸만 줄어듦, TOP 3는 줄마다 구분선(QA #30) */
+    .home-grid .tx-row, .home-grid .legend-row { flex-wrap: nowrap; }
+    .home-grid .tx-row > span.flex-1, .home-grid .legend-row > span.flex-1 { min-width: 0; }
+    .home-grid .legend-row > span.flex-1 { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .home-grid ol > li + li > .legend-row { border-top: 1px solid var(--line); border-radius: 0; }
+    .home-grid .pace-grid > * { overflow-wrap: normal; word-break: keep-all; text-wrap: balance; }
+  }
+  @media (min-width: 1280px) {
+    .home-grid { grid-template-columns: minmax(0, 1.15fr) minmax(0, 1fr) minmax(0, .85fr); grid-template-areas: "main recent side"; grid-template-rows: auto; }
+  }
   /* 예산 요약: 하루 금액·남음/초과를 크기·색으로 구분. 폭이 좁거나 글자를 키워도 겹치지 않게 세로로 쌓고 필요하면 줄바꿈 */
   .bud-summary { display: flex; flex-direction: column; align-items: stretch; gap: 12px; width: 100%; min-width: 0; }
   .bud-hero, .bud-chip { display: flex; flex-direction: column; align-items: center; gap: 2px; width: 100%; min-width: 0; box-sizing: border-box; padding: 12px 10px; border-radius: 20px; background: var(--surface-solid); }
@@ -150,6 +166,10 @@
   .tx-emoji { @apply grid place-items-center w-10 h-10 rounded-2xl text-xl shrink-0; background: var(--heat-1); }
   .legend-row { @apply flex w-full items-center gap-2 min-h-[44px] px-2 rounded-xl text-body; }
   .legend-row:hover:not(:disabled) { background: var(--bg); }
+  /* 차트 범례: 글자를 키워도 금액은 한 줄, 이름만 줄임표로 줄어듦(QA #30). 넓은 화면은 줄마다 구분선 */
+  .legend-list .legend-row { flex-wrap: nowrap; }
+  .legend-list .legend-row > span.flex-1 { min-width: 0; }
+  @media (min-width: 768px) { .legend-list > li + li > .legend-row { border-top: 1px solid var(--line); border-radius: 0; } }
   .skeleton { background: linear-gradient(90deg, var(--line), transparent, var(--line)); background-size: 200% 100%; animation: shimmer 1.2s infinite; }
 
   .cal-cell { @apply flex flex-col items-center justify-start gap-0.5 rounded-xl pt-1.5 min-h-[52px] min-w-0 transition-colors; } /* 폭은 칸(1/7)에 맞춤: 넓을 때 44px 이상, 아주 좁은 폭에서 이웃 칸과 겹치지 않게 */
@@ -165,6 +185,7 @@
   .cal-cell.is-sel { background: var(--primary) !important; color: var(--on-primary); }
   .cal-cell.is-sel .text-ink-sub { color: inherit; }
 
+  .fab.desk-fab { display: none; } /* PC 전용 '기록'(아래 1024px 규칙에서 보임) */
   .tabbar { @apply relative z-30 flex items-end justify-around pt-2;
     padding-bottom: max(10px, env(safe-area-inset-bottom));
     /* 배경은 화면 끝까지, 버튼은 본문과 같은 가운데 폭(최대 448px) 안에 */
@@ -196,11 +217,15 @@
     /* 왼쪽 세로 메뉴: 화면이 아무리 넓어도 본문 덩어리의 왼쪽에 붙어 있음 */
     .tabbar { position: fixed; top: max(16px, env(safe-area-inset-top)); bottom: 16px; left: max(calc(16px + var(--rail-shift, 0px)), calc(50% - (var(--shell-max) + var(--rail-space) + 16px) / 2 + 16px)); right: auto; /* --rail-shift: 본문 스크롤 막대 자리(양쪽)만큼 → 좌우 여백이 같게(main.js) */
       width: 88px; overflow-y: auto; overscroll-behavior: contain; flex-direction: column; justify-content: flex-start; align-items: center; gap: 8px; padding: 16px 0; border-radius: 28px; border: 1px solid var(--glass-border); }
-    /* PC: 로고 아래 은빛 둥근 사각 안에 쨈 컵 + '기록'(진한 글자, 대비 4.5:1 넉넉히) → 동그란 로고와 헷갈리지 않게(QA I1) */
-    .tabbar .fab { order: -1; margin: 0 0 12px; gap: 0; width: 76px; min-height: 48px; padding: 4px 6px 8px; border-radius: 18px;
-      color: var(--cup-label); font-size: 14px; line-height: 1.25; font-weight: 700; background: var(--cup-plate); border: 1px solid var(--cup-rim); }
-    .tabbar .fab-disc { width: 52px; height: auto; margin: 0; background: none; border: 0; box-shadow: none; } /* 폭을 정해 둬야 @container(inline-size)가 0으로 접히지 않음 */
-    .tabbar .fab-disc .cup-svg { width: min(52px, 100cqi); height: min(52px, 100cqi); } /* 모바일과 같은 52px → 'ㅉ' 사이 빈 칸이 같은 픽셀 격자에 맞음 */
+    /* PC: '기록'(쨈 컵)은 왼쪽 위 메뉴가 아니라 본문 아래 가운데(폰과 같은 자리) → 누른 곳 바로 위로 입력 창이 열림(#30).
+       은빛 둥근 알약 안에 쨈 컵 52px + '기록'(진한 글자) → 동그란 로고와 헷갈리지 않게(QA I1). class="fab desk-fab" 라서 눌림·'탁'·연타 막기는 폰과 같음 */
+    .tabbar .fab { display: none; }
+    .fab.desk-fab { display: flex; position: fixed; z-index: 35; bottom: max(20px, env(safe-area-inset-bottom)); left: calc(50% + (var(--rail-space) - 8px) / 2); transform: translateX(-50%);
+      flex-direction: row; align-items: center; gap: 4px; min-width: 0; margin: 0; min-height: 56px; padding: 1px 22px 1px 8px; border-radius: 28px;
+      color: var(--cup-label); font-size: 16px; line-height: 1.25; font-weight: 700; white-space: nowrap; background: var(--cup-plate); border: 1px solid var(--cup-rim); transition: transform 90ms; @apply shadow-glow; }
+    .fab.desk-fab:active { transform: translateX(-50%) scale(.94); }
+    .desk-fab .fab-disc { width: 52px; height: 52px; margin: 0; background: none; border: 0; box-shadow: none; } /* 폭을 정해 둬야 @container(inline-size)가 0으로 접히지 않음, 모바일과 같은 52px 컵 */
+    .app-main > .app-shell { padding-bottom: 104px !important; }
     .tab { min-width: 64px; min-height: 64px; font-size: 12px; }
   }
   /* 추가 버튼(모바일): 위로 솟은 접시 위 조식 쨈 컵(시안 D, 극사실 호일 컵) + 그 아래 '기록' 글자 13px(다른 탭처럼 아이콘+이름, L1) */
@@ -330,11 +355,11 @@
   .sheet-backdrop { @apply absolute inset-0 bg-black/40 opacity-0 transition-opacity duration-200; }
   .sheet { @apply absolute bottom-0 inset-x-0 mx-auto max-w-md rounded-t-[28px] outline-none overflow-y-auto; max-height: calc(100dvh - env(safe-area-inset-top) - 8px); overscroll-behavior: contain;
     background: var(--surface-solid); transform: translateY(105%); transition: transform .2s cubic-bezier(.32,.72,0,1); box-shadow: 0 -10px 40px rgba(0,0,0,.18); }
-  @media (min-width: 1024px) { .sheet { max-width: 420px; bottom: 50%; transform: translateY(60%) scale(.98); opacity: 0; border-radius: 28px; transition: transform .28s cubic-bezier(.32,.72,0,1), opacity .2s; } }
+  @media (min-width: 1024px) { .sheet { max-width: 420px; left: calc(var(--rail-space) - 8px); bottom: max(20px, env(safe-area-inset-bottom)); max-height: calc(100dvh - 40px); transform: translateY(24px) scale(.98); opacity: 0; border-radius: 28px; transition: transform .28s cubic-bezier(.32,.72,0,1), opacity .2s; } }
   #sheet-root.open { @apply pointer-events-auto; visibility: visible; transition-delay: 0s; }
   #sheet-root.open .sheet-backdrop { @apply opacity-100; }
   #sheet-root.open .sheet { transform: translateY(0); transition-duration: .28s; }
-  @media (min-width: 1024px) { #sheet-root.open .sheet { transform: translateY(50%); opacity: 1; } }
+  @media (min-width: 1024px) { #sheet-root.open .sheet { transform: translateY(0); opacity: 1; } }
   .amount-display { white-space: nowrap; font-size: min(40px, 11vw); line-height: 48px; font-weight: 800; letter-spacing: -0.02em; }
   .cat-grid { @apply grid grid-cols-4 gap-2; }
   .cat-chip { @apply flex flex-col items-center justify-center gap-1 min-h-[64px] rounded-2xl border transition-transform; border-color: var(--line); }

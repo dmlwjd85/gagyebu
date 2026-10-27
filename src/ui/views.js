@@ -157,8 +157,8 @@ export function homeView(m) {
       ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
         : empty('🐣', isCur ? '아직 기록이 없어요. 쨈 컵 모양 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
     </section>`;
-  return `<h1 class="sr-only">홈</h1><div class="view-grid">
-    <div class="flex flex-col gap-3">
+  return `<h1 class="sr-only">홈</h1><div class="view-grid home-grid">
+    <div class="home-col home-main">
       <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
       ${firstRun ? recentSec : ''}
       <section class="stat-grid" aria-label="이번 달 통계">
@@ -170,9 +170,9 @@ export function homeView(m) {
       ${m.streak || m.noSpend ? `<div class="glass px-4 py-3 text-body flex items-center gap-2"><span aria-hidden="true">🔥</span><span>${m.streak ? `${m.streak}일째 기록 중` : '오늘 기록하면 연속 기록 시작'}${m.noSpend ? ` · 이번 달 무지출 🌱 ${m.noSpend}일` : ''}</span></div>` : ''}
       ${assetHomeLink(m)}
       <div id="tip-slot"></div>
-      ${m.wide && top3.length ? `<section class="card-solid p-4" aria-labelledby="top-h"><h2 id="top-h" class="text-head">많이 쓴 곳 TOP 3</h2>
-        <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''}
-  </div>${firstRun ? '' : recentSec}</div>`;
+  </div>${firstRun ? '' : `<div class="home-col home-recent">${recentSec}</div>`}
+  ${(() => { const side = m.wide && top3.length ? `<section class="card-solid p-4" aria-labelledby="top-h"><h2 id="top-h" class="text-head">많이 쓴 곳 TOP 3</h2>
+        <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''; return side ? `<div class="home-col home-side">${side}</div>` : ''; })()}</div>`;
 }
 // 지출 칸: 환불이 더 많은 달은 '0원' + 아랫줄 '환불 +49,000원'(빼기 기호 겹침·말줄임 없음, QA N10)
 // 환불이 더 많은 달: 짧은 '+4.9만'으로 한 줄 유지 → 세 칸 높이 68px(360px, QA R4)
@@ -332,7 +332,7 @@ export function chartView(m0, ui) {
       : sel.length ? `<div class="relative mt-3">${donut(items, { total, center: kind === 'expense' ? '총지출' : '총수입' })}</div>
       ${refundOver ? `<p class="mt-3 text-caption text-ink-sub">환불이 지출보다 ${numSpan(formatWon(refundOver))} 많아서 이 달 총지출은 0원으로 봐요. 비율은 지출이 남은 카테고리 합 ${numSpan(formatWon(posSum))} 기준이에요.</p>`
         : overs.length || posSum !== total ? `<p class="mt-3 text-caption text-ink-sub">비율은 환불을 뺀 뒤 지출이 남은 카테고리 합 ${numSpan(formatWon(posSum))} 기준이에요.</p>` : ''}
-      <ol class="mt-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-1 gap-x-2 -mx-2">${items.map((it, i) => `<li><button class="legend-row" ${it.categoryId === '__rest' ? 'disabled' : `data-filter-cat="${esc(it.categoryId)}"`}>
+      <ol class="legend-list mt-4 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-1 gap-x-2 -mx-2">${items.map((it, i) => `<li><button class="legend-row" ${it.categoryId === '__rest' ? 'disabled' : `data-filter-cat="${esc(it.categoryId)}"`}>
         <span class="w-3 h-3 rounded-full shrink-0" style="background:${it.color}" aria-hidden="true"></span>
         <span aria-hidden="true">${esc(it.emoji)}</span><span class="flex-1 text-left truncate">${esc(it.label)}</span>
         <span class="num text-caption text-ink-sub tabular-nums min-w-[2.5rem] text-right">${it.pct}%</span>

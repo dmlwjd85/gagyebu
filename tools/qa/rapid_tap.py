@@ -41,7 +41,7 @@ def login(pg):
     if pg.locator('text=나중에 고를게요').count(): pg.click('text=나중에 고를게요'); pg.wait_for_timeout(2500)
 
 def fab_center(pg):
-    return pg.evaluate("""() => { const f = [...document.querySelectorAll('.fab')].find((e) => e.offsetParent); const r = f.getBoundingClientRect();
+    return pg.evaluate("""() => { const f = [...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length); const r = f.getBoundingClientRect();
       const d = f.querySelector('.fab-disc').getBoundingClientRect(); return [r.x + r.width / 2, d.y + d.height / 2]; }""")
 
 def tap(pg, kind, x, y):
@@ -60,7 +60,7 @@ def key_xy(pg, k, scroll=False):  # 시트가 올라오는 중이어도 지금 �
     return None
 
 AMOUNT = "() => document.querySelector('#sheet-root .amount-display')?.getAttribute('aria-label') || ''"
-ZONE = """() => { const f = [...document.querySelectorAll('.fab')].find((e) => e.offsetParent); const r = f.getBoundingClientRect(); const P = 25;
+ZONE = """() => { const f = [...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length); const r = f.getBoundingClientRect(); const P = 25;
   const d = f.querySelector('.fab-disc').getBoundingClientRect(); const cx = r.x + r.width / 2, cy = d.y + d.height / 2;
   const z = { l: cx - P, r: cx + P, t: cy - P, b: cy + P }; const out = new Set();
   for (const e of document.querySelectorAll('#sheet-root button, #sheet-root input, #sheet-root [data-close]')) { const q = e.getBoundingClientRect();

@@ -27,7 +27,7 @@ WATCH = """() => { const W = window.__w = { toast: 0 }; new MutationObserver((ms
 STATE = """() => { const sr = document.getElementById('sheet-root'); return { open: sr.classList.contains('open'), hash: location.hash.replace(/^#\\/?(home)?$/, ''),
   amount: (sr.querySelector('.amount-display')?.getAttribute('aria-label') || '').replace(/[^0-9,]/g, '') , toast: window.__w.toast,
   err: /입력해 주세요|선택해 주세요/.test(sr.querySelector('.sheet')?.innerText || '') }; }"""
-FAB = """() => { const f = [...document.querySelectorAll('.fab')].find((e) => e.offsetParent); const r = f.getBoundingClientRect();
+FAB = """() => { const f = [...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length); const r = f.getBoundingClientRect();
   const d = f.querySelector('.fab-disc').getBoundingClientRect(); return [r.x + r.width / 2, d.y + d.height / 2]; }"""
 POS = """() => { const o = {}; for (const e of document.querySelectorAll('#sheet-root [data-key], #sheet-root [data-save]')) { const r = e.getBoundingClientRect();
   o[e.dataset.key ?? 'save'] = [r.x + r.width / 2, r.y + r.height / 2]; } return o; }"""
@@ -42,7 +42,7 @@ def login(pg):
 def seed(pg, amounts):  # 홈에 기록 넣기(보통 사용 길: 컵 → 숫자 → 첫 분류 → 저장). 금액은 실행 안에서 겹치지 않게(같은 금액이면 '중복인가요?')
     for a in amounts:
         pg.keyboard.press('Escape'); pg.wait_for_timeout(300)
-        pg.locator('.fab:visible').first.click(); pg.wait_for_timeout(900)
+        pg.locator(':is(.fab, .desk-fab):visible').first.click(); pg.wait_for_timeout(900)
         for k in a: pg.locator(f'#sheet-root [data-key="{k}"]').click(); pg.wait_for_timeout(60)
         pg.locator('#sheet-root .cat-chip').first.click(); pg.wait_for_timeout(150); pg.locator('#sheet-root [data-save]').click(); pg.wait_for_timeout(700)
         if pg.locator('text=그래도 저장').count(): pg.click('text=그래도 저장'); pg.wait_for_timeout(700)
@@ -79,11 +79,11 @@ with sync_playwright() as p:
             lp = ctx.new_page(); login(lp)
             n = len(open(sys.argv[2]).readlines()); seed(lp, [f'{w}{n}1', f'{w}{n}2'])  # 컨텍스트(로그인)마다 기록 2건
             lp.goto(URL); lp.wait_for_timeout(1500); fx = lp.evaluate(FAB)
-            lp.locator('.fab:visible').first.click(); lp.wait_for_timeout(1200); pos = lp.evaluate(POS); lp.close()
+            lp.locator(':is(.fab, .desk-fab):visible').first.click(); lp.wait_for_timeout(1200); pos = lp.evaluate(POS); lp.close()
             M = ('줄임' if reduced else '기본'); T = '터치' if kind == 'touch' else '마우스'
             def case(cid, steps, key=False):
                 pg = ctx.new_page(); pg.goto(URL); pg.wait_for_timeout(1500)
-                if key: pg.evaluate("[...document.querySelectorAll('.fab')].find((e) => e.offsetParent).focus()")
+                if key: pg.evaluate("[...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length).focus()")
                 r = run_case(pg, kind, steps, key); r['id'] = f'{w} {T} {M} {cid}'; OUT.write(json.dumps(r, ensure_ascii=False) + '\n'); OUT.flush(); pg.close()
             for d in DELAYS: case(f'컵→{d}ms 1·2', [(0, fx), (d, pos['1']), (d + 150, pos['2'])])
             if kind == 'mouse': case('Enter→150·200ms 1·2', [(0, 'Enter'), (150, '1'), (200, '2')], key=True)

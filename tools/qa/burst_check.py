@@ -4,7 +4,7 @@
 - 그 자리 누름이 시트로 가는지(복사본·조각 자리 elementFromPoint 가 시트 안) → 가리는 동안에도 누름 통과
 - 시트 clip-path(펼침)가 언제 풀리는지, 처음 프레임에 시트가 컵 자리에서 작게 시작했는지
 통과: 복사본·조각 누름 통과, 복사본은 화면에 보이고 자판·저장을 가리는 시간 200ms 이하, 조각은 520ms 안에 모두 사라짐, 휴대폰 폭은 펼침이 400ms 안에 끝남.
-PC(1280)는 보통 연출: 복사본이 시트 요소와 겹치지 않음(0프레임).
+PC(1280)는 '기록'이 본문 아래 가운데(#30)라 시트와 겹침 → 같은 '탁'·조각(가림 200ms 이하), 시트 펼침은 없음.
 폭 320/339/360/390/1280 × 밝음·어둠. QA_REDUCED=1 이면 움직임 줄이기(펼침·조각 없음, 색 변화만).
 사용: python3 tools/qa/burst_check.py [앱 주소] [--emu-host=… --auth-port=… --fs-port=… --project=demo-…] (emu.py 참고)"""
 import os, sys
@@ -54,7 +54,7 @@ def login(pg):
     pg.reload(); pg.wait_for_timeout(1500)
     if pg.locator('text=테스트 계정으로 로그인').count(): pg.click('text=테스트 계정으로 로그인'); pg.wait_for_timeout(3000)
     if pg.locator('text=나중에 고를게요').count(): pg.click('text=나중에 고를게요'); pg.wait_for_timeout(2500)
-FAB = "(()=>{const f=[...document.querySelectorAll('.fab')].find(e=>e.offsetParent);const r=f.getBoundingClientRect();const d=f.querySelector('.fab-disc').getBoundingClientRect();return [r.x+r.width/2,d.y+d.height/2]})()"
+FAB = "(()=>{const f=[...document.querySelectorAll('.fab, .desk-fab')].find(e=>e.getClientRects().length);const r=f.getBoundingClientRect();const d=f.querySelector('.fab-disc').getBoundingClientRect();return [r.x+r.width/2,d.y+d.height/2]})()"
 cover = lambda g: f"{g['last'] - g['first'] + 16}ms" if g['first'] is not None else '0ms'
 bad = 0
 with sync_playwright() as p:
@@ -76,8 +76,8 @@ with sync_playwright() as p:
                 ok = R['pass'] and R['seen'] and R['maxGhosts'] == 1 and gcov <= 200 and R['bitsMs'] <= 520 and R['bitsMs'] > 0 and '24px' in R['clipFirst'] and R['clipEnd'] is not None and R['clipEnd'] <= 400
             elif mobile:  # 움직임 줄이기: 펼침·조각 없음
                 ok = R['pass'] and R['seen'] and R['bitsMs'] == 0 and R['clipEnd'] is None and gcov <= 200
-            else:
-                ok = R['pass'] and R['seen'] and not g['frames'] and R['bitsMs'] == 0
+            else:  # PC: '기록'이 아래 가운데라 시트와 겹침 → 같은 '탁'·조각, 시트는 원래대로(펼침 없음). 움직임 줄이기는 조각 없음
+                ok = R['pass'] and R['seen'] and R['maxGhosts'] == 1 and gcov <= 200 and R['clipEnd'] is None and (R['bitsMs'] == 0 if REDUCED else 0 < R['bitsMs'] <= 520)
             bad += not ok
             print(f"{w}px {'밝음' if sc == 'light' else '어둠'}{' 움직임 줄이기' if REDUCED else ''}: 복사본 {R['maxGhosts']}개(마지막으로 보인 때 {R['ghostMs']}ms) · 자판·저장 가림 {cover(g)} {g['frames'] or ''} · "
                   f"조각 마지막 {R['bitsMs']}ms, 자판·저장 가림 {cover(bt)} {bt['frames'] or ''} · 누름 통과 {'예' if R['pass'] else '아니오'} · "

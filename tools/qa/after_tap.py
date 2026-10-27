@@ -33,12 +33,12 @@ def tap(pg, kind, p):
     if kind == 'touch': pg.touchscreen.tap(*p)
     else: pg.mouse.click(*p)
 
-FAB = "(() => { const f = [...document.querySelectorAll('.fab')].find((e) => e.offsetParent); const r = f.getBoundingClientRect(); const d = f.querySelector('.fab-disc').getBoundingClientRect(); return [r.x + r.width / 2, d.y + d.height / 2]; })()"
+FAB = "(() => { const f = [...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length); const r = f.getBoundingClientRect(); const d = f.querySelector('.fab-disc').getBoundingClientRect(); return [r.x + r.width / 2, d.y + d.height / 2]; })()"
 Q = {
   'amount': "document.querySelector('#sheet-root .amount-display')?.getAttribute('aria-label')?.replace('금액 ', '') || '-'",
   'open': "document.getElementById('sheet-root').classList.contains('open') ? '열림' : '닫힘'",
   'err': "(document.querySelector('#sheet-root [role=alert]')?.innerText || '').trim() || '오류 없음'",
-  'focus': "(() => { const a = document.activeElement; if (!a || a === document.body) return 'body'; if (a.matches('.fab')) return '컵 버튼'; if (a.matches('#sheet-root .sheet')) return '시트(dialog)'; return (a.getAttribute('aria-label') || a.name || a.tagName).slice(0, 14); })()",
+  'focus': "(() => { const a = document.activeElement; if (!a || a === document.body) return 'body'; if (a.matches('.fab, .desk-fab')) return '컵 버튼'; if (a.matches('#sheet-root .sheet')) return '시트(dialog)'; return (a.getAttribute('aria-label') || a.name || a.tagName).slice(0, 14); })()",
 }
 def q(pg, k): return pg.evaluate(Q[k])
 
@@ -71,7 +71,7 @@ def sc_sr(pg, kind):
     pg.keyboard.press('Escape'); pg.wait_for_timeout(500)
     return f"열린 뒤 {a} → Esc 뒤 {q(pg, 'focus')}"
 def sc_enter12(pg, kind):  # 컵에 초점 두고 Enter 80ms × 12 (QA 3차 N2), 이어서 금액·분류·Enter 저장
-    pg.evaluate("[...document.querySelectorAll('.fab')].find((e) => e.offsetParent).focus()")
+    pg.evaluate("[...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length).focus()")
     for _ in range(12): pg.keyboard.press('Enter'); pg.wait_for_timeout(80)
     pg.wait_for_timeout(500); r = f"{q(pg, 'open')} {q(pg, 'err')}"
     pg.keyboard.type('5000', delay=60); pg.wait_for_timeout(150)
@@ -80,7 +80,7 @@ def sc_enter12(pg, kind):  # 컵에 초점 두고 Enter 80ms × 12 (QA 3차 N2),
     if pg.locator('text=그래도 저장').count(): pg.click('text=그래도 저장'); pg.wait_for_timeout(500)
     return f"{r} / 5000+분류+Enter → {'저장(닫힘)' if q(pg, 'open') == '닫힘' else '안 됨 ' + q(pg, 'err')}"
 def sc_enter_tab(pg, kind):  # Enter 로 열고 곧바로 숫자·Tab
-    pg.evaluate("[...document.querySelectorAll('.fab')].find((e) => e.offsetParent).focus()")
+    pg.evaluate("[...document.querySelectorAll('.fab, .desk-fab')].find((e) => e.getClientRects().length).focus()")
     pg.keyboard.press('Enter'); pg.wait_for_timeout(DELAY); pg.keyboard.type('12', delay=60); pg.keyboard.press('Tab'); pg.wait_for_timeout(200)
     return f"{q(pg, 'amount')} Tab 뒤 초점={q(pg, 'focus')}"
 

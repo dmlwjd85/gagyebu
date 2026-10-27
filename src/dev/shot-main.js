@@ -69,7 +69,7 @@ const m = {
   weather: moneyWeather({ budget: budget.total, periodTxs, p, today }),
   trend: trend(txs, [0].map(() => p)),
   streak: 2, noSpend: 4, insight: null,
-  wide: false, dark: currentTheme() === 'dark', themeMode: q.get('dark') === '1' ? 'dark' : 'light', look, offline: false, contentScale: scale, storedStart: sd,
+  wide: window.matchMedia('(min-width: 768px)').matches, dark: currentTheme() === 'dark', themeMode: q.get('dark') === '1' ? 'dark' : 'light', look, offline: false, contentScale: scale, storedStart: sd,
 };
 const settings = (mode === 'single' || mode === 'student' || mode === 'couple')
   ? { ...settingsForMode(mode), allowanceAmount: 800000, allowanceCycle: 'month', allowanceDay: 1, ...(mode === 'couple' ? { spouseName: '민지', splitMe: 60 } : {}) }
@@ -88,8 +88,9 @@ m.trend = ['2026-05', '2026-06', '2026-07', '2026-08', '2026-09', '2026-10'].map
 
 const ui = { catKind: 'expense', chartKind: 'expense', envelopes: true, catMenu: null, emojiFor: null, accEmojiFor: null, barYm: null };
 if (q.get('empty') === '1') m.periodTxs = [];
-const nav = screen === 'home';
+const nav = screen === 'home' || screen === 'sheet';
 const body = screen === 'onboard' ? onboardingView() : ({
+  sheet: () => homeView(m),
   home: () => homeView(m),
   settings: () => settingsView(m, ui),
   budget: () => budgetView(m, ui),
@@ -112,7 +113,7 @@ app.innerHTML = `
   <div class="app-frame ${nav ? 'has-nav' : ''}">
     <div class="app-top"><div class="app-shell">${topBar(m, { month: screen !== 'settings', back: screen === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null })}</div></div>
     <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell">${body}</div></main>
-    ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav>` : ''}
+    ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav><button class="fab desk-fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>` : ''}
   </div>`;
 fitNums(document);
 document.fonts?.ready?.then(() => fitNums(document));
