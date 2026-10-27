@@ -293,11 +293,16 @@
   @keyframes jam-bit { 0% { opacity: 1; transform: translate(0, 0) scale(.4) rotate(0); animation-timing-function: cubic-bezier(.05, .8, .25, 1); }
     45% { opacity: 1; transform: translate(calc(var(--dx) * .9), calc(var(--dy) * .9)) scale(1) rotate(calc(var(--a, 0deg) * .7)); animation-timing-function: ease-in; }
     100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 14px)) scale(.6) rotate(var(--a, 0deg)); } }
-  /* 시트는 누르는 즉시 제자리(슬라이드 없이)에 열리고 입력도 바로 받음. 보이는 것만 컵 자리에서 원으로 0.3초 펼쳐짐(clip-path, 끝나면 풀림) */
+  /* 시트는 누르는 즉시 제자리(슬라이드 없이)에 열리고 입력도 바로 받음. 보이는 것만 컵 자리에서 원으로 0.3초 펼쳐짐(mask, 끝나면 풀림).
+     clip-path 는 잘린 곳이 누름을 받지 않아(크롬) 펼쳐지는 동안 누른 숫자가 바탕으로 빠짐 → 누름에 영향 없는 mask 로 그림 */
   @media (max-width: 1023px) and (prefers-reduced-motion: no-preference) {
-    #sheet-root.is-bloom .sheet { transition: none; transform: none; animation: sheet-bloom .3s cubic-bezier(.25, .8, .25, 1) backwards; }
+    #sheet-root.is-bloom .sheet { transition: none; transform: none;
+      -webkit-mask: radial-gradient(circle closest-side, #000 calc(100% - 1px), transparent) var(--bloom-x, 50%) calc(var(--bloom-y, 100%) + 150vmax) / 300vmax 300vmax no-repeat;
+      mask: radial-gradient(circle closest-side, #000 calc(100% - 1px), transparent) var(--bloom-x, 50%) calc(var(--bloom-y, 100%) + 150vmax) / 300vmax 300vmax no-repeat;
+      animation: sheet-bloom .3s cubic-bezier(.25, .8, .25, 1) backwards; }
   }
-  @keyframes sheet-bloom { from { clip-path: circle(24px at var(--bloom-x, 50%) var(--bloom-y, 100%)); } to { clip-path: circle(150% at var(--bloom-x, 50%) var(--bloom-y, 100%)); } }
+  /* 원 지름 48px(컵 자리) → 300vmax(화면 전체). 위치: 가로 50%+dx 는 원 가운데가 컵 x, 세로 100%-d+지름/2 는 원 가운데가 컵 y */
+  @keyframes sheet-bloom { from { -webkit-mask-size: 48px 48px; mask-size: 48px 48px; -webkit-mask-position: var(--bloom-x, 50%) calc(var(--bloom-y, 100%) + 24px); mask-position: var(--bloom-x, 50%) calc(var(--bloom-y, 100%) + 24px); } }
   .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-j1); opacity: 0; pointer-events: none; }
   .fab.is-flash .fab-disc::after { opacity: .3; } /* 움직임 없는 색 변화: 160ms 동안 접시에 쨈 색이 옅게 덮였다가 사라짐(fabPop.js가 켜고 끔). 애니메이션이 아니라 전역 '움직임 줄이기' 규칙(0.01ms)에 지워지지 않음 */
   @media (prefers-reduced-motion: reduce) {
