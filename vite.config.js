@@ -39,6 +39,8 @@ export default defineConfig({
         short_name: '쨈 가계부',
         description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 쨈 가계부.',
         lang: 'ko',
+        // id 고정: 예전 설치본은 id가 없어 Chrome이 start_url(https://dmlwjd85.github.io/gagyebu/)을 id로 썼다. 같은 값으로 고정해 이름이 바뀌어도 같은 앱으로 본다.
+        id: '/gagyebu/',
         start_url: '/gagyebu/',
         scope: '/gagyebu/',
         display: 'standalone',
@@ -61,6 +63,8 @@ export default defineConfig({
         runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
+        // start_url에 ?source= 같은 쿼리가 붙어도 오프라인에서 index.html을 내준다.
+        ignoreURLParametersMatching: [/.*/],
       },
     }),
   ],
