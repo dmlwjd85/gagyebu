@@ -212,8 +212,9 @@ describe('쨈 심볼과 추가 버튼', () => {
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
     expect(views).not.toMatch(/아래 가운데|왼쪽 위/); // 화면 폭마다 버튼 위치가 달라 위치를 말하지 않음
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
-    expect(fav).toContain(JJAEM_D);
-    expect(fav).toContain('쨈 가계부');
+    // 앱 아이콘(은박 호일 컵)은 쨈 제목 평면 글자 윤곽을 쓰므로 패스 대신 이름과 글꼴 저작권 주석을 확인
+    expect(fav).toContain('<title>쨈 가계부</title>');
+    expect(fav).toContain('JJAEM Title Flat');
     const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
     const root = varsIn(tokens, ':root');
     expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);

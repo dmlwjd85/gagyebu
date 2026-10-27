@@ -1,7 +1,60 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
-  <!-- 쨈 윤곽: Pretendard Bold (SIL OFL 1.1), Copyright © 2023 Kil Hyung-jin. src/ui/brand.js JJAEM_D 와 같은 패스. 폰트 파일은 포함하지 않음. -->
-  <title>쨈 가계부</title>
-  <defs><linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6D4AFF"/><stop offset=".55" stop-color="#2F6FD6"/><stop offset="1" stop-color="#16897C"/></linearGradient></defs>
-  <rect width="512" height="512" rx="0" fill="url(#bg)"/>
-  <g transform="translate(127.3 115.6) scale(0.156)"><path d="M1288 30H1054V836C895 713 856 507 854 326H986V122H558V326H634C632 459 616 618 534 748C453 616 438 454 438 326H514V122H58V326H216C213 510 174 724 0 850L132 1014C228 949 288 850 326 736C363 860 427 972 536 1044C644 971 708 859 744 736C782 851 844 949 942 1014L1054 872V1062H1288V636H1414V1066H1650V0H1414V428H1288ZM1650 1140H352V1800H1650ZM604 1340H1400V1596H604Z" fill="#fff"/></g>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+<!-- 쨈 글자 윤곽: 쨈 제목 평면(JJAEM Title Flat) v1.0.1 © 2026 JJAEM Font Team, fonttools로 벡터 추출. 아이콘용으로 ㅈ·ㅈ·ㅣ 간격만 벌림. 래스터 글자 없음. -->
+<title>쨈 가계부 앱 아이콘 — 은박 호일 컵 (마스커블)</title>
+<defs>
+ <radialGradient id="bg" cx=".38" cy=".25" r="1"><stop offset="0" stop-color="#8A6DFF"/><stop offset=".55" stop-color="#6544F0"/><stop offset="1" stop-color="#3E22B8"/></radialGradient>
+ <linearGradient id="foil" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FBFCFE"/><stop offset=".2" stop-color="#CBD1DA"/><stop offset=".42" stop-color="#F4F6F9"/><stop offset=".6" stop-color="#B7BEC8"/><stop offset=".8" stop-color="#ECEEF2"/><stop offset="1" stop-color="#A7AFBA"/></linearGradient>
+ <linearGradient id="glare" x1="0" y1="0" x2="1" y2=".55"><stop offset=".3" stop-color="#fff" stop-opacity="0"/><stop offset=".42" stop-color="#fff" stop-opacity=".7"/><stop offset=".48" stop-color="#fff" stop-opacity=".08"/><stop offset=".56" stop-color="#fff" stop-opacity=".4"/><stop offset=".64" stop-color="#fff" stop-opacity="0"/></linearGradient>
+ <linearGradient id="rimside" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#C9CFD8"/><stop offset=".5" stop-color="#8E97A4"/><stop offset="1" stop-color="#5C6574"/></linearGradient>
+ <linearGradient id="berry" x1="0" y1="0" x2=".25" y2="1"><stop offset="0" stop-color="#5272D6"/><stop offset=".45" stop-color="#2E43A8"/><stop offset="1" stop-color="#18246A"/></linearGradient>
+ <linearGradient id="ink" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="300" y2="907"><stop offset="0" stop-color="#3D55C4"/><stop offset=".55" stop-color="#2B3FA0"/><stop offset="1" stop-color="#1A2470"/></linearGradient>
+ <linearGradient id="wall" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#fff" stop-opacity=".45"/><stop offset=".16" stop-color="#fff" stop-opacity=".06"/><stop offset=".72" stop-color="#000" stop-opacity=".06"/><stop offset=".9" stop-color="#000" stop-opacity=".2"/><stop offset="1" stop-color="#fff" stop-opacity=".25"/></linearGradient>
+ <pattern id="dots" width="17" height="17" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><circle cx="8.5" cy="8.5" r="2.6" fill="#6F7987" opacity=".22"/><circle cx="7" cy="7" r="1.2" fill="#fff" opacity=".7"/></pattern>
+ <filter id="b2" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="3"/></filter>
+ <filter id="sh" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="26"/></filter>
+ <!-- 잉크 인쇄: 은박 위에 살짝 도톰한 쨈 잉크 -->
+ <filter id="inkf" x="-10%" y="-10%" width="120%" height="120%" color-interpolation-filters="sRGB">
+  <feGaussianBlur in="SourceAlpha" stdDeviation="12.2" result="bp"/>
+  <feSpecularLighting in="bp" surfaceScale="14.6" specularConstant="1.1" specularExponent="30" lighting-color="#fff" result="sp"><feDistantLight azimuth="235" elevation="55"/></feSpecularLighting>
+  <feComposite in="sp" in2="SourceAlpha" operator="in" result="sps"/>
+  <feOffset in="SourceAlpha" dy="-12.2" result="up"/><feComposite in="SourceAlpha" in2="up" operator="out" result="bt"/>
+  <feGaussianBlur in="bt" stdDeviation="4.9" result="btb"/><feFlood flood-color="#6E8CFF" flood-opacity=".8"/><feComposite in2="btb" operator="in"/><feComposite in2="SourceAlpha" operator="in" result="ca"/>
+  <feOffset in="SourceAlpha" dy="7.3" result="o"/><feGaussianBlur in="o" stdDeviation="6.1" result="ob"/><feFlood flood-color="#3A4250" flood-opacity=".45"/><feComposite in2="ob" operator="in" result="ds"/>
+  <feMerge><feMergeNode in="ds"/><feMergeNode in="SourceGraphic"/><feMergeNode in="ca"/><feMergeNode in="sps"/></feMerge>
+ </filter>
+ <clipPath id="bodyclip"><path d="M258 694H766L720 826Q712 852 682 852H342Q312 852 304 826Z"/></clipPath>
+ <path id="g" d="M-12 382L-12 371L-9 361L-4 353L2 337L14 296L28 229L38 154L44 77L44 76L25 76L15 75L7 71L0 65L-6 56L-9 45L-8 35L-5 26L0 19L6 14L13 10L22 8L150 8L158 9L166 12L172 16L176 20L182 30L184 41L183 52L179 60L175 65L170 70L164 73L153 76L128 76L123 144L127 152L129 160L136 220L142 253L150 284L163 324L171 341L177 348L179 356L183 364L186 371L187 377L186 385L182 396L175 407L168 411L158 414L147 415L132 411L123 411L119 410L116 408L110 402L92 366L85 349L74 379L67 392L57 405L49 412L39 416L29 418L19 417L9 413L0 407L-5 401L-10 392ZM224 382L224 371L227 361L232 353L238 337L250 296L264 229L274 154L281 77L280 76L261 76L251 75L243 71L236 65L231 58L228 48L228 36L231 26L236 19L243 13L250 10L258 8L386 8L394 9L402 12L408 16L413 20L418 30L420 41L419 52L415 60L411 65L406 70L401 73L390 76L364 76L359 144L363 152L365 160L372 220L378 253L386 284L399 324L407 341L413 348L415 356L420 364L422 371L423 377L422 385L418 396L411 407L404 411L394 414L383 415L368 411L359 411L355 410L352 408L346 402L328 366L321 349L310 379L303 392L293 405L285 412L275 416L265 418L255 417L245 413L238 409L231 401L226 392ZM536 453L536 63L537 57L540 48L544 42L550 33L555 28L563 23L573 19L580 17L589 17L596 17L602 19L612 23L620 28L625 33L632 42L636 50L639 61L640 69L640 203L657 203L666 205L674 207L683 213L690 221L696 231L698 239L698 250L696 261L692 268L687 275L678 282L671 286L663 288L640 289L640 447L637 463L633 473L630 479L623 486L618 490L612 493L602 498L593 499L582 499L573 498L567 495L557 490L552 486L548 481L542 473L538 463ZM754 470L754 47L755 40L758 31L761 25L768 16L773 12L781 7L791 2L798 1L807 0L814 1L820 2L830 7L838 12L843 16L850 25L854 33L857 44L858 53L857 470L855 479L851 489L846 497L838 505L830 510L820 514L811 516L800 516L791 514L785 512L775 506L770 502L764 495L758 485L756 479ZM24 887L24 593L28 585L30 583L33 580L40 577L72 576L782 577L790 578L794 580L799 585L802 593L802 597L802 887L801 895L799 899L794 904L786 907L782 907L44 907L36 906L30 902L28 899L24 891ZM123 831L704 831L704 653L123 653Z"/>
+</defs>
+<rect width="1024" height="1024" fill="url(#bg)"/>
+<g transform="translate(512 512) scale(.9) translate(-512 -512)">
+<ellipse cx="512" cy="836" rx="220" ry="26" fill="#140A4A" opacity=".55" filter="url(#sh)"/>
+
+ <!-- 컵 몸통: 비치는 플라스틱 속 블루베리 쨈 -->
+ <path d="M258 694H766L720 826Q712 852 682 852H342Q312 852 304 826Z" fill="url(#berry)"/>
+ <g clip-path="url(#bodyclip)">
+  <ellipse cx="380" cy="786" rx="15" ry="8" fill="#9DB6FF" opacity=".55" transform="rotate(20 380 786)"/>
+  <ellipse cx="600" cy="806" rx="13" ry="7" fill="#9DB6FF" opacity=".45" transform="rotate(-25 600 806)"/>
+  <ellipse cx="500" cy="768" rx="10" ry="6" fill="#9DB6FF" opacity=".4"/>
+  <ellipse cx="690" cy="766" rx="9" ry="5" fill="#9DB6FF" opacity=".4"/>
+  <path d="M258 694H766L720 826Q712 852 682 852H342Q312 852 304 826Z" fill="url(#wall)"/>
+  <path d="M290 736L316 822" stroke="#fff" stroke-opacity=".8" stroke-width="14" stroke-linecap="round" filter="url(#b2)"/>
+  <path d="M728 736L714 796" stroke="#fff" stroke-opacity=".4" stroke-width="8" stroke-linecap="round" filter="url(#b2)"/>
+ </g>
+ <path d="M304 826Q312 852 342 852H682Q712 852 720 826" fill="none" stroke="#0B0830" stroke-opacity=".35" stroke-width="4"/>
+<!-- 뚜껑 옆면(접힌 은박 테두리) -->
+<rect x="214" y="222" width="596" height="480" rx="128" fill="url(#rimside)"/>
+<rect x="214" y="222" width="596" height="480" rx="128" fill="none" stroke="#3E4656" stroke-opacity=".5" stroke-width="3"/>
+<!-- 뚜껑 윗면 -->
+<rect x="212" y="196" width="600" height="480" rx="128" fill="url(#foil)"/>
+<rect x="212" y="196" width="600" height="480" rx="128" fill="url(#dots)"/>
+<rect x="212" y="196" width="600" height="480" rx="128" fill="url(#glare)"/>
+<g fill="none" stroke-linecap="round" stroke-width="5">
+  <path d="M252 366q40-18 84 4M662 616q46 20 100 6M612 248q46 24 104 6M302 596q34-26 76-12" stroke="#7A8492" stroke-opacity=".45"/>
+  <path d="M252 374q40-18 84 4M662 624q46 20 100 6M612 256q46 24 104 6M302 604q34-26 76-12" stroke="#fff" stroke-opacity=".8" stroke-width="4"/></g>
+<rect x="234" y="218" width="556" height="436" rx="108" fill="none" stroke="#6F7987" stroke-opacity="0.6" stroke-width="17.6" stroke-dasharray="5.6 8.8"/>
+<rect x="262" y="246" width="500" height="380" rx="82" fill="none" stroke="#fff" stroke-opacity=".85" stroke-width="4"/>
+<path d="M322 208Q432 202 542 207" stroke="#fff" stroke-width="8" stroke-linecap="round" fill="none" opacity=".9"/>
+<g transform="translate(336.05 250.00) scale(0.41014)"><g filter="url(#inkf)"><use href="#g" fill="url(#ink)"/></g></g>
+
+</g>
 </svg>
