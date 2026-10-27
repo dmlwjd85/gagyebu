@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
-import { symbol, JJAEM_D, FAB_INNER } from '../ui/brand.js';
+import { symbol, logo, JJAEM_D, JJAEM_ICON_D, JJAEM_ICON_VB, FAB_INNER } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -198,22 +198,52 @@ describe('설정·홈 표시', () => {
 });
 
 describe('쨈 심볼과 추가 버튼', () => {
-  test('심볼은 아이콘과 같은 쨈 윤곽(단색은 currentColor)이다', () => {
+  test('로고(가로 로고·첫 화면 로고·brand SVG)는 앱 아이콘과 같은 글자 윤곽 JJAEM_ICON_D를 남색 잉크로 그린다', () => {
+    const read = (p) => readFileSync(new URL(p, import.meta.url), 'utf8');
+    const horiz = logo({ cls: 'boot-logo' });
+    const boot = read('../../index.html').split('\n').find((l) => l.includes('id="boot-logo"'));
+    const light = read('../../public/brand/logo-light.svg');
+    const dark = read('../../public/brand/logo-dark.svg');
+    for (const svg of [horiz, boot, light, dark]) {
+      expect(svg).toContain(`<path d="${JJAEM_ICON_D}" fill="url(#`);
+      expect(svg).not.toContain(JJAEM_D);
+      expect(svg).toContain('translate(112.68 56.80)'); // 손그림 '가계부'는 그대로
+    }
+    // 첫 화면 로고는 logo()를 그대로 옮긴 것(그라데이션 id만 lgBoot)
+    expect(boot).toContain(horiz.replace(/lgL\d+/g, 'lgBoot'));
+    // 앱 안 색은 CSS 변수(라이트는 아이콘 남색 잉크, 다크는 더 밝은 남색), brand SVG는 같은 값을 직접 적는다
+    const css = read('../style.css');
+    expect(css).toContain(':root { --lg1: #3D55C4; --lg2: #2B3FA0; --lg3: #1A2470;');
+    expect(css).toContain('.dark { --lg1: #B9C4FF; --lg2: #93A4FF; --lg3: #7A8CF0;');
+    for (const c of ['#3D55C4', '#2B3FA0', '#1A2470']) expect(light).toContain(`stop-color="${c}"`);
+    for (const c of ['#B9C4FF', '#93A4FF', '#7A8CF0']) expect(dark).toContain(`stop-color="${c}"`);
+  });
+
+  test('앱 안 심볼은 아이콘 글자 윤곽 JJAEM_ICON_D(단색은 currentColor)이고, 아이콘 SVG도 같은 윤곽을 그린다', () => {
     const svg = symbol('S', { cls: 'fab-mark', ink: true });
     expect(svg).toContain('class="fab-mark"');
     expect(svg).toContain('fill="currentColor"');
-    expect(svg).toContain(JJAEM_D);
+    expect(svg).toContain(`viewBox="${JJAEM_ICON_VB}"`);
+    expect(svg).toContain(`d="${JJAEM_ICON_D}"`);
+    expect(svg).not.toContain(JJAEM_D);
     expect(svg).toContain('aria-hidden="true"');
     expect(svg).not.toContain('linearGradient');
     const painted = symbol('S', { label: '쨈 가계부' });
     expect(painted).toContain('linearGradient');
     expect(painted).toContain('aria-label="쨈 가계부"');
-    expect(painted).toContain(JJAEM_D);
+    expect(painted).toContain(`d="${JJAEM_ICON_D}"`);
+    expect(painted).not.toContain(JJAEM_D);
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
     expect(views).not.toMatch(/아래 가운데|왼쪽 위/); // 화면 폭마다 버튼 위치가 달라 위치를 말하지 않음
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
-    expect(fav).toContain(JJAEM_D);
-    expect(fav).toContain('쨈 가계부');
+    // 앱 아이콘(은박 호일 컵)은 쨈 제목 평면 글자 윤곽(JJAEM_ICON_D)을 #g 로 정의해 <use>로 그린다
+    const maskableSvg = readFileSync(new URL('../../public/pwa-maskable.svg', import.meta.url), 'utf8');
+    for (const svgText of [fav, maskableSvg]) {
+      expect(svgText).toContain(`<path id="g" d="${JJAEM_ICON_D}"`);
+      expect(svgText).toContain('<use href="#g"');
+      expect(svgText).toContain('JJAEM Title Flat');
+    }
+    expect(fav).toContain('<title>쨈 가계부</title>');
     const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
     const root = varsIn(tokens, ':root');
     expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);

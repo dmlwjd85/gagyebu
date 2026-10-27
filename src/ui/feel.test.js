@@ -44,6 +44,15 @@ describe('쨈 버튼 소리·진동', () => {
     expect(feel.buzz()).toBe(true);
     expect(got).toEqual([12]);
   });
+  test('prime(): 첫 누름 전에 AudioContext 를 한 번만 미리 만들고, 버튼 소리를 끄면 만들지 않음(QA 6차 D2)', () => {
+    const { AC, made } = fakeAudio(); let t = 0;
+    const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: {} }, now: () => t });
+    expect(feel.prime()).toBe(true); expect(feel.prime()).toBe(true); expect(made.ctx).toBe(1);
+    feel.play('bbok'); expect(made.ctx).toBe(1); // 첫 소리에서는 새로 만들지 않음
+    const off = fakeAudio();
+    expect(createFeel({ store: mem({ btnSound: 'off' }), win: { AudioContext: off.AC, navigator: {} } }).prime()).toBe(false); expect(off.made.ctx).toBe(0);
+    expect(createFeel({ store: mem(), win: { navigator: {} } }).prime()).toBe(false); // Web Audio 없음
+  });
   test('연타: 같은 소리는 45ms 안에 다시 안 내고, 동시에 최대 3개까지만', () => {
     const { AC } = fakeAudio(); let t = 0;
     const feel = createFeel({ store: mem(), win: { AudioContext: AC, navigator: {} }, now: () => t });

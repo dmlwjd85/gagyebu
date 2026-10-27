@@ -34,6 +34,7 @@ export default defineConfig({
       injectRegister: false,
 
       includeAssets: ['favicon.ico', 'favicon-16.png', 'favicon-32.png', 'apple-touch-icon.png'],
+      includeManifestIcons: false, // 설치 아이콘은 설치할 때 한 번만 받으면 됨(pwa-192는 globPatterns로 계속 프리캐시)
       manifest: {
         name: '쨈 가계부',
         short_name: '쨈 가계부',
@@ -64,6 +65,8 @@ export default defineConfig({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ['**/*.{js,css,html,svg,png}'],
+        // 512 설치 아이콘·마스커블·favicon.svg는 페이지가 쓰지 않으므로 프리캐시에서 뺌
+        globIgnores: ['**/pwa-512.png', '**/pwa-maskable-512.png', '**/pwa-maskable.svg', '**/favicon.svg'],
         // 예전 테마 그림 캐시(theme-art)·폰트 캐시(fonts)·workbox 프리캐시는 sw-cleanup.js 의 activate 에서 지운다.
         importScripts: ['sw-cleanup.js'],
         cacheId: 'gagyebu-v2',
