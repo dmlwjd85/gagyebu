@@ -6,6 +6,58 @@ export const daysInMonth = (ym) => new Date(Number(ym.slice(0, 4)), Number(ym.sl
 /** 31일 반복 → 2월엔 28(29)일, 30일인 달엔 30일 */
 export const dueDate = (ym, day) => `${ym}-${pad(Math.min(day, daysInMonth(ym)))}`;
 export const recTxId = (rid, ym) => `rec-${rid}-${ym}`;
+/** 'rec-{반복id}-{YYYY-MM}' → { rid, ym } (아니면 null). 반복 id는 형식 밖(예전 id)일 수도 있음 */
+export function recParts(id) {
+  const m = /^rec-(.+)-([0-9]{4}-(0[1-9]|1[0-2]))$/.exec(id || '');
+  return m ? { rid: m[1], ym: m[2] } : null;
+}
+// 사용자가 지운 자동 기록의 달(반복 문서 skipped): 그 달은 다시 자동 기록하지 않음(QA D1). 최근 24개만, 정렬·중복 없음
+export const SKIP_MAX = 24;
+export const addSkipped = (list = [], ym) => [...new Set([...list, ym])].sort().slice(-SKIP_MAX);
+export const dropSkipped = (list = [], ym) => list.filter((x) => x !== ym);
+/**
+ * 지운 달을 하나 넣을 때 24개 상한을 지키려고 함께 뺄 오래된 달(QA 3차 N2).
+ * 목록을 통째로 다시 쓰면 오프라인 기기가 다른 기기의 변경을 지우므로, 넣기는 arrayUnion·빼기는 arrayRemove로 보내고
+ * 여기서는 '뺄 것'만 고름. 규칙은 묶음이 끝난 뒤 상태(24개 이하)로 판단.
+ */
+export const skipTrim = (list = [], ym) => { const keep = new Set(addSkipped(list, ym)); return [...new Set(list)].filter((x) => !keep.has(x)); };
+/**
+ * 자동 기록 결과로 올려도 되는 lastPosted(QA 3차 N1).
+ * 회차 순서대로 앞에서부터 이어서 처리된('done') 달까지만 올림. 처리 못 한 달('failed')이 있으면 그 앞에서 멈춰서
+ * 다음에 열 때 그 달부터 다시 시도(이미 만든 뒤쪽 달은 '있으면 건너뛰기'라 두 번 생기지 않음).
+ * @param {string|undefined} lastPosted 지금 값
+ * @param {{ym: string}[]} due 회차(오래된 순)
+ * @param {('done'|'failed')[]} results 회차별 결과
+ * @returns {string|undefined}
+ */
+export function settledLastPosted(lastPosted, due, results) {
+  let lp = lastPosted;
+  for (let i = 0; i < due.length; i++) {
+    if (results[i] !== 'done') break;
+    lp = due[i].ym;
+  }
+  return lp;
+}
+/**
+ * 자동 기록 쓰기가 규칙에 거부됐을 때, 서버에서 다시 읽은 사실로 그 달을 어떻게 볼지(QA 3차 N1).
+ * 거부를 곧바로 '이미 있음'으로 보면, 규칙이 다른 이유(예: 앱이 규칙보다 먼저 배포됨)로 막았을 때 그 달이 영구히 빠짐.
+ * @param {{txExists: boolean, recExists: boolean, skipped?: string[], ym: string}} f
+ * @returns {'done'|'gone'|'failed'} done = 정말 있거나 사용자가 지운 달, gone = 반복이 지워짐, failed = 다음에 다시
+ */
+export function deniedOutcome({ txExists, recExists, skipped = [], ym }) {
+  if (txExists) return 'done';
+  if (!recExists) return 'gone';
+  return skipped.includes(ym) ? 'done' : 'failed';
+}
+/**
+ * 사용자가 그 달 자동 기록을 직접 고쳤을 때 lastPosted를 그 달로 올릴지(빈 달이 생기지 않을 때만).
+ * @returns {string|null} 새 lastPosted(바꿀 필요 없으면 null)
+ */
+export function bumpLastPosted(r, ym) {
+  const base = r.lastPosted ?? (r.startYm ? shiftYm(r.startYm, -1) : null);
+  if (!base || base >= ym || base < shiftYm(ym, -1)) return null;
+  return ym;
+}
 
 /**
  * 오늘까지 기록됐어야 하는 회차들(아직 안 만든 것만)

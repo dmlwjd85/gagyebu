@@ -55,14 +55,14 @@ service cloud.firestore {
     }
     // 카테고리별 예산: 카테고리 30개까지(규칙 식 1000개 한도), 키는 id 형식(join 한 번으로 검사), 값은 0원 ~ 100억 원 정수.
     // 키 안에 쉼표가 있으면 join 뒤 조각 수가 키 수보다 많아짐 → 거부('1234,5678,9012,3456' 한 키가 네 키처럼 통과하던 틈)
-    // 카드번호 모양: 밑줄로 이은 것 + 영문으로 이은 것(쉼표 join이라 키 경계를 넘지 않음). 규칙 식 한도 때문에 칸마다 id()는 안 씀.
+    // 카드번호 모양: looksLikeCard와 같은 한 패턴(숫자 13개 이상, 사이에 영문·밑줄 섞여도) → 거부. 밑줄만·영문만 따로 보던 때는 '1234a5678_9012b3456'이 통과했음(QA R6).
+    // 쉼표 join이라 키 경계를 넘지 않음. 규칙 식 한도 때문에 칸마다 id()는 안 씀.
     // 규칙 언어에 반복문이 없어 값은 칸 번호로 하나씩 검사
     function limitsOk(m) {
       return m is map && m.size() <= 30
         && (m.size() == 0 || (m.keys().join(',').matches('^([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3})(,([A-Za-z0-9_]{1,64}|[a-z]{1,20}(-[a-z]{1,20}){1,3}))*$')
             && m.keys().join(',').split(',').size() == m.size()
-            && !m.keys().join(',').matches('.*([0-9]_*){12}[0-9].*')
-            && !m.keys().join(',').matches('.*([0-9][A-Za-z]*){12}[0-9].*')))
+            && !m.keys().join(',').matches('.*([0-9][A-Za-z_]*){12}[0-9].*')))
         && limVals(m.values(), m.size());
     }
     function limVals(v, n) {
@@ -111,11 +111,13 @@ service cloud.firestore {
       // 업데이트에 owner가 이미 있으면 요청에도 있어야 한다. 예전 앱의 set()은 그 칸을 몰라 통째로 지운다.
       match /transactions/{docId} {
         allow read, delete: if isOwner(uid);
+        // 새로 만들기: 자동 기록 id(rec-…)는 사용자가 지운 달(반복 문서 skipped)이면 거부 → 지운 자동 기록이 다시 살아나지 않음(QA D1)
         allow create: if isOwner(uid)
+          && (!isRecTxId(docId) || recMonthOpen(uid, docId))
           && txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
-                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner'])
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner', 'origin'])
           && d().amount is int && d().amount <= 1000000000
           && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
           && d().kind in ['expense', 'income']
@@ -129,12 +131,18 @@ service cloud.firestore {
           && (!('recurringId' in d()) || id(d().recurringId))
           && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
           && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && (!('origin' in d()) || d().origin == 'auto') // 자동 기록 표식
           && optTs('createdAt') && optTs('updatedAt');
+        // 고치기: 자동 기록(origin 'auto')은 원래도 자동 기록인 문서만, rec- 문서에 createdAt=요청 시각(새로 만든다는 쓰기)이면 거부(QA D1)
         allow update: if isOwner(uid)
+          && !(d().get('origin', '') == 'auto' && resource.data.get('origin', '') != 'auto')
+          // 업데이트 전 앱(main)은 이미 있는 달에도 createdAt=요청 시각을 merge로 씀: createdAt·updatedAt 말고 바뀌는 칸이 없을 때만 허용(내용은 그대로)
+          && (!isRecTxId(docId) || d().get('createdAt', null) != request.time
+              || d().diff(resource.data).affectedKeys().hasOnly(['createdAt', 'updatedAt']))
           && txDocId(docId)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
-                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner'])
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner', 'origin'])
           && d().amount is int && d().amount <= 1000000000
           && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
           && d().kind in ['expense', 'income']
@@ -147,8 +155,14 @@ service cloud.firestore {
           && (!('recurringId' in d()) || id(d().recurringId))
           && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
           && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && (!('origin' in d()) || d().origin == 'auto') // 자동 기록 표식
           && (!('owner' in resource.data) || 'owner' in d())
           && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 반복 자동 기록 문서의 그 달이 반복 문서에서 '지운 달'로 표시돼 있지 않은지(getAfter: 되돌리기 묶음 뒤 상태)
+      function recMonthOpen(uid, docId) {
+        let p = /databases/$(database)/documents/users/$(uid)/recurring/$(docId[4:docId.size() - 8]);
+        return !existsAfter(p) || !(docId[docId.size() - 7:docId.size()] in getAfter(p).data.get('skipped', []));
       }
 
       // 카테고리
@@ -205,7 +219,7 @@ service cloud.firestore {
         allow create: if isOwner(uid)
           && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
-          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'owner', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'owner', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
@@ -213,19 +227,29 @@ service cloud.firestore {
           && d().active is bool
           && ym(d().startYm)
           && (!('lastPosted' in d()) || ym(d().lastPosted))
+          // 사용자가 지운 자동 기록의 달(YYYY-MM) 최근 24개: 이 달은 다시 자동 기록하지 않음(QA D1)
+          && (!('skipped' in d()) || (d().skipped is list && d().skipped.size() <= 24
+              && (d().skipped.size() == 0 || (d().skipped.join(',').matches('^[0-9]{4}-(0[1-9]|1[0-2])(,[0-9]{4}-(0[1-9]|1[0-2]))*$')
+                  && d().skipped.join(',').split(',').size() == d().skipped.size()))))
           && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
           && optTs('createdAt') && optTs('updatedAt');
         allow update: if isOwner(uid)
           && id(docId)
-          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
-          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'owner', 'createdAt', 'updatedAt'])
+          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active'])
+          // 예전 반복 문서는 startYm이 없을 수 있음: 원래 없던 문서만 계속 없어도 됨
+          && ('startYm' in d() || !('startYm' in resource.data))
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'owner', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
           && d().dayOfMonth is int && d().dayOfMonth >= 1 && d().dayOfMonth <= 31
           && d().active is bool
-          && ym(d().startYm)
+          && (!('startYm' in d()) || ym(d().startYm))
           && (!('lastPosted' in d()) || ym(d().lastPosted))
+          // 사용자가 지운 자동 기록의 달(YYYY-MM) 최근 24개: 이 달은 다시 자동 기록하지 않음(QA D1)
+          && (!('skipped' in d()) || (d().skipped is list && d().skipped.size() <= 24
+              && (d().skipped.size() == 0 || (d().skipped.join(',').matches('^[0-9]{4}-(0[1-9]|1[0-2])(,[0-9]{4}-(0[1-9]|1[0-2]))*$')
+                  && d().skipped.join(',').split(',').size() == d().skipped.size()))))
           && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
           && (!('owner' in resource.data) || 'owner' in d())
           && optTs('createdAt') && optTs('updatedAt');
