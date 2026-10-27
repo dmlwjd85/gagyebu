@@ -14,13 +14,20 @@ const fixGuide = `<details class="inst-more">
 </details>`;
 
 const BODY = {
-  prompt: `<p class="text-caption text-ink-sub break-words">홈 화면이나 바탕화면에서 한 번에 열려요. 주소창 없이 넓게 보이고, 인터넷이 끊겨도 기록할 수 있어요.</p>
+  prompt: `<p class="text-caption text-ink-sub break-words">홈 화면이나 바탕화면에서 바로 열려요. 주소창 없이 넓게 보이고, 인터넷이 끊겨도 기록할 수 있어요.</p>
     <button type="button" class="btn-primary self-start" data-action="install-app">앱으로 설치</button>`,
-  'ios-safari': `<p class="text-caption text-ink-sub break-words">아래쪽 <b>공유</b> 버튼(네모에 위 화살표)을 누르고 <b>'홈 화면에 추가'</b>를 골라 주세요. 홈 화면 아이콘으로 앱처럼 열려요.</p>`,
-  'ios-other': `<p class="text-caption text-ink-sub break-words">아이폰에서는 사파리에서 열어야 홈 화면에 앱으로 둘 수 있어요. 사파리에서 <span class="break-all">${APP_URL}</span> 을 열고 공유 → '홈 화면에 추가'를 눌러 주세요.</p>`,
-  manual: `<p class="text-caption text-ink-sub break-words">설치 버튼이 안 보이면 브라우저 메뉴(⋮)에서 '앱 설치'나 '홈 화면에 추가'를 눌러 주세요. 크롬·엣지·삼성 인터넷에서 설치할 수 있어요.</p>
+  // 사파리 공유 버튼은 화면마다 자리가 달라(iOS 26 기본 '간결' 탭 막대는 ⋯ 안, 아이패드는 위쪽) 자리 대신 모양으로 알려 줌
+  'ios-safari': `<p class="text-caption text-ink-sub break-words"><b>공유</b> 버튼(네모에서 화살표가 위로 나온 모양)을 누르고 <b>'홈 화면에 추가'</b>를 골라 주세요. 공유 버튼이 안 보이면 <b>⋯</b> 버튼을 먼저 눌러 주세요. 홈 화면 아이콘으로 앱처럼 열려요.</p>`,
+  // 아이폰 크롬·엣지·파이어폭스(iOS 16.4+): 크롬은 주소창 오른쪽 공유(Google Chrome 고객센터), 엣지·파이어폭스는 메뉴 안 공유
+  'ios-browser': `<p class="text-caption text-ink-sub break-words"><b>공유</b> 버튼(네모에서 화살표가 위로 나온 모양)을 누르고 <b>'홈 화면에 추가'</b>를 골라 주세요. 크롬은 주소창 오른쪽에 있고, 엣지·파이어폭스는 메뉴(⋯ 또는 ≡) 안에 있어요. 목록에 없으면 사파리에서 <span class="break-all">${APP_URL}</span> 을 열어 같은 방법으로 추가해 주세요.</p>`,
+  'ios-other': `<p class="text-caption text-ink-sub break-words">여기서는 홈 화면에 바로 추가할 수 없어요. 사파리에서 <span class="break-all">${APP_URL}</span> 을 열고 공유 → '홈 화면에 추가'를 눌러 주세요.</p>`,
+  'in-app': `<p class="text-caption text-ink-sub break-words">카카오톡 같은 앱 안에서 연 화면에서는 설치할 수 없어요. 화면의 <b>⋮</b>(더보기) 메뉴에서 <b>'다른 브라우저로 열기'</b>를 누른 뒤, 크롬이나 삼성 인터넷에서 설치해 주세요.</p>`,
+  'prompt-used': `<p class="text-caption text-ink-sub break-words">설치 창을 닫으셨어요. 나중에 설치하고 싶으면 브라우저 메뉴(⋮ 또는 ≡)에서 '앱 설치'나 '홈 화면에 추가'를 눌러 주세요.</p>`,
+  'mac-safari': `<p class="text-caption text-ink-sub break-words">사파리 메뉴 막대에서 <b>파일 → 'Dock에 추가'</b>를 누르면 Dock에서 앱처럼 열 수 있어요.</p>`,
+  manual: `<p class="text-caption text-ink-sub break-words">설치 버튼이 안 보이면 브라우저 메뉴(⋮ 또는 ≡)에서 '앱 설치'나 '홈 화면에 추가'를 눌러 주세요. 크롬·엣지·삼성 인터넷에서 설치할 수 있고, 맥 사파리는 파일 → 'Dock에 추가'예요.</p>
     ${fixGuide}`,
-  thanks: `<p class="text-body break-words" role="status">설치해 주셔서 고마워요! 이제 홈 화면에서 바로 열어 보세요.</p>`,
+  // 설치 직후 알림은 토스트가 한 번만 읽어 줌(여기엔 role=status 를 두지 않음)
+  thanks: `<p class="text-body break-words">설치해 주셔서 고마워요! 이제 홈 화면에서 바로 열어 보세요.</p>`,
 };
 
 export function installCard(state) {
@@ -31,8 +38,9 @@ export function installCard(state) {
 }
 
 const HINT = {
-  prompt: ['앱으로 설치하면 홈 화면에서 한 번에 열려요.', '<button type="button" class="inst-go" data-action="install-app">설치</button>'],
+  prompt: ['앱으로 설치하면 홈 화면에서 바로 열려요.', '<button type="button" class="inst-go" data-action="install-app">설치</button>'],
   'ios-safari': ['공유 → \'홈 화면에 추가\'로 앱처럼 쓸 수 있어요.', '<button type="button" class="inst-go" data-nav="settings">방법</button>'],
+  'ios-browser': ['공유 → \'홈 화면에 추가\'로 앱처럼 쓸 수 있어요.', '<button type="button" class="inst-go" data-nav="settings">방법</button>'],
   'ios-other': ['사파리에서 열면 홈 화면에 앱으로 둘 수 있어요.', '<button type="button" class="inst-go" data-nav="settings">방법</button>'],
 };
 

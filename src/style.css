@@ -467,6 +467,7 @@
   .update-banner p { margin: 0; flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
   .update-banner button { flex: 0 0 auto; white-space: nowrap; }
   /* 앱 설치: 홈 안내의 '설치' 글자 버튼(팁 줄 안), 설정의 펼침 안내 */
+  .inst-hint > p, .inst-card p { word-break: keep-all; overflow-wrap: anywhere; } /* 한국어 낱말 중간에서 줄이 갈리지 않게 */
   .inst-go { flex: 0 0 auto; align-self: center; min-height: 44px; padding: 0 12px; border-radius: 999px; font-weight: 700; color: var(--primary); white-space: nowrap; }
   .inst-more { font-size: 0.875rem; line-height: 1.55; color: var(--ink-sub); overflow-wrap: anywhere; }
   .inst-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; color: var(--ink); }

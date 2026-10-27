@@ -56,10 +56,11 @@ import { validateAssetAccount, validateHolding, validateContribution, validateTa
 initTheme();
 initLook();
 installUpdatePrompt();
-// 앱으로 설치: 설치 창 이벤트는 일찍 오므로 첫 화면 전에 붙잡아 둠. 방문 횟수는 '처음 몇 번' 작은 안내용(이 기기에만)
+// 앱으로 설치: 설치 창 이벤트는 일찍 오므로 첫 화면 전에 붙잡아 둠.
+// 쓴 날 수는 '처음 며칠' 작은 안내용(이 기기에만): 로그인 뒤 홈을 처음 그릴 때 하루 한 번만 셈(새로 고침·로그인 화면·앱 실행은 안 셈)
 const installer = createInstaller({ onChange: onInstallChange });
-const visits = bumpVisits();
-const curInstall = () => installState({ win: window, nav: navigator, hasPrompt: installer.hasPrompt(), installed: installer.installed() });
+let visits = null;
+const curInstall = () => installState({ win: window, nav: navigator, hasPrompt: installer.hasPrompt(), installed: installer.installed(), promptUsed: installer.promptUsed() });
 function onInstallChange(kind) {
   if (kind === 'installed') { feel.play('tok'); toast('설치해 주셔서 고마워요! 이제 홈 화면에서 바로 열 수 있어요.'); }
   if (state.user) render();
@@ -187,17 +188,23 @@ function pickTip() {
 function renderTip() {
   const slot = $('#tip-slot');
   if (!slot) return;
-  if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
+  // 설치 안내가 뜨는 날(2~5번째 날)은 안내가 먼저, 팁은 안내를 닫은 뒤에(한 번에 하나만)
+  if (ui.view !== 'home' || !currentTip || isSheetOpen() || hintOn()) { slot.innerHTML = ''; return; }
   // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
   slot.innerHTML = `<div class="tip" role="note" aria-label="팁"><span class="py-1.5" aria-hidden="true">💡</span><p>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
 }
 
+function hintOn() {
+  if (ui.view !== 'home' || !state.user || isSheetOpen()) return false;
+  const st = curInstall();
+  if (st === 'standalone') return false;
+  visits ??= bumpVisits(localStorage, today());
+  return shouldShowHint({ state: st, visits, dismissed: hintDismissed() });
+}
 function renderInstallHint() {
   const slot = $('#install-slot');
   if (!slot) return;
-  // 팁이 떠 있으면 한 번에 하나만(부담 없게): 팁을 닫은 다음 화면부터 보임
-  const show = ui.view === 'home' && !currentTip && !isSheetOpen() && shouldShowHint({ state: curInstall(), visits, dismissed: hintDismissed() });
-  slot.innerHTML = show ? installHint(curInstall()) : '';
+  slot.innerHTML = hintOn() ? installHint(curInstall()) : '';
 }
 
 // ── 동작 ───────────────────────────────────────────
@@ -696,13 +703,19 @@ app.addEventListener('click', async (e) => {
     if (!pr.ok) return toast('카테고리 한도는 30개까지 정할 수 있어요. 안 쓰는 카테고리 한도를 눌러 0원으로 지운 뒤 다시 해 주세요.', { duration: 6000 });
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
-  if (d.installHintClose !== undefined) { dismissHint(); return renderInstallHint(); }
+  if (d.installHintClose !== undefined) {
+    // 닫은 뒤 초점이 body 로 떨어지지 않게 다음 칸(팁 닫기, 없으면 본문)으로
+    dismissHint(); renderInstallHint(); renderTip();
+    return ($('#tip-slot .tip-x') ?? $('#main'))?.focus({ preventScroll: true });
+  }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
     case 'add': if (t.matches('.fab')) return addPop(t); haptic(); return openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번), 진동·소리는 누를 때(feel.js)
     case 'add-rec': return editRecurring(null);
     case 'install-app': {
+      if (installer.busy()) return; // 설치 창이 떠 있는 동안 또 누르면 무시
       haptic();
+      app.querySelectorAll('[data-action="install-app"]').forEach((b) => { b.disabled = true; });
       const r = await installer.prompt();
       if (r === 'unavailable') toast('지금은 설치 창을 띄울 수 없어요. 설정의 \'앱으로 설치\' 안내를 봐 주세요.');
       return render();
