@@ -498,8 +498,8 @@
 .bar-g:focus-visible > rect:first-child { stroke: var(--primary); stroke-width: 2; }
 
 /* ── 로고(design-spec 16-3): 색은 변수로 라이트·다크 자동 전환 ── */
-:root { --lg1: #6D4AFF; --lg2: #2F6FD6; --lg3: #16897C; --logo-ink: #2A2540; }
-.dark { --lg1: #A994FF; --lg2: #7FAEFF; --lg3: #3FD1BE; --logo-ink: #F2EEFF; }
+:root { --lg1: #3D55C4; --lg2: #2B3FA0; --lg3: #1A2470; --logo-ink: #2A2540; }
+.dark { --lg1: #B9C4FF; --lg2: #93A4FF; --lg3: #7A8CF0; --logo-ink: #F2EEFF; }
 /* 가로 로고: 높이 40px 이상만 허용 → 상자 72px(여백 포함, 글자 잉크 약 50px) */
 .boot-logo { height: 72px; width: auto; }
 /* 40px 미만 자리는 심볼만: 모바일 헤더 28px(S), 설정 아래 버전 24px(S), PC 탭 48px(M) */
