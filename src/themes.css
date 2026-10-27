@@ -2,7 +2,7 @@
    바탕·본문·오로라는 design/tokens-a.css 라이트/다크 그대로.
    --mood 는 고른 부분에만 쓴다.
    data-tone-menu=on: 활성 탭, 위 막대.
-   data-tone-accent=on: 제목, 버튼 바탕(--primary·＋버튼). 버튼 글자는 --on-primary.
+   data-tone-accent=on: 제목, 버튼 바탕(--primary). 버튼 글자는 --on-primary.
    data-tone-card=on: 카드 바탕을 --mood 8%만 섞음. 12%는 금액·수입·다크 버튼이 4.5:1 아래로 떨어진다.
    기본(data-theme=default)은 톤을 칠하지 않는다.
    글자 대비는 중립 바탕·흰/어두운 면 기준 4.5:1. 하단 추가 버튼(흰 채움)도 그라데이션 양 끝 4.5:1. */

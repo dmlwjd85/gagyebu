@@ -318,10 +318,11 @@ test('문구 17절: src 전체에 드릴게요·드려요를 쓰지 않음', () 
   expect(bad).toEqual([]);
 });
 
-describe('추가 버튼: ＋ 기록', () => {
-  const EMPTY = '아직 기록이 없어요. ＋ 기록 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.';
-  test('버튼 안에 ＋ 아이콘과 보이는 글자 "기록"이 있고, 접근 이름이 "기록"으로 시작한다(WCAG 2.5.3)', () => {
-    expect(FAB_INNER).toContain('class="fab-plus"');
+describe('추가 버튼: 조식 쨈 컵', () => {
+  const EMPTY = '아직 기록이 없어요. 쨈 컵 모양 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.';
+  test('버튼 안에 ＋ 없이 쨈 컵 그림과 보이는 글자 "기록"이 있고, 접근 이름이 "기록"으로 시작한다(WCAG 2.5.3)', () => {
+    expect(FAB_INNER).toContain('class="cup-svg"');
+    expect(FAB_INNER).not.toMatch(/＋|fab-plus|M12 5v14/);
     expect(FAB_INNER).toMatch(/<span class="fab-txt"[^>]*>기록<\/span>/);
     expect(FAB_INNER).not.toContain('fab-mark');
     for (const f of ['../main.js', '../dev/shot-main.js']) {

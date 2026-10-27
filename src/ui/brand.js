@@ -15,6 +15,7 @@
 // 다른 앱도 JJAEM_D 를 그대로 쓰면 같은 글자가 된다.
 let n = 0;
 
+import { CUP_SVG } from './cupD.js';
 export const JJAEM_VB = '0 0 1650 1800';
 export const JJAEM_D = 'M1288 30H1054V836C895 713 856 507 854 326H986V122H558V326H634C632 459 616 618 534 748C453 616 438 454 438 326H514V122H58V326H216C213 510 174 724 0 850L132 1014C228 949 288 850 326 736C363 860 427 972 536 1044C644 971 708 859 744 736C782 851 844 949 942 1014L1054 872V1062H1288V636H1414V1066H1650V0H1414V428H1288ZM1650 1140H352V1800H1650ZM604 1340H1400V1596H604Z';
 // 로고 왼쪽 칸. 손그림 '가계부'는 x=112.68 에서 시작한다.
@@ -44,6 +45,8 @@ export function logo({ cls = '' } = {}) {
   return `<svg class="${cls}" role="img" aria-label="쨈 가계부" xmlns="http://www.w3.org/2000/svg" viewBox="-23.88 -22.38 303.86 152.25">${grad(id)}<g transform="${MARK}"><path d="${JJAEM_D}" fill="url(#${id})"/></g>${GAGYEBU}</svg>`;
 }
 
-// 추가 버튼 속: ＋ 아이콘(원) + 눈에 보이는 '기록' 글자. 접근 이름 '기록 추가 (지출·수입)'이 보이는 글자 '기록'으로 시작(WCAG 2.5.3)
-// 모바일은 원 아래 '기록', PC(1024px~ 세로 메뉴)는 '＋ 기록' 넓은 버튼(style.css)
-export const FAB_INNER = '<span class="fab-disc" aria-hidden="true"><svg class="fab-plus" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg></span><span class="fab-txt" aria-hidden="true">기록</span>';
+// 조식 쨈 버튼(2026-10-26 선생님 지시, 시안 D): 호텔 조식의 작은 쨈 컵(은박 호일 뚜껑 + 들린 탭 + 비치는 쨈) + 아래 '기록' 글자.
+// 그림은 cupD.js(호일 위 '쨈'은 쨈 제목 윤곽 패스, 방울·윤기). 색은 style.css --cup-*(테마별 쨈 맛, 라이트·다크)
+// 접근 이름 '기록 추가 (지출·수입)'이 보이는 글자 '기록'으로 시작(WCAG 2.5.3). 누르면 fabPop.js 의 '탁' 연출
+export { CUP_SVG };
+export const FAB_INNER = `<span class="fab-disc" aria-hidden="true"><span class="cup-squish">${CUP_SVG}</span></span><span class="fab-txt" aria-hidden="true">기록</span>`;

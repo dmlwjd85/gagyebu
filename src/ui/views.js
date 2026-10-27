@@ -155,7 +155,7 @@ export function homeView(m) {
       <div class="flex items-center justify-between"><h2 id="recent-h" class="text-head">최근 기록</h2>
         ${m.periodTxs.length ? '<button class="link-btn" data-nav="calendar" data-mode="list">전체 보기 ›</button>' : ''}</div>
       ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
-        : empty('🐣', isCur ? '아직 기록이 없어요. ＋ 기록 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
+        : empty('🐣', isCur ? '아직 기록이 없어요. 쨈 컵 모양 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
     </section>`;
   return `<h1 class="sr-only">홈</h1><div class="view-grid home-grid">
     <div class="home-col home-main">
@@ -502,7 +502,8 @@ export function settingsView(m, ui) {
       <div class="seg self-start" role="radiogroup" aria-label="테마">${[['system', '시스템'], ['light', '라이트'], ['dark', '다크']].map(([v, l]) => `<button role="radio" aria-checked="${m.themeMode === v}" data-theme="${v}">${l}</button>`).join('')}</div>
       ${lookControls(m)}
       ${feat(m, 'monthStart') ? startDayPicker(m) : ''}
-      <label class="flex items-center justify-between gap-2 text-body">진동 피드백<label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동 피드백"><span></span></label></label>
+      <label class="flex items-center justify-between gap-2 text-body"><span class="min-w-0">버튼 소리<span class="block text-caption text-ink-sub break-words">쨈 컵 버튼을 누르면 작게 '뽁' 소리가 나요</span></span><label class="switch"><input type="checkbox" data-btn-sound ${localStorage.getItem('btnSound') !== 'off' ? 'checked' : ''} aria-label="버튼 소리"><span></span></label></label>
+      <label class="flex items-center justify-between gap-2 text-body"><span class="min-w-0">진동<span class="block text-caption text-ink-sub break-words">누를 때 살짝 떨려요 · 아이폰은 지원하지 않아요</span></span><label class="switch"><input type="checkbox" data-haptic ${localStorage.getItem('haptic') !== 'off' ? 'checked' : ''} aria-label="진동"><span></span></label></label>
       ${scaleControl(m.contentScale ?? 1)}
       <button class="btn-ghost self-start" data-action="tips-reset">팁 다시 보기</button></section>
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-data"><h2 id="s-data" class="text-head">데이터</h2>
