@@ -37,13 +37,12 @@ export default defineConfig({
       manifest: {
         name: '쨈 가계부',
         short_name: '쨈 가계부',
-        // id 를 start_url 과 같은 값으로 못박음: 지금까지 id 없이 start_url 로 계산되던 값(/gagyebu/)과 같아서
-        // 이미 설치한 사람에게 앱이 두 개 생기지 않음. 앞으로 start_url 을 바꿔도 같은 앱으로 남음.
-        id: '/gagyebu/',
         description: '10초 만에 쓰는 가계부. 하루 한 번 내 돈 날씨를 보고, 광고 없이 내 기록은 내 계정에만 저장해요.',
         lang: 'ko',
         dir: 'ltr',
         categories: ['finance'],
+        // id 고정: 예전 설치본은 id가 없어 Chrome이 start_url(https://dmlwjd85.github.io/gagyebu/)을 id로 썼다. 같은 값으로 고정해 이름이 바뀌어도 같은 앱으로 본다.
+        id: '/gagyebu/',
         start_url: '/gagyebu/',
         scope: '/gagyebu/',
         display: 'standalone',
@@ -72,6 +71,8 @@ export default defineConfig({
         runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
+        // start_url에 ?source= 같은 쿼리가 붙어도 오프라인에서 index.html을 내준다.
+        ignoreURLParametersMatching: [/.*/],
       },
     }),
   ],
