@@ -7,7 +7,7 @@ import { LEGACY_FEATURES } from './lib/modes.js';
 const listeners = new Set();
 const freshMode = () => ({ settings: null, settingsLoaded: false, mode: null, legacyMode: true, askMode: false, features: { ...LEGACY_FEATURES } });
 export const state = {
-  ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [],
+  ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [],
   assetAccounts: [], holdings: [], contributions: [], assetPrefs: null,
   txWindow: null, txLoaded: false, pendingWrites: false,
   ...freshMode(),
@@ -33,7 +33,7 @@ export function loginErrorText(e) {
 let store = null, storeP = null;
 const SIGNED_IN = 'signedIn';
 const loadStore = () => (storeP ??= import('./store.js').then((m) => {
-  m.bind({ state, emit, onError: (e) => writeErrorHandler?.(e) });
+  m.bind({ state, emit, onError: (e, retry) => writeErrorHandler?.(e, retry) });
   return (store = m);
 }));
 
@@ -55,7 +55,7 @@ export function initAuth() {
       try { await loadStore(); } catch (e) { console.error(e); }
       if (auth.currentUser?.uid !== user.uid) return; // 기다리는 사이 로그아웃·계정 전환됨
     } else localStorage.removeItem(SIGNED_IN);
-    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true, ...freshMode() });
+    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true, ...freshMode() });
     if (user && store) store.startUser();
     emit();
   });
@@ -67,6 +67,7 @@ export const watchMonth = call('watchMonth');
 export const saveTx = call('saveTx');
 export const saveTxBatch = call('saveTxBatch');
 export const restoreTx = call('restoreTx');
+export const retryKept = call('retryKept');
 export const deleteTx = call('deleteTx');
 export const saveCategory = call('saveCategory');
 export const deleteCategory = call('deleteCategory');

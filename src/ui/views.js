@@ -177,13 +177,14 @@ export function homeView(m) {
         <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''; return side ? `<div class="home-col home-side">${side}</div>` : ''; })()}</div>`;
 }
 // 지출 칸: 환불이 더 많은 달은 '0원' + 아랫줄 '환불 +49,000원'(빼기 기호 겹침·말줄임 없음, QA N10)
-// 환불이 더 많은 달: 짧은 '+4.9만'으로 한 줄 유지 → 세 칸 높이 68px(360px, QA R4)
+// 환불이 더 많은 달: 짧은 '환불 4.9만'으로 한 줄 유지 → 세 칸 높이 68px(360px, QA R4·R7)
 const spendStat = (net) => {
   const { spent, refund } = spendParts(net);
   if (!refund) return stat('지출', minusWon(net, compactWon), formatWon(spent), 'text-expense');
-  const short = '+' + shortWon(refund);
+  // '+4.9만'만 있으면 수입으로 오해할 수 있어 '환불' 글자를 붙임(QA R7)
+  const short = shortWon(refund);
   return `<div class="glass p-3" role="group" aria-label="지출 0원, 환불 ${esc(formatWon(refund))}이 더 많아요"><p class="text-caption text-ink-sub" aria-hidden="true">지출</p>
-    <p data-fit class="stat-v tabular-nums whitespace-nowrap" aria-hidden="true" title="환불 ${esc(formatWon(refund))}">0원 <span class="text-micro font-semibold text-income">${esc(short)}</span></p></div>`;
+    <p data-fit class="stat-v tabular-nums whitespace-nowrap" aria-hidden="true" title="환불 ${esc(formatWon(refund))}">0원 <span class="text-micro font-semibold text-income">환불 ${esc(short)}</span></p></div>`;
 };
 const stat = (k, v, full, cls) => `<div class="glass p-3" role="group" aria-label="${k} ${esc(full)}"><p class="text-caption text-ink-sub" aria-hidden="true">${k}</p><p data-fit class="stat-v tabular-nums ${cls}" title="${esc(full)}" aria-hidden="true">${esc(v)}</p></div>`;
 const skeleton = (n) => `<ul class="mt-2 space-y-2" aria-busy="true" aria-label="불러오는 중">${'<li class="skeleton h-12 rounded-md"></li>'.repeat(n)}</ul>`;
@@ -515,6 +516,8 @@ export function settingsView(m, ui) {
       ${feat(m, 'recurring') ? `<button class="set-link" data-nav="recurring"><span aria-hidden="true">🔁</span><span class="flex-1 text-left min-w-0">반복 거래<span class="block text-caption text-ink-sub break-words">${m.recurring.length ? `${m.recurring.filter((r) => r.active).length}개 켜짐 · 월세·구독 자동 기록` : '월세·구독 자동 기록'}</span></span><span aria-hidden="true">›</span></button>` : ''}
       <div class="flex flex-wrap gap-2"><button class="btn-ghost" data-action="csv-month">이 달 CSV 내보내기</button><button class="btn-ghost" data-action="csv-all">전체 CSV 내보내기</button><button class="btn-ghost" data-action="json-all">JSON 백업</button><button class="btn-ghost" data-action="json-in">JSON 복원</button></div>
       <p class="text-caption text-ink-sub">엑셀에서 바로 열 수 있어요. 파일은 이 기기에서만 만들어져요.</p>
+      ${m.kept?.length ? `<div class="glass p-3 flex flex-col gap-2" role="group" aria-labelledby="s-kept"><p id="s-kept" class="text-body">📦 이 기기에만 보관된 기록 ${m.kept.length}건<span class="block text-caption text-ink-sub">되돌린 기록을 서버에 저장하지 못해 이 기기에 담아 뒀어요. 지우지 않았으니 안심해도 돼요.</span></p>
+        <div class="flex flex-wrap gap-2"><button class="btn-ghost" data-action="kept-retry"${m.keptBusy ? ' disabled aria-busy="true"' : ''}>${m.keptBusy ? '저장하는 중…' : '다시 저장하기'}</button><button class="btn-ghost" data-action="kept-csv">CSV로 받기</button></div></div>` : ''}
       <button class="btn-danger self-start" data-action="delete-all">모든 기록과 계정 삭제</button></section>
     </div>
     <div class="flex flex-col gap-3">

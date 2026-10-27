@@ -11,6 +11,7 @@ import { ymd, period, periodOf, shiftYm, monthLabel, isYmd } from './lib/dates.j
 import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
+import { editTarget } from './lib/restore.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
@@ -90,7 +91,7 @@ function model() {
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
     sd, storedStart, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
-    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, txs: state.txs,
+    categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, kept: state.kept, keptBusy: !!ui.keptBusy, txs: state.txs,
     assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
@@ -210,8 +211,10 @@ function renderInstallHint() {
 // ── 동작 ───────────────────────────────────────────
 function onSave(tx, { repeat = false } = {}) {
   const isEdit = !!tx.id;
-  const before = isEdit ? findTx(tx.id) : null;
+  const old = isEdit ? findTx(tx.id) : null;
   const id = data.saveTx(tx);
+  // 예전 형식 id라 새 id로 옮겨 고쳤으면, 되돌리기도 옮긴 문서에(QA N6)
+  const before = old && id !== old.id ? { ...old, id, recurringId: editTarget(old).recurringId } : old;
   const c = state.categories.find((x) => x.id === tx.categoryId);
   if (ui.view === 'search') refreshSearch();
   if (repeat && tx.amount > 0) {
@@ -758,6 +761,16 @@ app.addEventListener('click', async (e) => {
     case 'login-test': return data.loginTestUser();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
     case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 줄게요.');
+    case 'kept-retry': {
+      if (ui.keptBusy) return; // 겹쳐 누르기 막기(QA N1)
+      if (!navigator.onLine) return toast('인터넷이 연결되면 다시 눌러 주세요. 기록은 이 기기에 그대로 있어요.');
+      ui.keptBusy = true; render();
+      let r;
+      try { r = await data.retryKept(); } finally { ui.keptBusy = false; render(); }
+      if (!r.left) return toast(r.saved > 1 ? `보관해 둔 기록 ${r.saved}건을 모두 저장했어요.` : '보관해 둔 기록을 저장했어요.');
+      return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
+    }
+    case 'kept-csv': return download(`쨈가계부_보관기록_${m.today}.csv`, toCSV(state.kept, state));
     case 'csv-month': return download(`쨈가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
       try { download(`쨈가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
@@ -1154,8 +1167,11 @@ if (isFirebaseConfigured) {
       if (ev === 'close') nav.closeModal();
     },
   });
-  data.onWriteError((e) => {
+  data.onWriteError((e, retry) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
+    // 반복 자동 기록이 거부됐고, 서버에서 확인해 보니 정말 없는 달(QA 3차 N1): 그 달은 다음에 열 때 다시 시도
+    if (e?.code === 'recurring-pending') return toast(`반복 기록 ${e.count}건을 아직 못 남겼어요. 다음에 앱을 열면 다시 해 볼게요.`, { duration: 6000 });
+    if (e?.code === 'kept-locally') return toast(e.message, { action: '설정 열기', onAction: () => go('settings'), duration: 8000 });
     if (e?.code === 'permission-denied') {
       // 로그인 만료와 규칙 거부를 구분(반복 id 거부 때 '다시 로그인'은 틀린 안내였음, QA R1)
       const signedIn = !!data.state?.user;
@@ -1163,7 +1179,7 @@ if (isFirebaseConfigured) {
         ? '저장이 거부됐어요. 문제가 계속되면 알려 주세요.'
         : '로그인이 만료됐어요. 다시 로그인해 주세요.');
     }
-    return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.');
+    return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.', retry ? { action: '다시 하기', onAction: retry, duration: 8000 } : {});
   });
   data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);
