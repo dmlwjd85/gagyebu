@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, arrayUnion, arrayRemove, deleteField, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, arrayUnion, arrayRemove, deleteField, disableNetwork, enableNetwork, Timestamp } from 'firebase/firestore';
 import { recTxId, skipTrim, addSkipped } from '../../src/lib/recurring.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../../src/lib/defaults.js';
 import { safeRef, fixedRecId, looksLikeCard } from '../../src/lib/ids.js';
@@ -769,7 +769,9 @@ describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시
     await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, ...ts() })); // 없을 때는 예전 앱도 그대로 만들 수 있음
     await assertSucceeds(updateDoc(doc(alice(), p), { amount: 81000 }));
     await assertFails(setDoc(doc(alice(), p), { ...AUTO, ...ts() }));
-    await assertFails(updateDoc(doc(alice(), p), { createdAt: serverTimestamp() }));
+    // 내용이 그대로인 createdAt만 바꾸는 쓰기는 허용(업데이트 전 앱의 merge 묶음, PR36 QA). 내용은 바뀌지 않음
+    await assertSucceeds(updateDoc(doc(alice(), p), { createdAt: serverTimestamp() }));
+    expect((await getDoc(doc(alice(), p))).data()).toMatchObject({ amount: 81000 });
   });
   test("자동 기록 문서의 부분 고치기(카테고리 옮기기)는 허용, origin을 'auto'로 바꾸는 고치기는 거부", async () => {
     await seed();
@@ -827,7 +829,7 @@ describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시
     expect((await getDoc(doc(db, 'users/alice/transactions/noCa1'))).data()).toMatchObject({ amount: 30000 });
     await seed();
     await assertSucceeds(setDoc(doc(db, p), { ...AUTO, ...ts() }));
-    await assertFails(setDoc(doc(db, p), { ...AUTO, ...ts() }));
+    await assertFails(setDoc(doc(db, p), { ...AUTO, amount: AUTO.amount + 1, ...ts() })); // 내용이 다르면 거부
     await assertFails(setDoc(doc(bob(), 'users/alice/transactions/noCa1'), { ...TX, ...ts() })); // 남의 기록은 그대로 거부
   });
   test('앱 생성 함수 id(rec-·자동 id·고정 id kp/tx/rx) 전부 기존대로 만들기·고치기·지우기', async () => {
@@ -933,4 +935,45 @@ describe('N2 지운 달(skipped): 넣기·빼기는 원자적으로, 두 기기(
     await seed({ skipped: ['2026-09'] });
     for (const bad of ['2026-13', '1234567890123', 202610]) await assertFails(updateDoc(doc(alice(), recPath), { skipped: arrayUnion(bad) }));
   });
+});
+
+// ── PR #36 QA(9.6점) 재현: /workspace/qa/pr36/qa36.test.js ──
+describe('PR36 QA: 업데이트 전 앱 자동 기록 묶음·startYm 없는 예전 반복', () => {
+  const ts = Timestamp.fromMillis(1760000000000);
+  const REC = { name: '월세', amount: 500000, kind: 'expense', categoryId: 'housing', dayOfMonth: 25, active: true, startYm: '2026-08', lastPosted: '2026-09' };
+  const R1 = { date: '2026-09-25', amount: 500000, kind: 'expense', categoryId: 'housing', memo: '월세', recurringId: 'r1', owner: '공동' };
+  const tx = (db, id) => doc(db, `users/alice/transactions/${id}`);
+  beforeEach(async () => env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'users/alice/recurring/r1'), { ...REC, owner: '공동', createdAt: ts });
+    await setDoc(doc(db, 'users/alice/recurring/rOld'), { name: '구독', amount: 9900, kind: 'expense', categoryId: 'sub', dayOfMonth: 3, active: true, lastPosted: '2026-09' });
+    await setDoc(tx(db, 'rec-r1-2026-09'), { ...R1, createdAt: ts, updatedAt: ts });
+    await setDoc(tx(db, 'rec-rOld-2026-09'), { date: '2026-09-03', amount: 9900, kind: 'expense', categoryId: 'sub', memo: '구독', recurringId: 'rOld', createdAt: ts });
+  }));
+  const oldPost = (db, id, data, lp) => { const b = writeBatch(db);
+    b.set(tx(db, id), { ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    b.update(doc(db, 'users/alice/recurring/r1'), { lastPosted: lp, updatedAt: serverTimestamp() }); return b.commit(); };
+  test('예전 앱 postRecurring: 새 달 묶음 통과', () => assertSucceeds(oldPost(alice(), 'rec-r1-2026-10', { ...R1, date: '2026-10-25' }, '2026-10')));
+  test('예전 앱 postRecurring: 이미 있는 달(내용 같음) 묶음 통과, 내용은 그대로', async () => {
+    await assertSucceeds(oldPost(alice(), 'rec-r1-2026-09', R1, '2026-09'));
+    let got;
+    await env.withSecurityRulesDisabled(async (c) => { got = (await getDoc(tx(c.firestore(), 'rec-r1-2026-09'))).data(); });
+    expect({ ...got, createdAt: undefined, updatedAt: undefined }).toEqual({ ...R1, createdAt: undefined, updatedAt: undefined });
+  });
+  test('예전 앱 postRecurring: 사용자가 고친 달(금액 다름)은 덮어쓰기 거부', async () => {
+    await env.withSecurityRulesDisabled((c) => updateDoc(tx(c.firestore(), 'rec-r1-2026-09'), { amount: 480000 }));
+    await assertFails(oldPost(alice(), 'rec-r1-2026-09', R1, '2026-09'));
+  });
+  test('새 앱 자동 기록 삭제 묶음(r1) 통과, 지운 달 재생성 거부', async () => {
+    const db = alice(), b = writeBatch(db);
+    b.delete(tx(db, 'rec-r1-2026-09')); b.update(doc(db, 'users/alice/recurring/r1'), { skipped: arrayUnion('2026-09'), updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+    await assertFails(setDoc(tx(db, 'rec-r1-2026-09'), { ...R1, origin: 'auto', createdAt: serverTimestamp() }));
+  });
+  test('새 앱 자동 기록 삭제 묶음(startYm 없는 예전 반복) 통과', async () => {
+    const db = alice(), b = writeBatch(db);
+    b.delete(tx(db, 'rec-rOld-2026-09')); b.update(doc(db, 'users/alice/recurring/rOld'), { skipped: arrayUnion('2026-09'), updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+  });
+  test('startYm이 있던 반복에서 startYm 지우기는 거부', () => assertFails(updateDoc(doc(alice(), 'users/alice/recurring/r1'), { startYm: deleteField() })));
 });

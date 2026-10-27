@@ -136,7 +136,9 @@ service cloud.firestore {
         // 고치기: 자동 기록(origin 'auto')은 원래도 자동 기록인 문서만, rec- 문서에 createdAt=요청 시각(새로 만든다는 쓰기)이면 거부(QA D1)
         allow update: if isOwner(uid)
           && !(d().get('origin', '') == 'auto' && resource.data.get('origin', '') != 'auto')
-          && (!isRecTxId(docId) || d().get('createdAt', null) != request.time)
+          // 업데이트 전 앱(main)은 이미 있는 달에도 createdAt=요청 시각을 merge로 씀: createdAt·updatedAt 말고 바뀌는 칸이 없을 때만 허용(내용은 그대로)
+          && (!isRecTxId(docId) || d().get('createdAt', null) != request.time
+              || d().diff(resource.data).affectedKeys().hasOnly(['createdAt', 'updatedAt']))
           && txDocId(docId)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
@@ -233,14 +235,16 @@ service cloud.firestore {
           && optTs('createdAt') && optTs('updatedAt');
         allow update: if isOwner(uid)
           && id(docId)
-          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
+          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active'])
+          // 예전 반복 문서는 startYm이 없을 수 있음: 원래 없던 문서만 계속 없어도 됨
+          && ('startYm' in d() || !('startYm' in resource.data))
           && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'owner', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
           && d().dayOfMonth is int && d().dayOfMonth >= 1 && d().dayOfMonth <= 31
           && d().active is bool
-          && ym(d().startYm)
+          && (!('startYm' in d()) || ym(d().startYm))
           && (!('lastPosted' in d()) || ym(d().lastPosted))
           // 사용자가 지운 자동 기록의 달(YYYY-MM) 최근 24개: 이 달은 다시 자동 기록하지 않음(QA D1)
           && (!('skipped' in d()) || (d().skipped is list && d().skipped.size() <= 24
