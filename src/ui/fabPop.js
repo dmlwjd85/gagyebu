@@ -5,7 +5,7 @@
 // (.is-burst), 쨈 방울·호일 조각(.jam-burst, pointer-events:none)이 위로 튀어 퍼지고, 시트는 그 컵 자리에서 원으로 펼쳐지듯 보임(.is-bloom, mask — clip-path 는 잘린 곳이 누름을 막아 쓰지 않음).
 // 시트 자체는 누르는 즉시 제자리에 열려 있음 → 펼쳐지는 동안에도 입력은 그대로 받음(QA 4차 D1). 복사본이 자판 위에 머무는 건 0.18초뿐이고 누름은 통과.
 // 진짜 버튼도 같은 연출을 돌림(PC 처럼 시트가 버튼을 덮지 않는 화면에서는 두 컵이 정확히 겹침).
-// 클릭 안에서는 버튼 자리만 재고 바로 시트를 엶. 복사본 붙이기·연출 클래스·소리는 시트가 그려진 다음 프레임 뒤로 미룸(QA 5차 D2: 클릭 직후 다음 누름이 열린 시트에 닿게).
+// 클릭 안에서는 맨 먼저 시트를 엶. 복사본 재기·붙이기·연출 클래스·소리는 시트가 그려진 다음 프레임 뒤로 미룸(QA 5차·6차 D2: 클릭 직후 다음 누름이 열린 시트에 닿게).
 // prefers-reduced-motion: 터지는 동작·펼침·조각 없이 시트는 바로, 컵 자리에 짧은 쨈 색 변화(.is-flash, 160ms)만.
 // 키보드(Enter/Space)는 <button> 의 기본 click 으로 같은 길을 탐. 소리('톡')는 onBurst(feel.js, 설정을 따름).
 export const POP_MS = 520;
@@ -65,16 +65,16 @@ export function createAddPop({ open, isOpen = () => false, reduced = () => false
     if (!btn) { onBurst(); open(); return true; }
     end?.();
     const cls = reduced() ? 'is-flash' : 'is-popping';
-    const place = overlay(btn); // 시트가 열리기 전에 버튼 자리만 재 둠
-    const at = btn.querySelector?.('.fab-disc')?.getBoundingClientRect();
-    const unbloom = at && cls === 'is-popping' ? bloom(at.left + at.width / 2, at.top + at.height / 2) : null; // 첫 화면부터 컵 자리에서 펼쳐지게 open() 전에
-    open();
+    open(); // 무엇보다 먼저 시트를 엶(QA 6차 D2: 열기 전 배치 계산이 시트가 누름을 받는 첫 프레임을 늦춤)
+    // 펼침만 첫 화면에 필요해 열고 나서 같은 클릭 안에서 컵 자리 하나만 측정(그 배치는 첫 프레임이 그대로 씀). 움직임 줄이기는 펼침이 없어 클릭 안에서 재지 않음
+    const at = cls === 'is-popping' ? btn.querySelector?.('.fab-disc')?.getBoundingClientRect() : null;
+    const unbloom = at ? bloom(at.left + at.width / 2, at.top + at.height / 2) : null;
     let g = null, gcls = cls, bits = null;
     const done = () => { btn.classList.remove(cls); g?.classList.remove(gcls); g?.remove(); bits?.remove(); unbloom?.(); if (end === done) end = null; };
     end = done;
     frame(() => {
       if (end !== done) return; // 그새 다시 눌려 새 연출이 시작됨
-      g = place?.(cover()) ?? null;
+      g = overlay(btn)?.(cover()) ?? null; // 복사본 자리·모양 재기도 프레임 뒤(QA 6차 D2)
       if (g?.burst && cls === 'is-popping') { gcls = 'is-burst'; bits = spray(g); }
       btn.classList.remove(cls); void btn.offsetWidth; btn.classList.add(cls);
       if (g) { g.classList.remove(gcls); void g.offsetWidth; g.classList.add(gcls); }

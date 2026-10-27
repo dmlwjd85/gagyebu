@@ -362,6 +362,9 @@
     background: var(--surface-solid); transform: translateY(105%); transition: transform .2s cubic-bezier(.32,.72,0,1); box-shadow: 0 -10px 40px rgba(0,0,0,.18); }
   @media (min-width: 1024px) { .sheet { max-width: 420px; left: calc(var(--rail-space) - 8px); bottom: max(20px, env(safe-area-inset-bottom)); max-height: calc(100dvh - 40px); transform: translateY(24px) scale(.98); opacity: 0; border-radius: 28px; transition: transform .28s cubic-bezier(.32,.72,0,1), opacity .2s; } }
   #sheet-root.open { @apply pointer-events-auto; visibility: visible; transition-delay: 0s; }
+  /* 움직임 줄이기: 아래 전역 규칙(모든 요소 전환 0.01ms)이 시트 안 모든 요소의 '물려받은 보임'까지 전환시켜, 열려도 다음 프레임 전까지 자판이 숨은 채(누름이 바탕으로 떨어짐)였음.
+     시트 안은 전환을 아예 없앰 → 열린 바로 그 순간부터 자판이 제자리에서 누름을 받음(QA 6차 D2) */
+  @media (prefers-reduced-motion: reduce) { #sheet-root, #sheet-root * { transition: none; } }
   #sheet-root.open .sheet-backdrop { @apply opacity-100; }
   #sheet-root.open .sheet { transform: translateY(0); transition-duration: .28s; }
   @media (min-width: 1024px) { #sheet-root.open .sheet { transform: translateY(0); opacity: 1; } }
