@@ -252,6 +252,27 @@
   /* 움직임 줄이기: 터지는 동작·눌림 없이 짧은 색 변화만(접시에 빛 한 번), 시트는 바로 열림(fabPop.js) */
   .fab.fab-ghost { position: fixed; z-index: 60; display: block; min-width: 0; margin: 0; pointer-events: none; } /* 시트 위에 겹친 컵 복사본: 터지는 연출만 보이고 누름은 아래 시트로(fabPop.js ghostOver) */
   .fab-ghost .fab-disc { margin: 0; }
+  /* 휴대폰 '피어남'(6차 보완, fabPop.js): 시트를 덮는 컵 복사본은 제자리에서 0.15초 만에 '탁'(같은 동작을 빠르게) 터지며 부풀어 사라지고,
+     쨈 방울·호일 조각(.jam-bit)이 0.3초 안에 위로 높이 튀어 퍼지며 사라짐(자판 위에 머무는 시간 최소). 모두 누름 통과, transform·opacity 만 */
+  .fab.is-burst { animation: ghost-pop .15s ease-in both; }
+  .fab.is-burst .cup-body { animation: cup-squash .16s cubic-bezier(.3, .7, .4, 1); }
+  .fab.is-burst .cup-lid { animation: cup-peel .16s cubic-bezier(.3, .7, .4, 1) both; }
+  .fab.is-burst .cup-blob { animation: cup-blob .16s cubic-bezier(.2, .9, .3, 1.2); }
+  .fab.is-burst .cup-pp { animation: cup-pp .18s ease-out both; }
+  @keyframes ghost-pop { 0%, 40% { opacity: 1; transform: none; } 100% { opacity: 0; transform: scale(1.35); } }
+  .jam-burst { position: fixed; z-index: 61; width: 0; height: 0; pointer-events: none; }
+  .jam-bit { position: absolute; left: calc(var(--s, 8px) / -2); top: calc(var(--s, 8px) / -2); width: var(--s, 8px); height: var(--s, 8px); border-radius: 50%;
+    background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75) 0 18%, transparent 24%), linear-gradient(160deg, var(--cup-j3), var(--cup-j1) 55%, var(--cup-j2));
+    box-shadow: 0 1px 2px rgba(0,0,0,.25); opacity: 0; animation: jam-bit .3s var(--d, 0ms) both; }
+  .jam-foil { --s: 9px; border-radius: 2px; width: 11px; height: 7px; background: linear-gradient(135deg, #FFFFFF, var(--cup-rimside1) 45%, var(--cup-rimside2)); border: .5px solid var(--cup-edge); }
+  @keyframes jam-bit { 0% { opacity: 1; transform: translate(0, 0) scale(.4) rotate(0); animation-timing-function: cubic-bezier(.05, .8, .25, 1); }
+    45% { opacity: 1; transform: translate(calc(var(--dx) * .9), calc(var(--dy) * .9)) scale(1) rotate(calc(var(--a, 0deg) * .7)); animation-timing-function: ease-in; }
+    100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 14px)) scale(.6) rotate(var(--a, 0deg)); } }
+  /* 시트는 누르는 즉시 제자리(슬라이드 없이)에 열리고 입력도 바로 받음. 보이는 것만 컵 자리에서 원으로 0.3초 펼쳐짐(clip-path, 끝나면 풀림) */
+  @media (max-width: 1023px) and (prefers-reduced-motion: no-preference) {
+    #sheet-root.is-bloom .sheet { transition: none; transform: none; animation: sheet-bloom .3s cubic-bezier(.25, .8, .25, 1) backwards; }
+  }
+  @keyframes sheet-bloom { from { clip-path: circle(24px at var(--bloom-x, 50%) var(--bloom-y, 100%)); } to { clip-path: circle(150% at var(--bloom-x, 50%) var(--bloom-y, 100%)); } }
   .fab-disc::after { content: ''; position: absolute; inset: 0; border-radius: inherit; background: var(--cup-j1); opacity: 0; pointer-events: none; }
   .fab.is-flash .fab-disc::after { opacity: .3; } /* 움직임 없는 색 변화: 160ms 동안 접시에 쨈 색이 옅게 덮였다가 사라짐(fabPop.js가 켜고 끔). 애니메이션이 아니라 전역 '움직임 줄이기' 규칙(0.01ms)에 지워지지 않음 */
   @media (prefers-reduced-motion: reduce) {

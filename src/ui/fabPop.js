@@ -1,17 +1,20 @@
 // 조식 쨈 버튼: 누르면 컵이 살짝 눌렸다가 뚜껑 필름이 '탁' 터지고 방울이 튐(style.css .is-popping, 520ms).
 // 기록 시트는 누르는 즉시 열림(main 과 같음 → 누른 직후 0.25초 안의 숫자·Enter 도 그대로 입력, QA 4차 D1).
 // 터지는 연출은 시트 위에 겹친 컵 복사본(.fab-ghost, pointer-events:none)에서 보임 → 눈에는 보이고 누름은 아래 시트로 그대로 감.
-// 다만 컵 자리가 열린 시트 판과 겹치면(320 '8'·339 '0'·360·390 '저장' 자리) 복사본을 그리지 않음 → 자판·'저장' 위에 컵이 떠 있어 또 누르게 되는 일이 없음(QA 5차 D1).
+// 휴대폰처럼 컵 자리가 열린 시트 판과 겹치면(320 '8'·339 '0'·360·390 '저장' 자리) '피어남'(6차 보완): 복사본은 제자리에서 0.16초 만에 '탁' 터지고 사라지며
+// (.is-burst), 쨈 방울·호일 조각(.jam-burst, pointer-events:none)이 위로 튀어 퍼지고, 시트는 그 컵 자리에서 원으로 펼쳐지듯 보임(.is-bloom, clip-path).
+// 시트 자체는 누르는 즉시 제자리에 열려 있음 → 펼쳐지는 동안에도 입력은 그대로 받음(QA 4차 D1). 복사본이 자판 위에 머무는 건 0.18초뿐이고 누름은 통과.
 // 진짜 버튼도 같은 연출을 돌림(PC 처럼 시트가 버튼을 덮지 않는 화면에서는 두 컵이 정확히 겹침).
 // 클릭 안에서는 버튼 자리만 재고 바로 시트를 엶. 복사본 붙이기·연출 클래스·소리는 시트가 그려진 다음 프레임 뒤로 미룸(QA 5차 D2: 클릭 직후 다음 누름이 열린 시트에 닿게).
-// prefers-reduced-motion: 터지는 동작 없이 짧은 색 변화(.is-flash, 160ms)만.
+// prefers-reduced-motion: 터지는 동작·펼침·조각 없이 시트는 바로, 컵 자리에 짧은 쨈 색 변화(.is-flash, 160ms)만.
 // 키보드(Enter/Space)는 <button> 의 기본 click 으로 같은 길을 탐. 소리('톡')는 onBurst(feel.js, 설정을 따름).
 export const POP_MS = 520;
 export const BURST_AT_MS = 90; // 호일이 벗겨지는 순간 '톡'
+export const BURST_FAST_AT_MS = 50; // 휴대폰 '피어남'(0.16초 터짐)에서 호일이 벗겨지는 순간
 export const FLASH_MS = 160;
 // 다음 프레임이 그려진 뒤에 fn(시트가 먼저 화면에 나오게)
 export const afterFrame = (fn) => (typeof requestAnimationFrame === 'function' ? requestAnimationFrame(() => setTimeout(fn, 0)) : setTimeout(fn, 0));
-// 컵 접시 자리를 지금 재 두고, 나중에 cover(열린 시트 판, 기본은 앱의 #sheet-root .sheet)와 겹치지 않을 때만 복사본을 붙이는 함수를 돌려줌.
+// 컵 접시 자리를 지금 재 두고, 나중에 그 자리에 복사본을 붙이는 함수를 돌려줌. cover(열린 시트 판, 기본은 앱의 #sheet-root .sheet)와 겹치면 g.burst = true.
 // 시트 판은 미끄러져 올라오는 중이라 transform 을 뺀 제자리(offset 상자)로 겹침을 봄
 export function ghostOver(btn) {
   const disc = btn.querySelector('.fab-disc'), svg = disc?.querySelector('.cup-svg');
@@ -20,20 +23,42 @@ export function ghostOver(btn) {
   const look = ['width', 'height', 'background', 'border', 'border-radius', 'box-shadow'].map((k) => [k, cs.getPropertyValue(k)]);
   const svgSize = sc && [sc.width, sc.height];
   return (cover) => {
-    if (cover && overlaps(r, homeBox(cover))) return null;
+    const burst = !!cover && overlaps(r, homeBox(cover)); // 시트 판과 겹침 → 제자리에서 빨리 터지고 사라짐(createAddPop)
     const g = document.createElement('span');
     g.className = 'fab fab-ghost'; g.setAttribute('aria-hidden', 'true');
     g.style.cssText = `left:${r.left}px;top:${r.top}px;width:${r.width}px;height:${r.height}px`;
     const d = disc.cloneNode(true);
     for (const [k, v] of look) d.style.setProperty(k, v);
     if (svgSize) { const v = d.querySelector('.cup-svg'); v.style.width = svgSize[0]; v.style.height = svgSize[1]; }
-    g.append(d); document.body.append(g);
+    g.append(d); document.body.append(g); g.burst = burst;
     return g;
   };
 }
 const homeBox = (el) => { const p = el.offsetParent?.getBoundingClientRect() ?? { left: 0, top: 0 }; const left = p.left + el.offsetLeft, top = p.top + el.offsetTop; return { left, top, right: left + el.offsetWidth, bottom: top + el.offsetHeight }; };
 const overlaps = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-export function createAddPop({ open, isOpen = () => false, reduced = () => false, later = setTimeout, frame = afterFrame, onBurst = () => {}, overlay = ghostOver, cover = () => document.querySelector('#sheet-root .sheet') }) {
+// 시트가 컵 자리(x, y: 화면 좌표)에서 원으로 펼쳐지듯 보이게(style.css #sheet-root.is-bloom, 휴대폰 폭·움직임 허용일 때만 적용).
+// 클릭 안에서 open() 전에 클래스 하나·변수 둘만 붙임(배치 계산 없음). 시트는 아래·가운데 기준이라 화면 좌표를 시트 기준으로 바꿔 둠. 끄는 함수를 돌려줌
+export function bloomSheet(x, y, root = document.getElementById('sheet-root')) {
+  if (!root) return () => {};
+  root.style.setProperty('--bloom-x', `calc(50% + ${Math.round(x - innerWidth / 2)}px)`);
+  root.style.setProperty('--bloom-y', `calc(100% - ${Math.round(innerHeight - y)}px)`);
+  root.classList.add('is-bloom');
+  return () => root.classList.remove('is-bloom');
+}
+// 쨈 방울·호일 조각: 복사본 가운데에서 위로 높이 튀어 퍼지며 사라짐(style.css .jam-bit, 0.3초). 누름은 통과
+const BITS = [[-120, -330, 14, 0], [-55, -400, 10, 10], [10, -370, 13, 0], [75, -410, 9, 20], [130, -320, 12, 10], [-160, -270, 9, 20], [160, -280, 10, 10], [-25, -300, 8, 20]];
+const FOIL = [[-95, -300, 200], [45, -420, -160], [115, -350, 260], [-140, -360, -220]];
+export function sprayBits(g) {
+  const r = g.getBoundingClientRect(), box = document.createElement('div');
+  const cy = r.top + r.height / 2, k = Math.max(1, (cy - 330) / 300); // 컵이 낮을수록(긴 화면) 높이 튀겨 조각이 자판(시트 위에서 약 430px) 위에 내려앉게
+  box.className = 'jam-burst'; box.setAttribute('aria-hidden', 'true');
+  box.style.cssText = `left:${r.left + r.width / 2}px;top:${cy}px`;
+  box.innerHTML = BITS.map(([x, y, s, d]) => `<i class="jam-bit" style="--dx:${x}px;--dy:${Math.round(y * k)}px;--s:${s}px;--d:${d}ms"></i>`).join('')
+    + FOIL.map(([x, y, a], i) => `<i class="jam-bit jam-foil" style="--dx:${x}px;--dy:${Math.round(y * k)}px;--a:${a}deg;--d:${i * 5}ms"></i>`).join('');
+  document.body.append(box);
+  return box;
+}
+export function createAddPop({ open, isOpen = () => false, reduced = () => false, later = setTimeout, frame = afterFrame, onBurst = () => {}, overlay = ghostOver, cover = () => document.querySelector('#sheet-root .sheet'), bloom = bloomSheet, spray = sprayBits }) {
   let end = null; // 지금 도는 연출을 끝내는 함수(다시 누르면 새로 시작)
   return (btn) => {
     if (isOpen()) return false;
@@ -41,15 +66,19 @@ export function createAddPop({ open, isOpen = () => false, reduced = () => false
     end?.();
     const cls = reduced() ? 'is-flash' : 'is-popping';
     const place = overlay(btn); // 시트가 열리기 전에 버튼 자리만 재 둠
+    const at = btn.querySelector?.('.fab-disc')?.getBoundingClientRect();
+    const unbloom = at && cls === 'is-popping' ? bloom(at.left + at.width / 2, at.top + at.height / 2) : null; // 첫 화면부터 컵 자리에서 펼쳐지게 open() 전에
     open();
-    let g = null;
-    const done = () => { btn.classList.remove(cls); g?.classList.remove(cls); g?.remove(); if (end === done) end = null; };
+    let g = null, gcls = cls, bits = null;
+    const done = () => { btn.classList.remove(cls); g?.classList.remove(gcls); g?.remove(); bits?.remove(); unbloom?.(); if (end === done) end = null; };
     end = done;
     frame(() => {
       if (end !== done) return; // 그새 다시 눌려 새 연출이 시작됨
       g = place?.(cover()) ?? null;
-      for (const x of [btn, g]) if (x) { x.classList.remove(cls); void x.offsetWidth; x.classList.add(cls); }
-      if (cls === 'is-flash') { onBurst(); later(done, FLASH_MS); } else { later(() => onBurst(), BURST_AT_MS); later(done, POP_MS); }
+      if (g?.burst && cls === 'is-popping') { gcls = 'is-burst'; bits = spray(g); }
+      btn.classList.remove(cls); void btn.offsetWidth; btn.classList.add(cls);
+      if (g) { g.classList.remove(gcls); void g.offsetWidth; g.classList.add(gcls); }
+      if (cls === 'is-flash') { onBurst(); later(done, FLASH_MS); } else { later(() => onBurst(), gcls === 'is-burst' ? BURST_FAST_AT_MS : BURST_AT_MS); later(done, POP_MS); }
     });
     return true;
   };

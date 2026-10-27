@@ -110,16 +110,37 @@ describe('컵 복사본(ghostOver)', () => {
     expect(document.querySelectorAll('.fab-ghost').length).toBe(1);
     vi.advanceTimersByTime(POP_MS); expect(document.querySelectorAll('.fab-ghost').length).toBe(0);
   });
-  test('컵 자리가 열린 시트 판과 겹치면(320 \'8\'·360 \'저장\' 자리) 복사본을 그리지 않고, 진짜 버튼 연출만(QA 5차 D1)', () => {
+  test('휴대폰 피어남(6차 보완): 컵 자리가 시트 판과 겹치면 복사본은 제자리에서 빨리 터지고(is-burst) 쨈·호일 조각이 튀며, 520ms 뒤 모두 사라짐', () => {
     vi.useFakeTimers();
     const btn = cupButton(rect(138, 561, 44, 34)), panel = sheetPanel(0, 8, 320, 632);
     createAddPop({ open: () => {}, frame: (fn) => fn(), cover: () => panel })(btn);
-    expect(document.querySelectorAll('.fab-ghost').length).toBe(0); expect(btn.classList.contains('is-popping')).toBe(true);
-    createAddPop({ open: () => {}, frame: (fn) => fn() })(cupButton(rect(138, 561, 44, 34))); // 기본값은 앱의 #sheet-root .sheet 를 찾음
-    expect(document.querySelectorAll('.fab-ghost').length).toBe(0);
-    const pc = cupButton(rect(40, 700, 44, 34)), dialog = sheetPanel(430, 100, 420, 600); // PC: 시트는 가운데, 컵은 왼쪽 메뉴
+    const g = document.querySelector('.fab-ghost'); expect(g.style.left).toBe('138px'); expect(g.style.top).toBe('561px');
+    expect(g.classList.contains('is-burst')).toBe(true); expect(g.classList.contains('is-popping')).toBe(false); expect(btn.classList.contains('is-popping')).toBe(true);
+    const bits = document.querySelector('.jam-burst'); expect(bits.getAttribute('aria-hidden')).toBe('true'); expect(bits.querySelectorAll('.jam-bit').length).toBe(12);
+    const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
+    expect(css).toMatch(/\.jam-burst\s*\{[^}]*pointer-events:\s*none/);
+    vi.advanceTimersByTime(POP_MS); expect(document.querySelectorAll('.fab-ghost, .jam-burst').length).toBe(0);
+    const pc = cupButton(rect(40, 700, 44, 34)), dialog = sheetPanel(430, 100, 420, 600); // PC: 시트는 가운데, 컵은 왼쪽 메뉴 → 보통 연출, 조각 없음
     createAddPop({ open: () => {}, frame: (fn) => fn(), cover: () => dialog })(pc);
-    expect(document.querySelectorAll('.fab-ghost').length).toBe(1);
+    expect(document.querySelector('.fab-ghost').classList.contains('is-popping')).toBe(true); expect(document.querySelectorAll('.jam-burst').length).toBe(0);
+  });
+  test('피어남: 시트 펼침(is-bloom)은 클릭 안에서 open() 전에 컵 가운데 기준으로 켜고 연출 끝에 끔, 움직임 줄이기는 펼침·조각 없이 색 변화만', () => {
+    vi.useFakeTimers();
+    const root = document.createElement('div'); root.id = 'sheet-root'; document.body.append(root);
+    let seen = null; const f = frames();
+    createAddPop({ open: () => { seen = root.classList.contains('is-bloom'); }, frame: f.frame })(cupButton(rect(138, 561, 44, 34)));
+    expect(seen).toBe(true); // 첫 화면부터 펼쳐지게
+    expect(root.style.getPropertyValue('--bloom-x')).toBe(`calc(50% + ${Math.round(160 - innerWidth / 2)}px)`);
+    expect(root.style.getPropertyValue('--bloom-y')).toBe(`calc(100% - ${Math.round(innerHeight - 578)}px)`);
+    f.flush(); vi.advanceTimersByTime(POP_MS); expect(root.classList.contains('is-bloom')).toBe(false);
+    const panel = sheetPanel(0, 8, 320, 632);
+    createAddPop({ open: () => {}, reduced: () => true, frame: (fn) => fn(), cover: () => panel })(cupButton(rect(138, 561, 44, 34)));
+    expect(root.classList.contains('is-bloom')).toBe(false); expect(document.querySelectorAll('.jam-burst').length).toBe(0);
+    expect(document.querySelector('.fab-ghost').classList.contains('is-flash')).toBe(true);
+    const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
+    expect(css).toMatch(/max-width: 1023px\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*#sheet-root\.is-bloom \.sheet/);
+  });
+  test('접시가 없는 버튼은 복사본 없음', () => {
     expect(ghostOver(document.createElement('button'))).toBe(null); // 접시가 없는 버튼
   });
 });
