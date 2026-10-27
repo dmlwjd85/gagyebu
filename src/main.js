@@ -25,6 +25,8 @@ import { buildBackup, parseBackup } from './lib/backup.js';
 import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay, monthStartDayOf } from './lib/modes.js';
 import { ownerToWrite, spouseLabel } from './lib/couple.js';
 import { installUpdatePrompt } from './lib/pwaUpdate.js';
+import { createInstaller, installState, shouldShowHint, hintDismissed, dismissHint, bumpVisits } from './lib/install.js';
+import { installHint } from './ui/installView.js';
 import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
@@ -49,6 +51,14 @@ import { validateAssetAccount, validateHolding, validateContribution, validateTa
 initTheme();
 initLook();
 installUpdatePrompt();
+// 앱으로 설치: 설치 창 이벤트는 일찍 오므로 첫 화면 전에 붙잡아 둠. 방문 횟수는 '처음 몇 번' 작은 안내용(이 기기에만)
+const installer = createInstaller({ onChange: onInstallChange });
+const visits = bumpVisits();
+const curInstall = () => installState({ win: window, nav: navigator, hasPrompt: installer.hasPrompt(), installed: installer.installed() });
+function onInstallChange(kind) {
+  if (kind === 'installed') { feel.play('tok'); toast('설치해 주셔서 고마워요! 이제 홈 화면에서 바로 열 수 있어요.'); }
+  if (state.user) render();
+}
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
 const app = $('#app');
@@ -83,7 +93,7 @@ function model() {
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    wide: window.matchMedia('(min-width: 768px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale,
+    wide: window.matchMedia('(min-width: 768px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale, install: curInstall(),
     mode: state.mode ?? null, legacyMode: state.legacyMode !== false && !state.mode, features: state.features, settings: state.settings ?? null,
   };
 }
@@ -150,6 +160,7 @@ function render() {
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
   renderTip();
+  renderInstallHint();
 }
 const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
   <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쨈 가계부' })}</div>
@@ -174,6 +185,14 @@ function renderTip() {
   if (ui.view !== 'home' || !currentTip || isSheetOpen()) { slot.innerHTML = ''; return; }
   // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
   slot.innerHTML = `<div class="tip" role="note" aria-label="팁"><span class="py-1.5" aria-hidden="true">💡</span><p>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
+}
+
+function renderInstallHint() {
+  const slot = $('#install-slot');
+  if (!slot) return;
+  // 팁이 떠 있으면 한 번에 하나만(부담 없게): 팁을 닫은 다음 화면부터 보임
+  const show = ui.view === 'home' && !currentTip && !isSheetOpen() && shouldShowHint({ state: curInstall(), visits, dismissed: hintDismissed() });
+  slot.innerHTML = show ? installHint(curInstall()) : '';
 }
 
 // ── 동작 ───────────────────────────────────────────
@@ -672,10 +691,17 @@ app.addEventListener('click', async (e) => {
     if (!pr.ok) return toast('카테고리 한도는 30개까지 정할 수 있어요. 안 쓰는 카테고리 한도를 눌러 0원으로 지운 뒤 다시 해 주세요.', { duration: 6000 });
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
+  if (d.installHintClose !== undefined) { dismissHint(); return renderInstallHint(); }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
     case 'add': if (t.matches('.fab')) return addPop(t); haptic(); return openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번), 진동·소리는 누를 때(feel.js)
     case 'add-rec': return editRecurring(null);
+    case 'install-app': {
+      haptic();
+      const r = await installer.prompt();
+      if (r === 'unavailable') toast('지금은 설치 창을 띄울 수 없어요. 설정의 \'앱으로 설치\' 안내를 봐 주세요.');
+      return render();
+    }
     case 'add-goal': return editGoal(null);
     case 'add-rule': return editRule();
     case 'allowance': return editAllowance();

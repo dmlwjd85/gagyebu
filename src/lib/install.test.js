@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from 'vitest';
 import { installState, shouldShowHint, isIOSSafari, hintDismissed, dismissHint, bumpVisits, createInstaller, HINT_KEY, VISIT_KEY, HINT_UNTIL } from './install.js';
+import { installCard, installHint } from '../ui/installView.js';
 
 const UA = {
   iphoneSafari: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
@@ -102,5 +103,24 @@ describe('createInstaller', () => {
     expect(ins.installed()).toBe(true);
     expect(ins.hasPrompt()).toBe(false);
     expect(onChange).toHaveBeenLastCalledWith('installed');
+  });
+});
+
+describe('installView', () => {
+  it('standalone 이면 설정 칸 없음, 상태별 안내', () => {
+    expect(installCard('standalone')).toBe('');
+    expect(installCard('prompt')).toContain('data-action="install-app"');
+    expect(installCard('ios-safari')).toContain('홈 화면에 추가');
+    expect(installCard('ios-other')).toContain('사파리에서');
+    expect(installCard('manual')).toContain('chrome://apps');
+    expect(installCard('manual')).toContain('<details');
+    expect(installCard('thanks')).toContain('고마워요');
+  });
+  it('작은 안내는 설치할 수 있는 상태에서만, 닫기 버튼 있음', () => {
+    expect(installHint('prompt')).toContain('data-install-hint-close');
+    expect(installHint('prompt')).toContain('data-action="install-app"');
+    expect(installHint('ios-safari')).toContain('data-nav="settings"');
+    expect(installHint('manual')).toBe('');
+    expect(installHint('standalone')).toBe('');
   });
 });
