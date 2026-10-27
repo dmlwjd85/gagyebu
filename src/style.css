@@ -278,7 +278,7 @@
   .fab.fab-ghost { position: fixed; z-index: 60; display: block; min-width: 0; margin: 0; pointer-events: none; } /* 시트 위에 겹친 컵 복사본: 터지는 연출만 보이고 누름은 아래 시트로(fabPop.js ghostOver) */
   .fab-ghost .fab-disc { margin: 0; }
   /* 휴대폰 '피어남'(6차 보완, fabPop.js): 시트를 덮는 컵 복사본은 제자리에서 0.15초 만에 '탁'(같은 동작을 빠르게) 터지며 부풀어 사라지고,
-     쨈 방울·호일 조각(.jam-bit)이 0.3초 안에 위로 높이 튀어 퍼지며 사라짐(자판 위에 머무는 시간 최소). 모두 누름 통과, transform·opacity 만 */
+     쨈 방울·호일 조각(.jam-bit)이 0.38초 안에 위로 높이 튀어 퍼지며 사라짐(자판 위에 머무는 시간 최소). 모두 누름 통과, transform·opacity 만 */
   .fab.is-burst { animation: ghost-pop .15s ease-in both; }
   .fab.is-burst .cup-body { animation: cup-squash .16s cubic-bezier(.3, .7, .4, 1); }
   .fab.is-burst .cup-lid { animation: cup-peel .16s cubic-bezier(.3, .7, .4, 1) both; }
@@ -288,8 +288,12 @@
   .jam-burst { position: fixed; z-index: 61; width: 0; height: 0; pointer-events: none; }
   .jam-bit { position: absolute; left: calc(var(--s, 8px) / -2); top: calc(var(--s, 8px) / -2); width: var(--s, 8px); height: var(--s, 8px); border-radius: 50%;
     background: radial-gradient(circle at 35% 30%, rgba(255,255,255,.75) 0 18%, transparent 24%), linear-gradient(160deg, var(--cup-j3), var(--cup-j1) 55%, var(--cup-j2));
-    box-shadow: 0 1px 2px rgba(0,0,0,.25); opacity: 0; animation: jam-bit .3s var(--d, 0ms) both; }
-  .jam-foil { --s: 9px; border-radius: 2px; width: 11px; height: 7px; background: linear-gradient(135deg, #FFFFFF, var(--cup-rimside1) 45%, var(--cup-rimside2)); border: .5px solid var(--cup-edge); }
+    box-shadow: 0 1px 2px rgba(0,0,0,.25); opacity: 0; animation: jam-bit .38s var(--d, 0ms) both; }
+  /* 호일 조각: 구겨진 은박처럼 반사 띠 두 줄 + 모서리마다 다른 둥글기(QA 6차 D1: 작아서 안 보이던 것을 14×9px로) */
+  .jam-foil { --s: 12px; border-radius: 1px 4px 2px 3px; width: 14px; height: 9px; background: linear-gradient(125deg, #FFFFFF 0 18%, var(--cup-rimside1) 40%, #FFFFFF 52%, var(--cup-rimside2) 78%, var(--cup-rimside1)); border: .5px solid var(--cup-edge); }
+  /* 어둠 테마: 짙은 쨈색 방울이 어두운 바탕에 묻히지 않게 얇은 밝은 테두리와 은은한 빛(QA 6차 D1) */
+  html.dark .jam-bit { box-shadow: 0 0 0 1.5px rgba(255,255,255,.55), 0 0 8px rgba(255,255,255,.22); }
+  html.dark .jam-foil { border-color: rgba(255,255,255,.8); }
   @keyframes jam-bit { 0% { opacity: 1; transform: translate(0, 0) scale(.4) rotate(0); animation-timing-function: cubic-bezier(.05, .8, .25, 1); }
     45% { opacity: 1; transform: translate(calc(var(--dx) * .9), calc(var(--dy) * .9)) scale(1) rotate(calc(var(--a, 0deg) * .7)); animation-timing-function: ease-in; }
     100% { opacity: 0; transform: translate(var(--dx), calc(var(--dy) + 14px)) scale(.6) rotate(var(--a, 0deg)); } }
@@ -362,6 +366,9 @@
     background: var(--surface-solid); transform: translateY(105%); transition: transform .2s cubic-bezier(.32,.72,0,1); box-shadow: 0 -10px 40px rgba(0,0,0,.18); }
   @media (min-width: 1024px) { .sheet { max-width: 420px; left: calc(var(--rail-space) - 8px); bottom: max(20px, env(safe-area-inset-bottom)); max-height: calc(100dvh - 40px); transform: translateY(24px) scale(.98); opacity: 0; border-radius: 28px; transition: transform .28s cubic-bezier(.32,.72,0,1), opacity .2s; } }
   #sheet-root.open { @apply pointer-events-auto; visibility: visible; transition-delay: 0s; }
+  /* 움직임 줄이기: 아래 전역 규칙(모든 요소 전환 0.01ms)이 시트 안 모든 요소의 '물려받은 보임'까지 전환시켜, 열려도 다음 프레임 전까지 자판이 숨은 채(누름이 바탕으로 떨어짐)였음.
+     시트 안은 전환을 아예 없앰 → 열린 바로 그 순간부터 자판이 제자리에서 누름을 받음(QA 6차 D2) */
+  @media (prefers-reduced-motion: reduce) { #sheet-root, #sheet-root * { transition: none; } }
   #sheet-root.open .sheet-backdrop { @apply opacity-100; }
   #sheet-root.open .sheet { transform: translateY(0); transition-duration: .28s; }
   @media (min-width: 1024px) { #sheet-root.open .sheet { transform: translateY(0); opacity: 1; } }
@@ -519,6 +526,11 @@
 @media (max-height: 700px) {
   .dlg-wrap.dlg-wrap { padding-top: 8px; padding-bottom: 8px; }
   .dlg-wrap > [role="dialog"] { padding-top: 16px; padding-bottom: 16px; }
+}
+/* 기록 시트 자판 키 56→44px(터치 대상 최소 44px 유지): 320×640 에서 0·000·⌫ 줄이 화면 밖(y622~678)으로 밀리던 것을 화면 안으로.
+   맨 아래 줄 끝이 y678 이라 높이 681px 이상(339×700 등)은 이미 화면 안이므로 그대로 둠(컵 자리 아래 자판 배치도 그대로) */
+@media (max-height: 680px) {
+  .key { height: 44px; }
 }
 .versym { width: 24px; height: 24px; flex: none; }
 .pclogo { display: none; }

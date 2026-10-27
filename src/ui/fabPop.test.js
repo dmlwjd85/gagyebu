@@ -124,12 +124,12 @@ describe('컵 복사본(ghostOver)', () => {
     createAddPop({ open: () => {}, frame: (fn) => fn(), cover: () => dialog })(pc);
     expect(document.querySelector('.fab-ghost').classList.contains('is-popping')).toBe(true); expect(document.querySelectorAll('.jam-burst').length).toBe(0);
   });
-  test('피어남: 시트 펼침(is-bloom)은 클릭 안에서 open() 전에 컵 가운데 기준으로 켜고 연출 끝에 끔, 움직임 줄이기는 펼침·조각 없이 색 변화만', () => {
+  test('피어남: 시트 펼침(is-bloom)은 클릭 안에서 open() 바로 뒤(첫 프레임 전)에 컵 가운데 기준으로 켜고 연출 끝에 끔, 움직임 줄이기는 펼침·조각 없이 색 변화만', () => {
     vi.useFakeTimers();
     const root = document.createElement('div'); root.id = 'sheet-root'; document.body.append(root);
     let seen = null; const f = frames();
     createAddPop({ open: () => { seen = root.classList.contains('is-bloom'); }, frame: f.frame })(cupButton(rect(138, 561, 44, 34)));
-    expect(seen).toBe(true); // 첫 화면부터 펼쳐지게
+    expect(seen).toBe(false); expect(root.classList.contains('is-bloom')).toBe(true); // open() 이 먼저(QA 6차 D2), 펼침은 첫 프레임 전에 켜짐
     expect(root.style.getPropertyValue('--bloom-x')).toBe(`calc(50% + ${Math.round(160 - innerWidth / 2)}px)`);
     expect(root.style.getPropertyValue('--bloom-y')).toBe(`calc(100% - ${Math.round(innerHeight - 578)}px)`);
     f.flush(); vi.advanceTimersByTime(POP_MS); expect(root.classList.contains('is-bloom')).toBe(false);
@@ -139,6 +139,44 @@ describe('컵 복사본(ghostOver)', () => {
     expect(document.querySelector('.fab-ghost').classList.contains('is-flash')).toBe(true);
     const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
     expect(css).toMatch(/max-width: 1023px\) and \(prefers-reduced-motion: no-preference\)\s*\{\s*#sheet-root\.is-bloom \.sheet/);
+  });
+  test('QA 6차 D2: 클릭 안에서는 open() 을 맨 먼저 부르고, 움직임 줄이기는 프레임 전까지 배치를 하나도 재지 않음(복사본 재기도 프레임 뒤)', () => {
+    const log = []; const f = frames();
+    const btn = cupButton(rect(138, 561, 44, 34)); const disc = btn.querySelector('.fab-disc'); const r0 = disc.getBoundingClientRect;
+    disc.getBoundingClientRect = () => { log.push('measure'); return r0(); };
+    const overlay = (b) => { log.push('overlay'); return ghostOver(b); };
+    createAddPop({ open: () => log.push('open'), reduced: () => true, frame: f.frame, later: () => {}, overlay })(btn);
+    expect(log).toEqual(['open']); // 시트가 누름을 받는 첫 프레임을 늦추는 일이 없음
+    f.flush(); expect(log).toEqual(['open', 'overlay', 'measure']); expect(document.querySelector('.fab-ghost').classList.contains('is-flash')).toBe(true);
+    document.body.innerHTML = ''; log.length = 0; const f2 = frames();
+    const b2 = cupButton(rect(138, 561, 44, 34)); const d2 = b2.querySelector('.fab-disc'); d2.getBoundingClientRect = () => { log.push('measure'); return rect(138, 561, 44, 34); };
+    createAddPop({ open: () => log.push('open'), frame: f2.frame, later: () => {}, overlay })(b2);
+    expect(log).toEqual(['open', 'measure']); // 기본 움직임: 열고 나서 펼침 자리 하나만, 복사본은 프레임 뒤
+    f2.flush(); expect(log.slice(2, 3)).toEqual(['overlay']);
+  });
+  test('QA 6차 D2: 누르는 순간(pointerdown·Enter)에는 클래스만 붙이고 뽁·진동은 afterFrame 뒤, 소리 준비(prime)는 첫 누름·키 뒤 프레임 다음', () => {
+    const main = readFileSync(join(process.cwd(), 'src/main.js'), 'utf8');
+    const press = main.match(/const pressFab = [^\n]*/)[0];
+    expect(press).toMatch(/afterFrame\(\(\) => \{ feel\.play\('bbok'\); feel\.buzz\(\); \}\)/);
+    expect(press.replace(/afterFrame\(.*\)/, '')).not.toMatch(/feel\./);
+    expect(main).toMatch(/afterFrame\(\(\) => feel\.prime\(\)\)/);
+    expect(main).toMatch(/\['pointerdown', 'keydown'\]\.forEach\(\(ev\) => document\.addEventListener\(ev, primeFeel, true\)\)/);
+  });
+  test('QA 6차 D2: 움직임 줄이기에서는 시트와 그 안 모든 요소의 전환을 없앰(전역 0.01ms 전환이 물려받은 보임까지 늦춰 자판이 다음 프레임까지 숨던 것)', () => {
+    const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
+    expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ #sheet-root, #sheet-root \* \{ transition: none; \} \}/);
+  });
+  test('QA 6차 D1: 쨈 방울 10~16px·호일 14×9px, 0.38초, 어둠 테마는 밝은 테두리, 조각은 누름 통과', () => {
+    const btn = cupButton(rect(138, 561, 44, 34)), panel = sheetPanel(0, 8, 320, 632);
+    createAddPop({ open: () => {}, frame: (fn) => fn(), cover: () => panel })(btn);
+    const sizes = [...document.querySelectorAll('.jam-bit:not(.jam-foil)')].map((b) => parseInt(b.style.getPropertyValue('--s'), 10));
+    expect(sizes).toHaveLength(8); expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10); expect(Math.max(...sizes)).toBeLessThanOrEqual(16);
+    const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
+    expect(css).toMatch(/\.jam-bit \{[^}]*animation: jam-bit \.38s/);
+    expect(css).toMatch(/\.jam-foil \{[^}]*width: 14px; height: 9px/);
+    expect(css).toMatch(/html\.dark \.jam-bit \{ box-shadow: 0 0 0 1\.5px rgba\(255,255,255,\.55\)/);
+    expect(css).toMatch(/\.jam-burst\s*\{[^}]*pointer-events:\s*none/);
+    expect(0.38 * 1000 + 20).toBeLessThan(POP_MS); // 가장 늦은 조각도 상자가 치워지기 전에 끝남
   });
   test('접시가 없는 버튼은 복사본 없음', () => {
     expect(ghostOver(document.createElement('button'))).toBe(null); // 접시가 없는 버튼

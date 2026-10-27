@@ -1,6 +1,6 @@
 // 쨈 컵 버튼의 손맛: Web Audio 로 그 자리에서 만드는 짧은 '뽁'(누름)·'톡'(터짐) + 짧은 진동. 소리 파일·의존성 없음.
 // - 설정: '버튼 소리'(localStorage btnSound), '진동'(localStorage haptic). 기기마다 따로 저장(계정 데이터 아님).
-// - AudioContext 는 첫 사용자 동작(누름) 때 처음 만듦(자동 재생 정책). iOS 는 기본 'ambient' 세션이라 무음 스위치를 켜면 소리가 안 남
+// - AudioContext 는 첫 사용자 동작(어디든 누름·키) 뒤 프레임 다음에 prime() 으로 만듦(자동 재생 정책, QA 6차 D2). iOS 는 기본 'ambient' 세션이라 무음 스위치를 켜면 소리가 안 남
 //   → 일부러 'ambient' 로 둠(수업 중 무음 모드를 존중, 다른 앱 음악도 끊지 않음). 웹은 무음 스위치를 읽을 수 없어 설정에서 끌 수 있게 함.
 // - 지직거림 방지: 3ms 안팎으로 부드럽게 켜고 지수 곡선으로 끔, 동시에 최대 3개, 같은 소리는 45ms 안에 다시 안 냄, 음높이 ±5% 흔들기. 음량: 한 소리 최고점 약 −13 dBFS(휴대폰 스피커에서 들리게), 3개가 겹쳐도 약 −3.5 dBFS 로 찢어지지 않음.
 // - 진동: navigator.vibrate 가 있는 기기만(안드로이드 크롬 등). iOS 사파리는 지원하지 않아 조용히 넘어감.
@@ -68,7 +68,11 @@ export function createFeel({ store = globalThis.localStorage, win = globalThis, 
       return n.vibrate(ms) !== false;
     } catch { return false; }
   }
-  return { play, buzz };
+  // 소리를 미리 준비(첫 사용자 동작 뒤 한가할 때 main.js 가 부름): 첫 컵 누름에서 AudioContext 를 만드느라 시트가 늦게 뜨지 않게(QA 6차 D2)
+  function prime() {
+    try { if (!store || store.getItem('btnSound') === 'off') return false; return !!audio(); } catch { return false; }
+  }
+  return { play, buzz, prime };
 }
 
 // 참고용 오프라인 렌더(테스트·wav 확인용): play()와 같은 봉투·음높이 곡선을 샘플로 계산

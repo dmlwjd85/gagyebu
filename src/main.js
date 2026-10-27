@@ -30,12 +30,17 @@ import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
 import { initSheet, openSheet, closeSheet, isSheetOpen } from './ui/sheet.js';
 import { logo, symbol, FAB_INNER } from './ui/brand.js';
-import { createAddPop } from './ui/fabPop.js';
+import { createAddPop, afterFrame } from './ui/fabPop.js';
 import { createFeel } from './ui/feel.js';
 const feel = createFeel();
 const addPop = createAddPop({ open: () => openSheet(), isOpen: () => isSheetOpen(), reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches, onBurst: () => feel.play('tok') });
 // 쨈 컵 손맛: 누르는 동안 말랑하게 눌린 채(.is-pressed) + '뽁'·짧은 진동 → 놓으면 되튐(style.css). 키보드 Enter·Space 도 같음
-const pressFab = (fab) => { if (fab.classList.contains('is-pressed')) return; fab.classList.add('is-pressed'); feel.play('bbok'); feel.buzz(); };
+// 누르는 순간에는 클래스만, '뽁'·진동은 다음 프레임 뒤(QA 6차 D2: pointerdown 에서 소리를 만들면 시트가 누름을 받는 첫 프레임이 늦어짐)
+const pressFab = (fab) => { if (fab.classList.contains('is-pressed')) return; fab.classList.add('is-pressed'); afterFrame(() => { feel.play('bbok'); feel.buzz(); }); };
+// 소리 준비: 앱 어디든 첫 누름·키 뒤 프레임 다음에 AudioContext 를 미리 만듦(첫 컵 누름에서 만들지 않게)
+let feelPrimed = false;
+const primeFeel = () => { if (feelPrimed) return; feelPrimed = true; afterFrame(() => feel.prime()); };
+['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, primeFeel, true));
 const releaseFab = () => document.querySelectorAll('.fab.is-pressed').forEach((f) => f.classList.remove('is-pressed'));
 document.addEventListener('pointerdown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.button) pressFab(f); });
 ['pointerup', 'pointercancel', 'blur'].forEach((ev) => window.addEventListener(ev, releaseFab));
