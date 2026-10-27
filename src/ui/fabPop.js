@@ -45,8 +45,8 @@ export function bloomSheet(x, y, root = document.getElementById('sheet-root')) {
   root.classList.add('is-bloom');
   return () => root.classList.remove('is-bloom');
 }
-// 쨈 방울·호일 조각: 복사본 가운데에서 위로 높이 튀어 퍼지며 사라짐(style.css .jam-bit, 0.3초). 누름은 통과
-const BITS = [[-120, -330, 14, 0], [-55, -400, 10, 10], [10, -370, 13, 0], [75, -410, 9, 20], [130, -320, 12, 10], [-160, -270, 9, 20], [160, -280, 10, 10], [-25, -300, 8, 20]];
+// 쨈 방울·호일 조각: 복사본 가운데에서 위로 높이 튀어 퍼지며 사라짐(style.css .jam-bit, 0.38초). 휴대폰에서도 알아보게 방울 10~16px(QA 6차 D1). 누름은 통과
+const BITS = [[-120, -330, 16, 0], [-55, -400, 12, 10], [10, -370, 15, 0], [75, -410, 11, 20], [130, -320, 14, 10], [-160, -270, 11, 20], [160, -280, 13, 10], [-25, -300, 10, 20]];
 const FOIL = [[-95, -300, 200], [45, -420, -160], [115, -350, 260], [-140, -360, -220]];
 export function sprayBits(g) {
   const r = g.getBoundingClientRect(), box = document.createElement('div');

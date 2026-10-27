@@ -166,6 +166,18 @@ describe('컵 복사본(ghostOver)', () => {
     const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
     expect(css).toMatch(/@media \(prefers-reduced-motion: reduce\) \{ #sheet-root, #sheet-root \* \{ transition: none; \} \}/);
   });
+  test('QA 6차 D1: 쨈 방울 10~16px·호일 14×9px, 0.38초, 어둠 테마는 밝은 테두리, 조각은 누름 통과', () => {
+    const btn = cupButton(rect(138, 561, 44, 34)), panel = sheetPanel(0, 8, 320, 632);
+    createAddPop({ open: () => {}, frame: (fn) => fn(), cover: () => panel })(btn);
+    const sizes = [...document.querySelectorAll('.jam-bit:not(.jam-foil)')].map((b) => parseInt(b.style.getPropertyValue('--s'), 10));
+    expect(sizes).toHaveLength(8); expect(Math.min(...sizes)).toBeGreaterThanOrEqual(10); expect(Math.max(...sizes)).toBeLessThanOrEqual(16);
+    const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
+    expect(css).toMatch(/\.jam-bit \{[^}]*animation: jam-bit \.38s/);
+    expect(css).toMatch(/\.jam-foil \{[^}]*width: 14px; height: 9px/);
+    expect(css).toMatch(/html\.dark \.jam-bit \{ box-shadow: 0 0 0 1\.5px rgba\(255,255,255,\.55\)/);
+    expect(css).toMatch(/\.jam-burst\s*\{[^}]*pointer-events:\s*none/);
+    expect(0.38 * 1000 + 20).toBeLessThan(POP_MS); // 가장 늦은 조각도 상자가 치워지기 전에 끝남
+  });
   test('접시가 없는 버튼은 복사본 없음', () => {
     expect(ghostOver(document.createElement('button'))).toBe(null); // 접시가 없는 버튼
   });
