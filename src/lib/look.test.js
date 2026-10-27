@@ -4,7 +4,7 @@ import { fileURLToPath } from 'node:url';
 import { describe, expect, test } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
-import { symbol, JJAEM_D, FAB_INNER } from '../ui/brand.js';
+import { symbol, JJAEM_D, JJAEM_ICON_D, FAB_INNER } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
@@ -198,7 +198,7 @@ describe('설정·홈 표시', () => {
 });
 
 describe('쨈 심볼과 추가 버튼', () => {
-  test('심볼은 아이콘과 같은 쨈 윤곽(단색은 currentColor)이다', () => {
+  test('앱 안 심볼은 JJAEM_D 윤곽(단색은 currentColor)이고, 아이콘 SVG는 아이콘 글자 윤곽 JJAEM_ICON_D를 그린다', () => {
     const svg = symbol('S', { cls: 'fab-mark', ink: true });
     expect(svg).toContain('class="fab-mark"');
     expect(svg).toContain('fill="currentColor"');
@@ -212,9 +212,14 @@ describe('쨈 심볼과 추가 버튼', () => {
     const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
     expect(views).not.toMatch(/아래 가운데|왼쪽 위/); // 화면 폭마다 버튼 위치가 달라 위치를 말하지 않음
     const fav = readFileSync(new URL('../../public/favicon.svg', import.meta.url), 'utf8');
-    // 앱 아이콘(은박 호일 컵)은 쨈 제목 평면 글자 윤곽을 쓰므로 패스 대신 이름과 글꼴 저작권 주석을 확인
+    // 앱 아이콘(은박 호일 컵)은 쨈 제목 평면 글자 윤곽(JJAEM_ICON_D)을 #g 로 정의해 <use>로 그린다
+    const maskableSvg = readFileSync(new URL('../../public/pwa-maskable.svg', import.meta.url), 'utf8');
+    for (const svgText of [fav, maskableSvg]) {
+      expect(svgText).toContain(`<path id="g" d="${JJAEM_ICON_D}"`);
+      expect(svgText).toContain('<use href="#g"');
+      expect(svgText).toContain('JJAEM Title Flat');
+    }
     expect(fav).toContain('<title>쨈 가계부</title>');
-    expect(fav).toContain('JJAEM Title Flat');
     const tokens = readFileSync(new URL('../../design/tokens-a.css', import.meta.url), 'utf8');
     const root = varsIn(tokens, ':root');
     expect(contrast('#FFFFFF', root['--fab-1'])).toBeGreaterThanOrEqual(4.5);
