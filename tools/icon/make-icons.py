@@ -3,7 +3,8 @@
 # 원본: tools/icon/A.svg(큰 크기용), tools/icon/A-small.svg(48px 이하용, 디테일을 줄이고 글자를 키움)
 #   글자 윤곽은 SVG 안에 벡터로 들어 있음(쨈 제목 평면 v1.0.1 © 2026 JJAEM Font Team, fonttools로 추출, 곡선 구간을 매끄럽게 다듬음). 폰트 파일은 저장소에 넣지 않음.
 # 만드는 파일(public/, 기존 파일 이름 그대로 덮어씀):
-#   pwa-512.png, pwa-192.png, apple-touch-icon.png(180)  ← A.svg, 꽉 찬 정사각형·투명 없음(모서리는 OS가 깎음)
+#   pwa-512.png, pwa-192.png                             ← A.svg, 둥근 사각형 + 투명 여백(Material 정사각 키라인 152/192, Windows·Linux는 마스크 없이 씀)
+#   apple-touch-icon.png(180)                            ← A.svg, 꽉 찬 정사각형·투명 없음(모서리는 iOS가 깎음)
 #   pwa-maskable-512.png, pwa-maskable.svg                ← A.svg를 90%로 줄여 뚜껑 모서리까지 80% 안전 원 안에 둠
 #   favicon.svg, favicon.ico의 24/48                     ← A-small.svg, 기존처럼 둥근 모서리(rx 114/512)
 #   favicon-16.png, favicon-32.png, favicon.ico의 16/32  ← 픽셀 격자에 맞춘 힌팅판(아래 G16·G32)
@@ -29,6 +30,18 @@ def maskable(svg):
     # 바닥 그림자도 원 마스크에 잘리지 않게 좁고 짧게(안전 원 밖 그림자 알파 ≤ 3%)
     body = re.sub(r'<ellipse cx="512" cy="\d+" rx="\d+" ry="34"([^>]*filter="url\(#sh\)")', r'<ellipse cx="512" cy="836" rx="220" ry="26"\1', body)
     return f'{title}{BG_RECT}\n<g transform="translate(512 512) scale(.9) translate(-512 -512)">{body}</g>\n</svg>\n'
+
+ANY_SCALE = 152 / 192  # Material 제품 아이콘 정사각 키라인(192 격자에서 152×152) → 바깥 여백 20/192 ≈ 10.4%
+
+def any_purpose(svg):
+    """purpose any(pwa-192·512): Windows·Linux Chrome/Edge는 마스크 없이 그대로 쓰므로 둥근 사각형 + 투명 여백.
+    모서리는 파비콘과 같은 rx 228/1024, 크기는 Material 정사각 키라인 152/192(여백 10.4%)."""
+    head, rest = svg.split(BG_RECT)
+    body = rest.replace('</svg>', '')
+    k = ANY_SCALE
+    clip = '<clipPath id="anyclip"><rect width="1024" height="1024" rx="228"/></clipPath>'
+    return (f'{head}<defs>{clip}</defs>\n<g transform="translate(512 512) scale({k:.6f}) translate(-512 -512)"><g clip-path="url(#anyclip)">'
+            f'<rect width="1024" height="1024" rx="228" fill="url(#bg)"/>{body}</g></g>\n</svg>\n')
 
 def rounded(svg, title='쨈 가계부'):
     """파비콘: 배경을 둥근 사각형(rx 228/1024 = 114/512)으로, 모서리는 투명."""
@@ -144,9 +157,11 @@ def main():
         b = p.chromium.launch(args=['--disable-gpu', '--force-color-profile=srgb'])
         pg = b.new_page(device_scale_factor=1)
         full, mask, fav = render(pg, big), render(pg, mask_svg), render(pg, fav_svg)
+        anyp = render(pg, any_purpose(big))
         b.close()
-    for name, s in [('pwa-512.png', 512), ('pwa-192.png', 192), ('apple-touch-icon.png', 180)]:
-        save_png(down(full, s).convert('RGB'), PUB / name)
+    for name, s in [('pwa-512.png', 512), ('pwa-192.png', 192)]:
+        save_png(down(anyp, s), PUB / name)  # 투명 여백이 있는 RGBA
+    save_png(down(full, 180).convert('RGB'), PUB / 'apple-touch-icon.png')
     save_png(down(mask, 512).convert('RGB'), PUB / 'pwa-maskable-512.png')
     h16, h32 = hinted16(), hinted32()
     save_png(h32, PUB / 'favicon-32.png')
