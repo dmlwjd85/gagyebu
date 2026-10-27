@@ -1,0 +1,106 @@
+import { describe, it, expect, vi } from 'vitest';
+import { installState, shouldShowHint, isIOSSafari, hintDismissed, dismissHint, bumpVisits, createInstaller, HINT_KEY, VISIT_KEY, HINT_UNTIL } from './install.js';
+
+const UA = {
+  iphoneSafari: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Mobile/15E148 Safari/604.1',
+  iphoneChrome: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) CriOS/126.0.6478.54 Mobile/15E148 Safari/604.1',
+  iphoneKakao: 'Mozilla/5.0 (iPhone; CPU iPhone OS 17_5 like Mac OS X) AppleWebKit/605.1.15 (KHTML, like Gecko) Mobile/15E148 KAKAOTALK 10.8.0',
+  ipadOS: 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15',
+  android: 'Mozilla/5.0 (Linux; Android 14; SM-S918N) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36',
+};
+const win = (standalone = false) => ({ matchMedia: (q) => ({ matches: standalone && q === '(display-mode: standalone)' }) });
+const store = (init = {}) => { const m = new Map(Object.entries(init)); return { getItem: (k) => (m.has(k) ? m.get(k) : null), setItem: (k, v) => m.set(k, String(v)), m }; };
+
+describe('installState', () => {
+  it('앱으로 실행 중이면 standalone (display-mode, 아이폰 navigator.standalone)', () => {
+    expect(installState({ win: win(true), nav: { userAgent: UA.android }, hasPrompt: true })).toBe('standalone');
+    expect(installState({ win: win(), nav: { userAgent: UA.iphoneSafari, standalone: true } })).toBe('standalone');
+  });
+  it('방금 설치했으면 thanks', () => {
+    expect(installState({ win: win(), nav: { userAgent: UA.android }, installed: true })).toBe('thanks');
+  });
+  it('아이폰 사파리·아이패드는 ios-safari, 아이폰 크롬·카카오톡은 ios-other', () => {
+    expect(installState({ win: win(), nav: { userAgent: UA.iphoneSafari } })).toBe('ios-safari');
+    expect(installState({ win: win(), nav: { userAgent: UA.ipadOS, maxTouchPoints: 5 } })).toBe('ios-safari');
+    expect(installState({ win: win(), nav: { userAgent: UA.iphoneChrome } })).toBe('ios-other');
+    expect(installState({ win: win(), nav: { userAgent: UA.iphoneKakao } })).toBe('ios-other');
+  });
+  it('설치 창이 있으면 prompt, 없으면 manual', () => {
+    expect(installState({ win: win(), nav: { userAgent: UA.android }, hasPrompt: true })).toBe('prompt');
+    expect(installState({ win: win(), nav: { userAgent: UA.android } })).toBe('manual');
+    expect(installState()).toBe('manual');
+  });
+  it('isIOSSafari: 맥 사파리(터치 없음)는 아님', () => {
+    expect(isIOSSafari({ userAgent: UA.ipadOS, maxTouchPoints: 0 })).toBe(false);
+  });
+});
+
+describe('작은 안내(처음 몇 번만, 닫으면 끝)', () => {
+  it('2~5번째 방문에서 설치할 수 있을 때만', () => {
+    expect(shouldShowHint({ state: 'prompt', visits: 1 })).toBe(false);
+    expect(shouldShowHint({ state: 'prompt', visits: 2 })).toBe(true);
+    expect(shouldShowHint({ state: 'ios-safari', visits: 5 })).toBe(true);
+    expect(shouldShowHint({ state: 'ios-other', visits: 3 })).toBe(true);
+    expect(shouldShowHint({ state: 'prompt', visits: 6 })).toBe(false);
+  });
+  it('manual·standalone·thanks 이거나 닫았으면 안 보임', () => {
+    for (const state of ['manual', 'standalone', 'thanks']) expect(shouldShowHint({ state, visits: 3 })).toBe(false);
+    expect(shouldShowHint({ state: 'prompt', visits: 3, dismissed: true })).toBe(false);
+  });
+  it('닫기는 저장되고, 저장소가 없거나 막혀도 터지지 않음', () => {
+    const s = store();
+    expect(hintDismissed(s)).toBe(false);
+    dismissHint(s);
+    expect(s.m.get(HINT_KEY)).toBe('off');
+    expect(hintDismissed(s)).toBe(true);
+    const broken = { getItem: () => { throw new Error('x'); }, setItem: () => { throw new Error('x'); } };
+    expect(hintDismissed(broken)).toBe(false);
+    expect(() => dismissHint(broken)).not.toThrow();
+    expect(bumpVisits(broken)).toBe(0);
+  });
+  it('방문 횟수는 HINT_UNTIL+1 에서 멈춤, 이상한 값은 0부터', () => {
+    const s = store({ [VISIT_KEY]: 'abc' });
+    expect(bumpVisits(s)).toBe(1);
+    expect(bumpVisits(s)).toBe(2);
+    for (let i = 0; i < 10; i++) bumpVisits(s);
+    expect(s.m.get(VISIT_KEY)).toBe(String(HINT_UNTIL + 1));
+  });
+});
+
+function fakeWin() {
+  const h = {};
+  return { addEventListener: (t, f) => ((h[t] ||= []).push(f)), fire: (t, e = {}) => (h[t] || []).forEach((f) => f(e)) };
+}
+const bip = (outcome) => ({ preventDefault: vi.fn(), prompt: vi.fn(async () => {}), userChoice: Promise.resolve({ outcome }) });
+
+describe('createInstaller', () => {
+  it('beforeinstallprompt 를 붙잡고(기본 띠 막음) 버튼에서 prompt()', async () => {
+    const w = fakeWin(); const onChange = vi.fn();
+    const ins = createInstaller({ win: w, onChange });
+    expect(ins.hasPrompt()).toBe(false);
+    expect(await ins.prompt()).toBe('unavailable');
+    const e = bip('accepted');
+    w.fire('beforeinstallprompt', e);
+    expect(e.preventDefault).toHaveBeenCalled();
+    expect(onChange).toHaveBeenCalledWith('prompt');
+    expect(ins.hasPrompt()).toBe(true);
+    expect(await ins.prompt()).toBe('accepted');
+    expect(e.prompt).toHaveBeenCalledTimes(1);
+    expect(ins.hasPrompt()).toBe(false); // 한 번 쓴 이벤트는 다시 못 씀
+  });
+  it('취소하면 dismissed, prompt 가 실패하면 unavailable', async () => {
+    const w = fakeWin(); const ins = createInstaller({ win: w });
+    w.fire('beforeinstallprompt', bip('dismissed'));
+    expect(await ins.prompt()).toBe('dismissed');
+    w.fire('beforeinstallprompt', { preventDefault() {}, prompt: async () => { throw new Error('NotAllowed'); }, userChoice: Promise.resolve({}) });
+    expect(await ins.prompt()).toBe('unavailable');
+  });
+  it('appinstalled 뒤에는 installed, 설치 창은 비움', () => {
+    const w = fakeWin(); const onChange = vi.fn(); const ins = createInstaller({ win: w, onChange });
+    w.fire('beforeinstallprompt', bip('accepted'));
+    w.fire('appinstalled');
+    expect(ins.installed()).toBe(true);
+    expect(ins.hasPrompt()).toBe(false);
+    expect(onChange).toHaveBeenLastCalledWith('installed');
+  });
+});
