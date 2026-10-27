@@ -1,5 +1,5 @@
 # 앱 아이콘(은박 호일 컵) 일괄 생성: 저장소 맨 위에서 `python3 tools/icon/make-icons.py`
-# 필요: Python 3, playwright(+ chromium), Pillow, pyoxipng  (pip install playwright pillow pyoxipng && playwright install chromium)
+# 필요: Python 3, playwright(+ chromium), Pillow, pyoxipng, imagequant(선택)  (pip install playwright pillow pyoxipng imagequant && playwright install chromium)
 # 원본: tools/icon/A.svg(큰 크기용), tools/icon/A-small.svg(48px 이하용, 디테일을 줄이고 글자를 키움)
 #   글자 윤곽은 SVG 안에 벡터로 들어 있음(쨈 제목 평면 v1.0.1 © 2026 JJAEM Font Team, fonttools로 추출, 곡선 구간을 매끄럽게 다듬음). 폰트 파일은 저장소에 넣지 않음.
 # 만드는 파일(public/, 기존 파일 이름 그대로 덮어씀):
@@ -16,6 +16,10 @@ try:
     import oxipng
 except ImportError:
     oxipng = None
+try:
+    import imagequant  # pngquant 엔진(libimagequant). 없으면 무손실로 저장
+except ImportError:
+    imagequant = None
 
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 SRC = ROOT / 'tools' / 'icon'
@@ -59,7 +63,10 @@ def render(page, svg, size=1024):
 def down(im, s):
     return im.resize((s, s), Image.LANCZOS)
 
-def save_png(im, path):
+def save_png(im, path, quant=False):
+    # quant=True: pngquant 품질 90-100, 디더링 없음(디더링하면 컵 몸통에 알갱이가 보임). 192·180에서 SSIM 0.997 이상 확인
+    if quant and imagequant:
+        im = imagequant.quantize_pil_image(im.convert('RGBA'), dithering_level=0.0, max_colors=256, min_quality=90, max_quality=100)
     im.save(path, optimize=True)
     if oxipng:
         oxipng.optimize(path, level=6, strip=oxipng.StripChunks.safe())
@@ -159,9 +166,9 @@ def main():
         full, mask, fav = render(pg, big), render(pg, mask_svg), render(pg, fav_svg)
         anyp = render(pg, any_purpose(big))
         b.close()
-    for name, s in [('pwa-512.png', 512), ('pwa-192.png', 192)]:
-        save_png(down(anyp, s), PUB / name)  # 투명 여백이 있는 RGBA
-    save_png(down(full, 180).convert('RGB'), PUB / 'apple-touch-icon.png')
+    save_png(down(anyp, 512), PUB / 'pwa-512.png')  # 투명 여백이 있는 RGBA, 무손실(512는 양자화하면 컵 몸통에 띠가 보임)
+    save_png(down(anyp, 192), PUB / 'pwa-192.png', quant=True)
+    save_png(down(full, 180).convert('RGB'), PUB / 'apple-touch-icon.png', quant=True)
     save_png(down(mask, 512).convert('RGB'), PUB / 'pwa-maskable-512.png')
     h16, h32 = hinted16(), hinted32()
     save_png(h32, PUB / 'favicon-32.png')
