@@ -38,8 +38,10 @@ export default defineConfig({
       manifest: {
         name: '쨈 가계부',
         short_name: '쨈 가계부',
-        description: '10초 기록, 하루 한 번 보는 내 돈 날씨. 광고·연동 없는 프라이버시 가계부, 쨈 가계부.',
+        description: '10초 만에 쓰는 가계부. 하루 한 번 내 돈 날씨를 보고, 광고 없이 내 기록은 내 계정에만 저장해요.',
         lang: 'ko',
+        dir: 'ltr',
+        categories: ['finance'],
         // id 고정: 예전 설치본은 id가 없어 Chrome이 start_url(https://dmlwjd85.github.io/gagyebu/)을 id로 썼다. 같은 값으로 고정해 이름이 바뀌어도 같은 앱으로 본다.
         id: '/gagyebu/',
         start_url: '/gagyebu/',
@@ -51,6 +53,12 @@ export default defineConfig({
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
           { src: 'pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
+        ],
+        // 설치 창에 보이는 미리보기(데모 계정 화면). jpg 는 precache 대상(globPatterns)이 아니라 오프라인 캐시 크기는 그대로
+        screenshots: [
+          { src: 'screenshots/home-narrow.jpg', sizes: '720x1560', type: 'image/jpeg', form_factor: 'narrow', label: '홈: 이번 달 돈 날씨와 최근 기록' },
+          { src: 'screenshots/record-narrow.jpg', sizes: '720x1560', type: 'image/jpeg', form_factor: 'narrow', label: '10초 기록: 금액과 카테고리만 고르면 끝' },
+          { src: 'screenshots/home-wide.jpg', sizes: '1280x800', type: 'image/jpeg', form_factor: 'wide', label: '넓은 화면의 홈' },
         ],
       },
       workbox: {

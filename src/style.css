@@ -466,6 +466,12 @@
     display: flex; flex-wrap: wrap; align-items: center; gap: 8px; padding: 10px 12px; border-radius: 16px; background: var(--surface-solid); color: var(--ink); border: 1px solid var(--line); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
   .update-banner p { margin: 0; flex: 1 1 12em; min-width: 0; overflow-wrap: anywhere; }
   .update-banner button { flex: 0 0 auto; white-space: nowrap; }
+  /* 앱 설치: 홈 안내의 '설치' 글자 버튼(팁 줄 안), 설정의 펼침 안내 */
+  .inst-hint > p, .inst-card p { word-break: keep-all; overflow-wrap: anywhere; } /* 한국어 낱말 중간에서 줄이 갈리지 않게 */
+  .inst-go { flex: 0 0 auto; align-self: center; min-height: 44px; padding: 0 12px; border-radius: 999px; font-weight: 700; color: var(--primary); white-space: nowrap; }
+  .inst-more { font-size: 0.875rem; line-height: 1.55; color: var(--ink-sub); overflow-wrap: anywhere; }
+  .inst-more summary { cursor: pointer; min-height: 44px; display: flex; align-items: center; font-weight: 700; color: var(--ink); }
+  .inst-more code { padding: 0 4px; border-radius: 6px; background: var(--surface); border: 1px solid var(--line); }
   .owner-chip { display: inline-block; max-width: 100%; margin-top: 2px; padding: 0 0.45rem; border-radius: 999px; border: 1px solid var(--line); font-size: 0.75em; line-height: 1.45; overflow-wrap: anywhere; }
   /* 14%면 수입 글자가 흰 면 위에서 4.39:1. */
   .owner-chip.is-deposit { font-weight: 700; color: var(--income); border-color: var(--income); background: color-mix(in srgb, var(--income) 8%, transparent); }

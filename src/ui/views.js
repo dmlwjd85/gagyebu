@@ -5,6 +5,7 @@ import { byCategory, byDay, heatLevel, envelope, totals, trend } from '../lib/st
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
 import { symbol } from './brand.js';
+import { installCard } from './installView.js';
 import { goalsCard, rulesCard } from './m2views.js';
 import { summarizeAll } from '../lib/assets.js';
 import { featureOn, MODES, FEATURES, allowanceFrom } from '../lib/modes.js';
@@ -170,6 +171,7 @@ export function homeView(m) {
       ${m.streak || m.noSpend ? `<div class="glass px-4 py-3 text-body flex items-center gap-2"><span aria-hidden="true">🔥</span><span>${m.streak ? `${m.streak}일째 기록 중` : '오늘 기록하면 연속 기록 시작'}${m.noSpend ? ` · 이번 달 무지출 🌱 ${m.noSpend}일` : ''}</span></div>` : ''}
       ${assetHomeLink(m)}
       <div id="tip-slot"></div>
+      <div id="install-slot" class="empty:hidden"></div>
   </div>${firstRun ? '' : `<div class="home-col home-recent">${recentSec}</div>`}
   ${(() => { const side = m.wide && top3.length ? `<section class="card-solid p-4" aria-labelledby="top-h"><h2 id="top-h" class="text-head">많이 쓴 곳 TOP 3</h2>
         <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''; return side ? `<div class="home-col home-side">${side}</div>` : ''; })()}</div>`;
@@ -492,6 +494,7 @@ export function settingsView(m, ui) {
   return `<div class="flex flex-col gap-3">
     <h1 class="text-title">설정</h1>
     <p class="glass px-4 py-3 text-caption">🔒 광고 0 · 알림 스팸 0 · 내 데이터는 내 것. 기록은 내 계정에만 저장돼요.</p>
+    ${installCard(m.install)}
     <div class="view-grid">
     <div class="flex flex-col gap-3">
     ${modeSettings(m)}
