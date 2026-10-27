@@ -154,13 +154,17 @@ describe('컵 복사본(ghostOver)', () => {
     expect(log).toEqual(['open', 'measure']); // 기본 움직임: 열고 나서 펼침 자리 하나만, 복사본은 프레임 뒤
     f2.flush(); expect(log.slice(2, 3)).toEqual(['overlay']);
   });
-  test('QA 6차 D2: 누르는 순간(pointerdown·Enter)에는 클래스만 붙이고 뽁·진동은 afterFrame 뒤, 소리 준비(prime)는 첫 누름·키 뒤 프레임 다음', () => {
+  test('QA 6차 D2·7차: 누르는 순간(pointerdown·Enter)에는 AudioContext 를 만들지 않고(소리가 이미 풀렸을 때만 마이크로태스크로 뽁), 잠금 풀기는 컵 위에서는 건너뛰어 click(시트 열기) 뒤', () => {
     const main = readFileSync(join(process.cwd(), 'src/main.js'), 'utf8');
-    const press = main.match(/const pressFab = [^\n]*/)[0];
-    expect(press).toMatch(/afterFrame\(\(\) => \{ feel\.play\('bbok'\); feel\.buzz\(\); \}\)/);
-    expect(press.replace(/afterFrame\(.*\)/, '')).not.toMatch(/feel\./);
-    expect(main).toMatch(/afterFrame\(\(\) => feel\.prime\(\)\)/);
-    expect(main).toMatch(/\['pointerdown', 'keydown'\]\.forEach\(\(ev\) => document\.addEventListener\(ev, primeFeel, true\)\)/);
+    const press = main.slice(main.indexOf('const pressFab = '), main.indexOf('};', main.indexOf('const pressFab = ')));
+    expect(press).toMatch(/if \(feel\.ready\(\)\) queueMicrotask\(\(\) => feel\.play\('bbok'\)\); else bbokAt = performance\.now\(\);/);
+    expect(press).toMatch(/afterFrame\(\(\) => feel\.buzz\(\)\)/);
+    expect(press).not.toMatch(/unlock|prime|AudioContext/);
+    expect(main).toMatch(/feel\.installUnlock\(\{ skip: \(t\) => !!t\?\.closest\?\.\('\.fab'\)/);
+    expect(main).not.toMatch(/feel\.prime|primeFeel/);
+    const feel = readFileSync(join(process.cwd(), 'src/ui/feel.js'), 'utf8');
+    expect(feel).toMatch(/\[\['touchend', doc\], \['pointerup', doc\], \['keydown', doc\]\]/); // pointerdown·touchstart 없음
+    expect(feel).toMatch(/win\.addEventListener\?\.\('click', handle\)/); // 거품 단계 → 앱 click(시트 열기) 뒤
   });
   test('QA 6차 D2: 움직임 줄이기에서는 시트와 그 안 모든 요소의 전환을 없앰(전역 0.01ms 전환이 물려받은 보임까지 늦춰 자판이 다음 프레임까지 숨던 것)', () => {
     const css = readFileSync(join(process.cwd(), 'src/style.css'), 'utf8');
