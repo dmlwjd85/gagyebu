@@ -54,6 +54,12 @@ export default defineConfig({
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
           { src: 'pwa-maskable-512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
         ],
+        // 설치 창에 보이는 미리보기(데모 계정 화면). jpg 는 precache 대상(globPatterns)이 아니라 오프라인 캐시 크기는 그대로
+        screenshots: [
+          { src: 'screenshots/home-narrow.jpg', sizes: '720x1560', type: 'image/jpeg', form_factor: 'narrow', label: '홈: 이번 달 돈 날씨와 최근 기록' },
+          { src: 'screenshots/record-narrow.jpg', sizes: '720x1560', type: 'image/jpeg', form_factor: 'narrow', label: '10초 기록: 금액과 카테고리만 고르면 끝' },
+          { src: 'screenshots/home-wide.jpg', sizes: '1280x800', type: 'image/jpeg', form_factor: 'wide', label: '넓은 화면의 홈' },
+        ],
       },
       workbox: {
         skipWaiting: true,
