@@ -103,7 +103,7 @@ export function txRow(m, t) {
 const empty = (icon, text, extra = '') => `<div class="py-8 text-center"><p class="text-4xl" aria-hidden="true">${icon}</p><p class="mt-2 text-body text-ink-sub">${esc(text)}</p>${extra}</div>`;
 
 // month: 달 이동 막대(가져오기·검색·반복·설정처럼 달과 상관없는 화면에서는 숨김)
-export function topBar(m, { month = true, back = null } = {}) {
+export function topBar(m, { month = true, back = null, payday = null } = {}) {
   const monthName = `${Number(String(m.viewYm || '').slice(5, 7))}월`;
   const range = month && m.sd > 1 ? periodRangeLabel(m.viewYm, m.sd) : '';
   const monthText = range ? `${monthName} (${range})` : monthName;
@@ -121,8 +121,15 @@ export function topBar(m, { month = true, back = null } = {}) {
       <button class="icon-btn" data-action="theme" aria-label="${m.dark ? '라이트 모드로 전환' : '다크 모드로 전환'}">${m.dark ? '☀️' : '🌙'}</button>
       <button class="icon-btn" data-nav="settings" aria-label="설정">⚙️</button>
     </div>
-    ${range ? `<p class="period-label" data-period-range>${esc(range)}</p>` : ''}
+    ${range && payday ? `<div class="period-row"><p class="period-label" data-period-range>${esc(range)}</p>${paydayChipHtml(payday)}</div>`
+      : range ? `<p class="period-label" data-period-range>${esc(range)}</p>` : payday ? `<div class="period-row">${paydayChipHtml(payday)}</div>` : ''}
     </header>`;
+}
+
+// 다음 월급날 칩(읽기 전용). 이모지 하나 + 짧은 문구, 줄 하나 높이.
+export function paydayChipHtml(p) {
+  const label = p.days === 0 ? '오늘이 월급날이에요' : `다음 월급날 ${Number(p.date.slice(5, 7))}월 ${Number(p.date.slice(8, 10))}일까지 ${p.days}일 남았어요`;
+  return `<p class="payday-chip" data-payday="${p.days}" role="note" aria-label="${esc(label)}" title="${esc(label)}"><span aria-hidden="true">${p.emoji}</span><span aria-hidden="true">${esc(p.text)}</span></p>`;
 }
 
 export function homeView(m) {
