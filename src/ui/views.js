@@ -129,7 +129,7 @@ export function topBar(m, { month = true, back = null, payday = null } = {}) {
 // 다음 월급날 칩(읽기 전용). 이모지 하나 + 짧은 문구, 줄 하나 높이.
 export function paydayChipHtml(p) {
   const label = p.days === 0 ? '오늘이 월급날이에요' : `다음 월급날 ${Number(p.date.slice(5, 7))}월 ${Number(p.date.slice(8, 10))}일까지 ${p.days}일 남았어요`;
-  return `<p class="payday-chip" data-payday="${p.days}" role="note" aria-label="${esc(label)}" title="${esc(label)}"><span aria-hidden="true">${p.emoji}</span><span aria-hidden="true">${esc(p.text)}</span></p>`;
+  return `<p class="payday-chip" data-payday="${p.days}" role="note" aria-label="${esc(label)}" title="${esc(label)}"><span aria-hidden="true">${p.emoji}</span><span class="pd-long" aria-hidden="true">${esc(p.text)}</span><span class="pd-short" aria-hidden="true">${p.days === 0 ? 'D-day' : `D-${p.days}`}</span></p>`;
 }
 
 export function homeView(m) {

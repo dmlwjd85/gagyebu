@@ -35,7 +35,18 @@ export function fitNum(el) {
   el.style.fontSize = `${size}px`;
   if (lab && parseFloat(getComputedStyle(lab).fontSize) > size) lab.style.fontSize = `${size}px`;
 }
-export const fitNums = (root = document) => $$('[data-fit]', root).forEach(fitNum);
+// 월급날 칩: 한 줄에 다 안 들어가면 짧은 문구(D-n)로. 줄바꿈하지 않아 본문 위치가 그대로
+export function fitPayday(root = document) {
+  $$('.payday-chip', root).forEach((c) => {
+    const row = c.parentElement;
+    c.classList.remove('is-short');
+    c.style.flex = 'none'; // 줄이지 않은 원래 너비로 재 봄
+    const over = row && row.scrollWidth > row.clientWidth + 0.5;
+    c.style.flex = '';
+    if (over) c.classList.add('is-short');
+  });
+}
+export const fitNums = (root = document) => { $$('[data-fit]', root).forEach(fitNum); fitPayday(root); };
 
 // 숫자 롤링(카운트업) — 420ms, reduced-motion 이면 즉시
 export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0)) {
