@@ -12,6 +12,7 @@ import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, t
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
 import { editTarget } from './lib/restore.js';
+import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
@@ -23,7 +24,7 @@ const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
 import { buildBackup, parseBackup } from './lib/backup.js';
-import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay, monthStartDayOf } from './lib/modes.js';
+import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay, monthStartDayOf, featureOn } from './lib/modes.js';
 import { ownerToWrite, spouseLabel } from './lib/couple.js';
 import { installUpdatePrompt } from './lib/pwaUpdate.js';
 import { createInstaller, installState, shouldShowHint, hintDismissed, dismissHint, bumpVisits } from './lib/install.js';
@@ -152,7 +153,7 @@ function render() {
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-frame ${nav ? 'has-nav' : ''}">
-      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view), back: headerBack(ui.view) })}</div></div>
+      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view), back: headerBack(ui.view), payday: ui.view === 'home' && m.viewYm === m.curYm && featureOn(m.features, 'monthStart') ? paydayChip(m.today, m.settings) : null })}</div></div>
       <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
       ${nav ? tabBar() : ''}
     </div>`;
