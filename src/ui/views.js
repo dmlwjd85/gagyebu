@@ -107,7 +107,7 @@ export function topBar(m, { month = true, back = null, payday = null } = {}) {
   const monthName = `${Number(String(m.viewYm || '').slice(5, 7))}월`;
   const range = month && m.sd > 1 ? periodRangeLabel(m.viewYm, m.sd) : '';
   const monthText = range ? `${monthName} (${range})` : monthName;
-  return `<header class="flex flex-wrap items-center justify-between gap-x-2 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
+  return `<header class="flex flex-wrap items-center justify-between gap-x-2 max-[299px]:gap-x-1 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
     <div class="flex flex-wrap items-center gap-1 max-[419px]:gap-0 min-w-0">
       ${back ? `<button type="button" class="nav-home" data-nav="${esc(back.to)}" aria-label="${esc(back.label)}"><span aria-hidden="true">‹</span>${esc(back.text || '홈')}</button>` : ''}
       ${symbol('S', { cls: 'hsym mr-0.5', label: '쨈 가계부' })}
