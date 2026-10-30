@@ -10,7 +10,7 @@ export default {
       backgroundImage,
       boxShadow,
       fontFamily: {
-        sans: ['"Pretendard Variable"', 'Pretendard', '-apple-system', '"Noto Sans KR"', 'sans-serif'],
+        sans: ['"JJAEM Body"', '"Pretendard Variable"', 'Pretendard', '-apple-system', '"Noto Sans KR"', 'sans-serif'],
       },
       // 글자 크기: --fs(본문 #main 안에서만 설정의 '본문 글자 크기'를 따름, 그 밖은 1) × 디자인 크기
       fontSize: Object.fromEntries(Object.entries({

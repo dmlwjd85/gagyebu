@@ -8,7 +8,7 @@ import { symbol, logo, JJAEM_D, JJAEM_ICON_D, JJAEM_ICON_VB, FAB_INNER } from '.
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
-  fontsFor, toneList,
+  fontsFor, toneList, FONT_OPTIONS,
 } from './look.js';
 
 function mem(init = {}) {
@@ -130,7 +130,7 @@ describe('테마는 색만', () => {
 describe('나눔라운드 숫자', () => {
   test('저장된 gaegu 는 본문 글꼴과 금액용 Pretendard를 함께 받는다', () => {
     expect(fontsFor('gaegu')).toEqual(['gaegu', 'pretendard']);
-    expect(fontsFor('pretendard')).toEqual(['pretendard']);
+    expect(fontsFor('pretendard')).toEqual(['jjaem']);
     expect(fontsFor('system')).toEqual([]);
     expect(toneList({ menu: true, accent: true, card: false })).toEqual(['menu', 'accent']);
     expect(toneList({ menu: false, accent: false, card: false })).toEqual([]);
@@ -151,6 +151,26 @@ describe('나눔라운드 숫자', () => {
     expect(css).toMatch(/font-family:[^;]*Gagyebu Round/);
     expect(css).toMatch(/font-variant-numeric:\s*tabular-nums/);
     expect(css).not.toMatch(/hero-art|theme-banner|Gaegu/);
+  });
+});
+
+describe('쨈 폰트 v1.0.5', () => {
+  test('기본 값(pretendard)은 쨈 본문 조각판으로 그리고, 전체 TTF·한 파일판은 싣지 않는다', () => {
+    const face = readFileSync(new URL('../assets/fonts/jjaem/jjaem-font.css', import.meta.url), 'utf8');
+    const blocks = face.match(/@font-face\{[^}]+\}/g);
+    expect(blocks).toHaveLength(6);
+    for (const block of blocks) {
+      expect(block).toMatch(/font-display:swap/);
+      expect(block).toMatch(/unicode-range:U\+/);
+      expect(block).toMatch(/url\('fonts\/JJAEM[^']*\.(ks|ext)\.woff2'\) format\('woff2'\)/);
+    }
+    expect(face.match(/font-family:'JJAEM Body';[^}]*font-weight:400/g)).toHaveLength(2);
+    expect(face.match(/font-family:'JJAEM Body';[^}]*font-weight:700/g)).toHaveLength(2);
+    expect(face.match(/font-family:'JJAEM Title Flat'/g)).toHaveLength(2);
+    expect(face).not.toMatch(/\.ttf|\.otf|한파일판/);
+    expect(FONT_OPTIONS.find((o) => o.id === 'pretendard').label).toBe('쨈 본문');
+    const tw = readFileSync(new URL('../../tailwind.config.js', import.meta.url), 'utf8');
+    expect(tw).toMatch(/sans: \['"JJAEM Body"', '"Pretendard Variable"'/);
   });
 });
 

@@ -4,10 +4,10 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
-// 첫 화면 글자(쨈 가계부, 로그인 안내)가 많이 든 Pretendard 조각만 미리 받기.
-// 91: 영문·숫자·가장 흔한 한글, 90: 그다음 흔한 한글. 나머지 조각은 필요할 때 받음.
+// 첫 화면 글자(쨈 가계부, 로그인 안내)가 든 쨈 본문 조각만 미리 받기.
+// .ks: 영문·숫자·기호 + 자주 쓰는 한글 2,350자(400·700 두 굵기). 나머지 한글 조각(.ext)은 필요할 때 받음.
 const BASE = '/gagyebu/';
-const PRELOAD_FONT_SUBSETS = [91, 90];
+const PRELOAD_FONT_FILES = [/JJAEMBody-Regular\.ks-[^/]+\.woff2$/, /JJAEMBody-Bold\.ks-[^/]+\.woff2$/];
 function preloadMainFonts() {
   return {
     name: 'preload-main-fonts',
@@ -15,7 +15,7 @@ function preloadMainFonts() {
       order: 'post',
       handler(html, ctx) {
         if (!ctx.bundle) return html;
-        const files = Object.keys(ctx.bundle).filter((f) => PRELOAD_FONT_SUBSETS.some((n) => new RegExp(`PretendardVariable\\.subset\\.${n}-[^/]+\\.woff2$`).test(f)));
+        const files = Object.keys(ctx.bundle).filter((f) => PRELOAD_FONT_FILES.some((re) => re.test(f)));
         return files.map((f) => ({ tag: 'link', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: `${BASE}${f}`, crossorigin: '' }, injectTo: 'head' }));
       },
     },
@@ -70,7 +70,7 @@ export default defineConfig({
         // 예전 테마 그림 캐시(theme-art)·폰트 캐시(fonts)·workbox 프리캐시는 sw-cleanup.js 의 activate 에서 지운다.
         importScripts: ['sw-cleanup.js'],
         cacheId: 'gagyebu-v2',
-        // 폰트 조각(92개)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
+        // 폰트 조각(woff2)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
         runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',

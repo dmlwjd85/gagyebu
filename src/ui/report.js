@@ -4,7 +4,9 @@ import { formatWon, spendParts, spendText, rateNote } from '../lib/money.js';
 import { byCategory } from '../lib/stats.js';
 
 const W = 1080, H = 1350;
-const FONT = '"Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+// 글자는 쨈 본문(400·700), 머리의 '쨈 가계부'(44px)만 쨈 제목 평면(28px 이상 제목용, 굵기 400 하나). 글꼴이 없으면 Pretendard·시스템 글꼴.
+const FONT = '"JJAEM Body", "Pretendard Variable", Pretendard, -apple-system, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif';
+const TITLE_FONT = `"JJAEM Title Flat", ${FONT}`;
 // 글자가 maxW보다 넓으면 글자 크기를 줄임(최소 40%). 그래도 넓으면 뒤를 '…'로 줄인 글자를 돌려줌
 function fit(ctx, text, weight, size, maxW) {
   ctx.font = `${weight} ${size}px ${FONT}`;
@@ -34,7 +36,7 @@ function roundRect(ctx, x, y, w, h, r) { ctx.beginPath(); ctx.roundRect(x, y, w,
 
 /** 캔버스에 그리기 → PNG Blob */
 export async function drawReport(d, { dark = false } = {}) {
-  try { await Promise.all(['800', '700', '500'].map((w) => document.fonts.load(`${w} 40px "Pretendard Variable"`, '쨈가계부월리포트0123456789원'))); } catch {}
+  try { await Promise.all([...['700', '400'].map((w) => document.fonts.load(`${w} 40px "JJAEM Body"`, '쨈가계부월리포트0123456789원')), document.fonts.load('400 44px "JJAEM Title Flat"', '쨈 가계부')]); } catch {}
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#1C1A2E' : '#FFFFFF';
@@ -46,7 +48,7 @@ export async function drawReport(d, { dark = false } = {}) {
   glow(1000, 200, 560, dark ? '47,111,214' : '160,195,255', dark ? 0.28 : 0.5);
   glow(540, 1350, 700, dark ? '63,209,190' : '160,230,220', dark ? 0.15 : 0.45);
   // 머리: 쨈 가계부 · N월 리포트
-  ctx.fillStyle = ink; ctx.font = `800 44px ${FONT}`; ctx.textBaseline = 'alphabetic';
+  ctx.fillStyle = ink; ctx.font = `400 44px ${TITLE_FONT}`; ctx.textBaseline = 'alphabetic';
   ctx.fillText('쨈 가계부', 80, 130);
   ctx.fillStyle = sub; ctx.font = `600 36px ${FONT}`; ctx.textAlign = 'right';
   ctx.fillText(`${d.ym.slice(0, 4)}년 ${d.month}월 리포트`, W - 80, 130); ctx.textAlign = 'left';

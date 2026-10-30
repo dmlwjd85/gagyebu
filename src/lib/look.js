@@ -2,6 +2,7 @@
 // 기기에는 localStorage, 로그인한 뒤에는 users/{uid}/settings/prefs 의 mood·font·decor·tone 만 더한다.
 // tone 은 선택 필드다. 없는 예전 문서는 기본(메뉴+강조 글씨 켜짐, 카드 바탕 꺼짐)으로 읽고, 그 값을 문서에 새로 쓰지 않는다.
 // font 값 'gaegu' 는 예전 손글씨 자리다. 지금은 나눔스퀘어라운드 서브셋으로 그린다. 저장값은 바꾸지 않는다.
+// font 값 'pretendard' 는 기본 글꼴 자리다. 지금은 쨈 본문(JJAEM Body)으로 그린다. 저장값·Firestore 규칙은 바꾸지 않는다.
 // decor 는 예전 설정과 맞추려고 읽고 저장만 한다. 화면에는 쓰지 않는다.
 // 쓰는 방식(mode·features·용돈·배우자)과 거래 필드는 바꾸지 않는다. normalizeSettings 는 이 키를 백업에 넣지 않는다.
 // 다크 모드는 기존 'theme' 키(light|dark|시스템) 그대로다.
@@ -30,7 +31,7 @@ export const MOOD_OPTIONS = [
 
 export const FONT_OPTIONS = [
   { id: 'system', label: '시스템 기본' },
-  { id: 'pretendard', label: 'Pretendard' },
+  { id: 'pretendard', label: '쨈 본문' },
   { id: 'gaegu', label: '나눔라운드' },
 ];
 
@@ -123,16 +124,18 @@ export function applyLook(look, root = globalThis.document?.documentElement) {
   return next;
 }
 
-/** gaegu(예전 손글씨 값)는 본문이 나눔라운드, 금액은 Pretendard 고정폭이라 둘 다 받는다. */
+/** gaegu(예전 손글씨 값)는 본문이 나눔라운드, 금액은 Pretendard 고정폭이라 둘 다 받는다.
+ *  pretendard(기본 값)는 쨈 본문으로 그린다. 쨈 본문 숫자는 폭이 같아 금액도 같은 글꼴로 그린다. */
 export function fontsFor(font) {
   if (font === 'gaegu') return ['gaegu', 'pretendard'];
-  if (font === 'pretendard') return ['pretendard'];
+  if (font === 'pretendard') return ['jjaem'];
   return [];
 }
 
 const loadedFonts = new Set();
 const fontLoaders = {
   pretendard: () => import('../fonts.css'),
+  jjaem: () => import('../assets/fonts/jjaem/jjaem-font.css'),
   gaegu: () => import('../assets/fonts/gaegu.css'),
 };
 
