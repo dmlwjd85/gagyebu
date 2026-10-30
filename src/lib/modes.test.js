@@ -302,8 +302,8 @@ describe('오늘 금액은 계산마다 이름이 다르다', () => {
     const html = homeView(m);
     const hero = html.slice(0, html.indexOf('id="pace-h"'));
     const card = html.slice(html.indexOf('id="pace-h"'));
-    expect(hero.match(/오늘 쓸 수 있는 돈/g)).toEqual(['오늘 쓸 수 있는 돈']);
-    expect(hero).toContain(formatWon(m.weather.available));
+    expect(hero.match(/이번 달 남은 예산/g)).toEqual(['이번 달 남은 예산']);
+    expect(hero).not.toContain('오늘 쓸 수 있는 돈');
     expect(card).toContain('이번 주 몫 중 남은 돈');
     expect(card).toContain('오늘 몫 중 남은 돈');
     expect(card).toContain('쓴 돈');

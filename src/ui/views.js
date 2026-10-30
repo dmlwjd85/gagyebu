@@ -1,7 +1,7 @@
 import { esc, numSpan } from './util.js';
 import { formatWon, signedWon, shortWon, compactWon, isPlus, spendParts, spendText, minusWon, percents, rateNote } from '../lib/money.js';
 import { addDays, parseYmd, prettyDate, WEEK, monthLabel, period, periodRangeLabel, shiftYm } from '../lib/dates.js';
-import { byCategory, byDay, heatLevel, envelope, totals, trend } from '../lib/stats.js';
+import { byCategory, byDay, heatLevel, envelope, totals, trend, monthBudgetLeft } from '../lib/stats.js';
 import { donut, trendBars, ring, PALETTE, REST_COLOR } from './charts.js';
 import { EMOJI_CHOICES } from '../lib/defaults.js';
 import { symbol } from './brand.js';
@@ -132,17 +132,28 @@ export function paydayChipHtml(p) {
   return `<p class="payday-chip" data-payday="${p.days}" role="note" aria-label="${esc(label)}" title="${esc(label)}"><span aria-hidden="true">${p.emoji}</span><span class="pd-long" aria-hidden="true">${esc(p.text)}</span><span class="pd-short" aria-hidden="true">${p.days === 0 ? 'D-day' : `D-${p.days}`}</span></p>`;
 }
 
+// 홈 요약 카드 안 '항목별 남은 예산' 펼치기/접기(기본 접힘, 상태는 localStorage 'homeBudgetOpen')
+export function budgetItemsHtml(m, ml) {
+  const open = !!m.budgetOpen;
+  const overN = ml.items.filter((i) => i.over).length;
+  return `<button type="button" class="hero-fold text-caption mt-3" data-budget-toggle aria-expanded="${open}" aria-controls="cat-left">
+      <span>항목별 남은 예산${overN ? ` · <b class="hero-warn">${overN}개 넘침</b>` : ''}</span><span aria-hidden="true" class="hero-fold-i">${open ? '▲' : '▼'}</span></button>
+    ${open ? `<ul id="cat-left" class="hero-cats">${ml.items.map((i) => { const c = catOf(m, i.categoryId); return `<li class="hero-cat text-body${i.over ? ' is-over' : ''}"><span aria-hidden="true">${esc(c.emoji)}</span><span class="hero-cat-name">${esc(c.name)}</span><span class="hero-cat-amt tabular-nums">${i.over ? '⚠️ ' : ''}${formatWon(i.left)}<span class="sr-only">${i.over ? ' 넘쳤어요' : ' 남았어요'}</span></span></li>`; }).join('')}</ul>` : ''}`;
+}
+
 export function homeView(m) {
   const w = m.weather;
   const isCur = m.viewYm === m.curYm;
   let hero;
-  if (isCur && w.hasBudget) {
+  const ml = m.monthLeft ?? monthBudgetLeft({ budget: m.budget, periodTxs: m.periodTxs ?? [], categories: m.categories ?? [] });
+  if (isCur && w.hasBudget && ml.hasBudget) {
     hero = `<p class="text-caption font-semibold flex items-center gap-1.5"><span class="wx-icon wx-${w.weather.key}" aria-hidden="true">${w.weather.icon}</span>${w.weather.label} · ${w.weather.text}</p>
-      <p class="text-body mt-2">오늘 쓸 수 있는 돈</p>
-      <p data-fit class="text-display tabular-nums mt-1" id="hero-num" aria-live="polite" data-target="${w.available}">${formatWon(w.available)}</p>
-      <div class="mt-3 h-2 rounded-full bg-white/25" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, w.usedPct)}" aria-label="예산 사용률">
-        <div class="bar-fill h-2 rounded-full bg-white" style="--w:${Math.min(100, w.usedPct)}%"></div></div>
-      <div class="mt-2 flex flex-wrap justify-between gap-x-3 text-caption tabular-nums"><span>이번 달 예산 ${w.usedPct}% 사용</span><span>${w.daysLeft}일 남음${w.tomorrow != null && w.remaining > 0 ? ` · 내일 ${formatWon(w.tomorrow)}` : ''}</span></div>`;
+      <p class="text-body mt-2">이번 달 남은 예산</p>
+      <p data-fit class="text-display tabular-nums mt-1" id="hero-num" aria-live="polite" data-target="${ml.left}">${formatWon(ml.left)}</p>
+      <div class="mt-3 h-2 rounded-full bg-white/25" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, ml.usedPct)}" aria-label="예산 사용률">
+        <div class="bar-fill h-2 rounded-full bg-white" style="--w:${Math.min(100, ml.usedPct)}%"></div></div>
+      <div class="mt-2 flex flex-wrap justify-between gap-x-3 text-caption tabular-nums"><span>예산 ${formatWon(ml.total)} 중 ${ml.usedPct}% 사용</span><span>${w.daysLeft}일 남음</span></div>
+      ${ml.items.length ? budgetItemsHtml(m, ml) : ''}`;
   } else if (isCur) {
     hero = `<p class="text-caption font-semibold">🌈 한 달 예산을 정하면 돈 날씨가 떠요</p>
       <p class="text-body mt-2">이번 달 남긴 돈</p>

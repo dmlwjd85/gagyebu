@@ -8,7 +8,7 @@ import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 let data = null;
 let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null };
 import { ymd, period, periodOf, shiftYm, monthLabel, isYmd } from './lib/dates.js';
-import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
+import { filterPeriod, totals, trend, moneyWeather, monthBudgetLeft, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
 import { editTarget } from './lib/restore.js';
@@ -96,6 +96,8 @@ function model() {
     assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
+    monthLeft: monthBudgetLeft({ budget: state.budget, periodTxs, categories: state.categories }),
+    budgetOpen: localStorage.getItem('homeBudgetOpen') === '1',
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
     trend: trend(state.txs, [-5, -4, -3, -2, -1, 0].map((d) => period(shiftYm(viewYm, d), sd))),
     streak: recordStreak(state.txs.map((x) => x.date), t),
@@ -146,7 +148,8 @@ function render() {
   const ask = !!(state.askMode && state.settingsLoaded && ui.view === 'home');
   const body = ask ? onboardingView() : ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
     : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView, assets: assetsView, tax: taxView }[ui.view](m, ui);
-  const nav = !ask && !NO_NAV.has(ui.view);
+  // 어느 화면에서든(연금·설정·검색 포함) 아래 메뉴로 쨈 버튼·홈에 갈 수 있게 항상 보임
+  const nav = !ask;
   // 위 메뉴 / 본문(여기만 스크롤, 글자 배율 적용) / 아래 메뉴 3줄 틀 — style.css '.app-frame'
   document.body.classList.add('has-frame');
   app.innerHTML = `
@@ -712,6 +715,7 @@ app.addEventListener('click', async (e) => {
     dismissHint(); renderInstallHint(); renderTip();
     return ($('#tip-slot .tip-x') ?? $('#main'))?.focus({ preventScroll: true });
   }
+  if (d.budgetToggle !== undefined) { localStorage.setItem('homeBudgetOpen', localStorage.getItem('homeBudgetOpen') === '1' ? '0' : '1'); return render(); }
   if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
     case 'add': if (t.matches('.fab')) return addPop(t); haptic(); return openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번), 진동·소리는 누를 때(feel.js)

@@ -108,3 +108,23 @@ export function topIncrease(cur, prev, minPrev = 10000) {
   }
   return best;
 }
+
+/**
+ * 이번 달 남은 예산 = 예산 합계 − 이번 달 지출(환불이 더 많으면 0원으로 봄).
+ * byCategory(나눠서 관리)에 한도가 있으면 항목별 남은 예산도 돌려줌(한도 큰 순 아님, 카테고리 순서 유지).
+ */
+export function monthBudgetLeft({ budget, periodTxs, categories = [] }) {
+  const total = budget?.total ?? 0;
+  if (!total || total <= 0) return { hasBudget: false, items: [] };
+  let net = 0;
+  const by = new Map();
+  for (const t of periodTxs) if (t.kind === 'expense') { net += t.amount; by.set(t.categoryId, (by.get(t.categoryId) ?? 0) + t.amount); }
+  const spent = Math.max(0, net);
+  const lims = budget?.byCategory ?? {};
+  const order = new Map(categories.map((c, i) => [c.id, i]));
+  const items = Object.entries(lims).filter(([, lim]) => Number(lim) > 0).map(([id, lim]) => {
+    const used = Math.max(0, by.get(id) ?? 0);
+    return { categoryId: id, limit: Number(lim), spent: used, left: Number(lim) - used, over: used > Number(lim) };
+  }).sort((a, b) => (order.get(a.categoryId) ?? 1e9) - (order.get(b.categoryId) ?? 1e9));
+  return { hasBudget: true, total, spent, left: total - spent, over: spent > total, usedPct: Math.min(999, Math.round((spent / total) * 100)), items };
+}
