@@ -8,7 +8,7 @@ import { symbol, logo, JJAEM_D, JJAEM_ICON_D, JJAEM_ICON_VB, FAB_INNER } from '.
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
-  fontsFor, toneList, FONT_OPTIONS,
+  fontsFor, toneList, FONT_OPTIONS, KS_SAMPLE, JJAEM_CACHE_FILES, prefetchJjaemKs, resetKsPrefetchForTest,
 } from './look.js';
 
 function mem(init = {}) {
@@ -209,8 +209,54 @@ describe('쨈 폰트 v1.0.5', () => {
     const vite = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
     expect(vite).toMatch(/JJAEMBody-Regular\\\.core-/);
     expect(vite).toMatch(/JJAEMBody-Bold\\\.core-/);
-    expect(vite).toMatch(/if\(f&&f!=='pretendard'\)return;/);
+    // head 맨 앞(CSS 링크보다 먼저)에 넣고, 그 자리에서는 localStorage 를 직접 읽는다(QA N3)
+    expect(vite).toMatch(/try\{f=localStorage\.getItem\('font'\)\}catch\(e\)\{\}if\(f==='system'\|\|f==='gaegu'\)return;/);
+    expect(vite).toMatch(/injectTo: 'head-prepend'/);
     expect(vite).not.toMatch(/\.ks-\[/);
+    // 받은 글꼴 조각은 런타임 캐시(CacheFirst)에 남아 오프라인에서도 쓴다
+    expect(vite).toMatch(/request\.destination === 'font', handler: 'CacheFirst'/);
+    // 글꼴 CSS 도 같이 미리 받음(글꼴 파일만 일찍 와서는 못 바꿈). 앱(Vite)이 넣는 stylesheet 가 crossOrigin='' 이라 미리 받기도 같게 해야 다시 받지 않음
+    expect(vite).toMatch(/PRELOAD_FONT_CSS = \/\^assets\\\/jjaem-font-/);
+    expect(vite).toMatch(/c\.rel='preload';c\.as='style';c\.crossOrigin='';c\.href=/);
+    // 미리 받은 조각을 넣는 캐시 이름이 워커 설정과 같아야 오프라인에서 찾음
+    expect(vite).toMatch(/cacheName: 'fonts-v2'/);
+    expect(readFileSync(new URL('./look.js', import.meta.url), 'utf8')).toMatch(/caches\.open\('fonts-v2'\)/);
+  });
+
+  test('.ks 조각은 첫 화면이 한가해진 뒤 두 굵기 모두 미리 받고, 데이터 절약·2G 에서는 받지 않는다(QA N2)', async () => {
+    for (const w of ['100 500', '600 900']) {
+      const [core, ks, ext] = body(w).map(range);
+      const c = KS_SAMPLE.codePointAt(0);
+      expect(ks.has(c)).toBe(true); expect(core.has(c)).toBe(false); expect(ext.has(c)).toBe(false);
+    }
+    const fake = ({ conn, cached = [] } = {}) => {
+      const calls = [], added = [];
+      const win = {
+        document: { readyState: 'complete', fonts: { ready: Promise.resolve(), load: (f, t) => { calls.push([f, t]); return Promise.resolve([]); } } },
+        navigator: { connection: conn },
+        caches: { open: async (name) => ({ match: async (u) => cached.includes(u), add: async (u) => added.push([name, u]) }) },
+        requestIdleCallback: (fn) => fn(),
+        setTimeout: (fn) => fn(),
+        addEventListener: () => {},
+      };
+      return { win, calls, added };
+    };
+    expect(JJAEM_CACHE_FILES.map((u) => u.split('/').pop().replace(/-[\w-]{8}\./, '.'))).toEqual(['JJAEMBody-Regular.core.woff2', 'JJAEMBody-Bold.core.woff2', 'JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2']);
+    resetKsPrefetchForTest();
+    const a = fake({ cached: [JJAEM_CACHE_FILES[0]] });
+    expect(prefetchJjaemKs(a.win)).toBe(true);
+    await new Promise((r) => setTimeout(r, 5));
+    expect(a.calls).toEqual([['400 16px "JJAEM Body"', KS_SAMPLE], ['700 16px "JJAEM Body"', KS_SAMPLE]]);
+    // 한 번 연 뒤 오프라인에서도 쓰게 워커 글꼴 캐시(fonts-v2)에 넣음. 이미 있는 것은 다시 받지 않음
+    expect(a.added).toEqual(JJAEM_CACHE_FILES.slice(1).map((u) => ['fonts-v2', u]));
+    expect(prefetchJjaemKs(fake().win)).toBe(false); // 한 번만
+    for (const conn of [{ saveData: true }, { effectiveType: '2g' }, { effectiveType: 'slow-2g' }]) {
+      resetKsPrefetchForTest();
+      const b = fake({ conn });
+      expect(prefetchJjaemKs(b.win)).toBe(false);
+      expect(b.calls).toEqual([]);
+    }
+    resetKsPrefetchForTest();
   });
 });
 

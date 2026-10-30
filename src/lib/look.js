@@ -7,6 +7,11 @@
 // 쓰는 방식(mode·features·용돈·배우자)과 거래 필드는 바꾸지 않는다. normalizeSettings 는 이 키를 백업에 넣지 않는다.
 // 다크 모드는 기존 'theme' 키(light|dark|시스템) 그대로다.
 
+import coreRegularUrl from '../assets/fonts/jjaem/fonts/JJAEMBody-Regular.core.woff2?url';
+import coreBoldUrl from '../assets/fonts/jjaem/fonts/JJAEMBody-Bold.core.woff2?url';
+import ksRegularUrl from '../assets/fonts/jjaem/fonts/JJAEMBody-Regular.ks.woff2?url';
+import ksBoldUrl from '../assets/fonts/jjaem/fonts/JJAEMBody-Bold.ks.woff2?url';
+
 export const MOODS = ['default', 'sakura', 'ocean', 'maple', 'snow', 'retro'];
 export const FONTS = ['system', 'pretendard', 'gaegu'];
 export const ART_MOODS = ['sakura', 'ocean', 'maple', 'snow', 'retro'];
@@ -144,10 +149,39 @@ export function ensureFont(font) {
   for (const name of fontsFor(font)) {
     if (loadedFonts.has(name)) continue;
     loadedFonts.add(name);
-    jobs.push(fontLoaders[name]());
+    jobs.push(name === 'jjaem' ? fontLoaders.jjaem().then((m) => { prefetchJjaemKs(); return m; }) : fontLoaders[name]());
   }
   return jobs.length ? Promise.all(jobs) : Promise.resolve();
 }
+
+// 쨈 본문 .ks 조각(자주 쓰는 한글 2,350자 중 첫 조각에 없는 글자, 400 약 411KB·700 약 421KB)을
+// 첫 화면이 다 뜨고 한가해진 뒤 조용히 받아 둔다(QA N2). 메모·검색·카테고리 이름에 처음 보는 글자를 쳐도 다른 글꼴이 섞이지 않게.
+// 받은 뒤 첫 조각·.ks 를 서비스 워커의 글꼴 캐시(fonts-v2, CacheFirst)에도 넣어 둔다 → 한 번 온라인으로 연 뒤에는 오프라인에서도 같음.
+// (첫 방문에는 워커가 아직 화면을 맡지 않아 글꼴 요청이 워커를 거치지 않으므로 직접 넣음. 방금 받은 파일이라 보통 브라우저 HTTP 캐시에서 나옴)
+// 데이터 절약 모드·2G 에서는 받지 않는다(그 글자가 나올 때만 받음). .ext(드문 한글 8,822자, 두 굵기 약 1MB)는 미리 받지 않는다.
+// KS_SAMPLE 은 두 굵기 .ks 범위 안에만 있는 글자(look.test.js 가 확인).
+export const KS_SAMPLE = String.fromCodePoint(0xac09); // 글자를 소스에 그대로 쓰면 첫 조각 만들 때 첫 조각에 들어가 버려서 코드값으로 씀
+export const JJAEM_CACHE_FILES = [coreRegularUrl, coreBoldUrl, ksRegularUrl, ksBoldUrl];
+let ksPrefetched = false;
+export function prefetchJjaemKs(w = globalThis) {
+  if (ksPrefetched) return false;
+  const conn = w.navigator?.connection;
+  if (!w.document?.fonts?.load || conn?.saveData || /(^|-)2g$/.test(conn?.effectiveType ?? '')) return false;
+  ksPrefetched = true;
+  const idle = (fn) => (w.requestIdleCallback ? w.requestIdleCallback(fn, { timeout: 5000 }) : w.setTimeout(fn, 2000));
+  const keep = async () => {
+    if (!w.caches?.open) return;
+    const cache = await w.caches.open('fonts-v2');
+    for (const u of JJAEM_CACHE_FILES) if (!(await cache.match(u))) await cache.add(u);
+  };
+  // 첫 조각이 다 오기 전에 시작하면 첫 화면 글꼴과 대역을 나눠 써서 늦어짐 → 받는 중인 글꼴이 다 끝나고(fonts.ready) 한 번 더 한가할 때 시작
+  const run = () => Promise.resolve(w.document.fonts.ready).then(() => new Promise((r) => idle(r)))
+    .then(() => Promise.all(['400', '700'].map((wt) => w.document.fonts.load(`${wt} 16px "JJAEM Body"`, KS_SAMPLE)))).then(keep).catch(() => {});
+  if (w.document.readyState === 'complete') idle(run);
+  else w.addEventListener('load', () => idle(run), { once: true });
+  return true;
+}
+export function resetKsPrefetchForTest() { ksPrefetched = false; }
 
 export function initLook() {
   const look = applyLook(readLook());
