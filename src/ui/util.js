@@ -202,3 +202,11 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
     form.querySelector('input,select')?.focus();
   });
 }
+
+/** 도는 동안 또 부르면 새로 시작하지 않고 같은 약속을 돌려준다(연타로 같은 일이 겹치지 않게). 끝나면 다시 부를 수 있음 */
+export function singleRun(fn) {
+  let job = null;
+  const run = (...args) => job ?? (job = Promise.resolve().then(() => fn(...args)).finally(() => { job = null; }));
+  run.busy = () => !!job;
+  return run;
+}

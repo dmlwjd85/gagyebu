@@ -106,7 +106,9 @@ describe('테마는 색만', () => {
     expect(main).not.toMatch(/hero-art|theme-banner|themeBannerHtml|\.webp/);
     const cfg = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
     expect(cfg).not.toMatch(/webp|cacheName:\s*'theme-art'/);
-    expect(cfg).toMatch(/globPatterns: \['\*\*\/\*\.\{js,css,html,svg,png\}'\]/);
+    // 프리캐시: 그림(webp) 없음. 글꼴은 리포트 제목 조각(약 2KB)만 더함(QA 3차 M4)
+    expect(cfg).toMatch(/PRECACHE_GLOBS = \['\*\*\/\*\.\{js,css,html,svg,png\}', '\*\*\/JJAEM-TitleFlat-\*\.woff2'\]/);
+    expect(cfg).toContain('globPatterns: PRECACHE_GLOBS,');
     expect(cfg).toContain("importScripts: ['sw-cleanup.js']");
     const sw = readFileSync(new URL('../../public/sw-cleanup.js', import.meta.url), 'utf8');
     expect(sw).toMatch(/addEventListener\(\s*'activate'/);
@@ -205,58 +207,130 @@ describe('쨈 폰트 v1.0.5', () => {
     }
   });
 
-  test('미리 받기(preload)는 첫 조각만, 설정 글꼴이 기본일 때만 건다', () => {
-    const vite = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
-    expect(vite).toMatch(/JJAEMBody-Regular\\\.core-/);
-    expect(vite).toMatch(/JJAEMBody-Bold\\\.core-/);
-    // head 맨 앞(CSS 링크보다 먼저)에 넣고, 그 자리에서는 localStorage 를 직접 읽는다(QA N3)
-    expect(vite).toMatch(/try\{f=localStorage\.getItem\('font'\)\}catch\(e\)\{\}if\(f==='system'\|\|f==='gaegu'\)return;/);
-    expect(vite).toMatch(/injectTo: 'head-prepend'/);
-    expect(vite).not.toMatch(/\.ks-\[/);
-    // 받은 글꼴 조각은 런타임 캐시(CacheFirst)에 남아 오프라인에서도 쓴다
-    expect(vite).toMatch(/request\.destination === 'font', handler: 'CacheFirst'/);
-    // 글꼴 CSS 도 같이 미리 받음(글꼴 파일만 일찍 와서는 못 바꿈). 앱(Vite)이 넣는 stylesheet 가 crossOrigin='' 이라 미리 받기도 같게 해야 다시 받지 않음
-    expect(vite).toMatch(/PRELOAD_FONT_CSS = \/\^assets\\\/jjaem-font-/);
-    expect(vite).toMatch(/c\.rel='preload';c\.as='style';c\.crossOrigin='';c\.href=/);
-    // 미리 받은 조각을 넣는 캐시 이름이 워커 설정과 같아야 오프라인에서 찾음
-    expect(vite).toMatch(/cacheName: 'fonts-v2'/);
-    expect(readFileSync(new URL('./look.js', import.meta.url), 'utf8')).toMatch(/caches\.open\('fonts-v2'\)/);
+  test('미리 받기(preload)는 보통 굵기 첫 조각 하나만, 기본 글꼴일 때만, 앱 CSS·JS 뒤에 낮은 우선순위로 건다(QA 3차 M3)', async () => {
+    const { default: config } = await import('../../vite.config.js');
+    const plugin = config.plugins.flat().find((p) => p?.name === 'preload-main-fonts');
+    const bundle = Object.fromEntries(['assets/JJAEMBody-Regular.core-AAAA1111.woff2', 'assets/JJAEMBody-Bold.core-BBBB2222.woff2', 'assets/JJAEMBody-Regular.ks-CCCC3333.woff2', 'assets/jjaem-font-DDDD4444.css', 'assets/index-EEEE5555.js'].map((f) => [f, {}]));
+    const out = plugin.transformIndexHtml.handler('<html><head></head></html>', { bundle });
+    const tags = out.tags ?? out;
+    expect(tags).toHaveLength(1);
+    expect(tags[0].injectTo).toBe('head'); // head 끝: Vite 가 넣는 앱 CSS·모듈 스크립트 뒤
+    const run = (font) => {
+      const links = [];
+      const document = { documentElement: { dataset: font ? { font } : {} }, createElement: () => ({}), head: { appendChild: (l) => links.push(l) } };
+      new Function('document', tags[0].children)(document);
+      return links;
+    };
+    for (const font of [undefined, 'pretendard']) {
+      const links = run(font);
+      expect(links.map((l) => [l.rel, l.as, l.fetchPriority, l.crossOrigin, l.href]).sort()).toEqual([
+        ['preload', 'font', 'low', '', '/gagyebu/assets/JJAEMBody-Regular.core-AAAA1111.woff2'],
+      ]); // 굵게 .core·.ks 조각·글꼴 CSS 는 미리 받지 않음
+    }
+    expect(run('system')).toEqual([]);
+    expect(run('gaegu')).toEqual([]);
   });
 
-  test('.ks 조각은 첫 화면이 한가해진 뒤 두 굵기 모두 미리 받고, 데이터 절약·2G 에서는 받지 않는다(QA N2)', async () => {
-    for (const w of ['100 500', '600 900']) {
-      const [core, ks, ext] = body(w).map(range);
-      const c = KS_SAMPLE.codePointAt(0);
-      expect(ks.has(c)).toBe(true); expect(core.has(c)).toBe(false); expect(ext.has(c)).toBe(false);
-    }
-    const fake = ({ conn, cached = [] } = {}) => {
-      const calls = [], added = [];
+  test('글꼴 런타임 캐시(fonts-v2, 만료 관리)는 글꼴 요청과 미리 받기가 다시 받는 woff2 를 같이 맡고, 리포트 제목 조각은 프리캐시(QA 3차 M4·M7)', async () => {
+    const { FONT_RUNTIME_CACHE, PRECACHE_GLOBS } = await import('../../vite.config.js');
+    const req = (destination, path) => ({ request: { destination }, url: new URL(`https://x.test/gagyebu/assets/${path}`) });
+    expect(FONT_RUNTIME_CACHE.urlPattern(req('font', 'JJAEMBody-Regular.ks-AAAA.woff2'))).toBe(true);
+    expect(FONT_RUNTIME_CACHE.urlPattern(req('', 'JJAEMBody-Regular.ks-AAAA.woff2'))).toBe(true);
+    expect(FONT_RUNTIME_CACHE.urlPattern(req('script', 'index-AAAA.js'))).toBe(false);
+    expect(FONT_RUNTIME_CACHE.urlPattern(req('style', 'index-AAAA.css'))).toBe(false);
+    expect(FONT_RUNTIME_CACHE).toMatchObject({ handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120 } } });
+    const title = readdirSync(fileURLToPath(new URL('../assets/fonts/jjaem/fonts/', import.meta.url))).filter((f) => /Title/.test(f));
+    expect(title).toEqual(['JJAEM-TitleFlat-Regular.title.woff2']);
+    expect(PRECACHE_GLOBS).toContain('**/JJAEM-TitleFlat-*.woff2');
+    expect(PRECACHE_GLOBS.join()).not.toMatch(/JJAEMBody|\*\.woff2'|\{[^}]*woff2/); // 본문 조각은 프리캐시하지 않음(쓰는 것만 런타임)
+  });
+
+  describe('.ks 조각 미리 받기(QA N2·3차 M5·M6·M7)', () => {
+    const tick = () => new Promise((r) => setTimeout(r, 5));
+    const fake = ({ conn, font = 'pretendard', controller = {}, idleQueue = false } = {}) => {
+      const calls = [], fetched = [], idles = [], sw = { controller, listeners: [], addEventListener: (ev, fn) => sw.listeners.push([ev, fn]) };
       const win = {
-        document: { readyState: 'complete', fonts: { ready: Promise.resolve(), load: (f, t) => { calls.push([f, t]); return Promise.resolve([]); } } },
-        navigator: { connection: conn },
-        caches: { open: async (name) => ({ match: async (u) => cached.includes(u), add: async (u) => added.push([name, u]) }) },
-        requestIdleCallback: (fn) => fn(),
+        document: { readyState: 'complete', documentElement: { dataset: { font } }, fonts: { ready: Promise.resolve(), load: (f, t) => { calls.push([f, t]); return Promise.resolve([]); } } },
+        navigator: { connection: conn, serviceWorker: sw },
+        fetch: async (u) => { fetched.push(u); return {}; },
+        requestIdleCallback: (fn) => (idleQueue ? idles.push(fn) : fn()),
         setTimeout: (fn) => fn(),
         addEventListener: () => {},
       };
-      return { win, calls, added };
+      return { win, calls, fetched, idles, sw };
     };
-    expect(JJAEM_CACHE_FILES.map((u) => u.split('/').pop().replace(/-[\w-]{8}\./, '.'))).toEqual(['JJAEMBody-Regular.core.woff2', 'JJAEMBody-Bold.core.woff2', 'JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2']);
-    resetKsPrefetchForTest();
-    const a = fake({ cached: [JJAEM_CACHE_FILES[0]] });
-    expect(prefetchJjaemKs(a.win)).toBe(true);
-    await new Promise((r) => setTimeout(r, 5));
-    expect(a.calls).toEqual([['400 16px "JJAEM Body"', KS_SAMPLE], ['700 16px "JJAEM Body"', KS_SAMPLE]]);
-    // 한 번 연 뒤 오프라인에서도 쓰게 워커 글꼴 캐시(fonts-v2)에 넣음. 이미 있는 것은 다시 받지 않음
-    expect(a.added).toEqual(JJAEM_CACHE_FILES.slice(1).map((u) => ['fonts-v2', u]));
-    expect(prefetchJjaemKs(fake().win)).toBe(false); // 한 번만
-    for (const conn of [{ saveData: true }, { effectiveType: '2g' }, { effectiveType: 'slow-2g' }]) {
+    test('.ks 범위 안 글자로 두 굵기를 받고, 첫 조각·.ks 는 워커를 거쳐(fetch) 다시 받아 만료 관리되는 캐시에 둔다', async () => {
+      for (const w of ['100 500', '600 900']) {
+        const [core, ks, ext] = body(w).map(range);
+        const c = KS_SAMPLE.codePointAt(0);
+        expect(ks.has(c)).toBe(true); expect(core.has(c)).toBe(false); expect(ext.has(c)).toBe(false);
+      }
+      expect(JJAEM_CACHE_FILES.map((u) => u.split('/').pop().replace(/-[\w-]{8}\./, '.'))).toEqual(['JJAEMBody-Regular.core.woff2', 'JJAEMBody-Bold.core.woff2', 'JJAEMBody-Regular.ks.woff2', 'JJAEMBody-Bold.ks.woff2']);
       resetKsPrefetchForTest();
-      const b = fake({ conn });
-      expect(prefetchJjaemKs(b.win)).toBe(false);
-      expect(b.calls).toEqual([]);
-    }
-    resetKsPrefetchForTest();
+      const a = fake();
+      expect(prefetchJjaemKs(a.win)).toBe(true);
+      await tick();
+      expect(a.calls).toEqual([['400 16px "JJAEM Body"', KS_SAMPLE], ['700 16px "JJAEM Body"', KS_SAMPLE]]);
+      expect(a.fetched).toEqual(JJAEM_CACHE_FILES);
+      expect(prefetchJjaemKs(fake().win)).toBe(false); // 한 번만
+      resetKsPrefetchForTest();
+    });
+    test('워커가 아직 화면을 맡지 않았으면 맡은 뒤(controllerchange)에 받는다. 워커가 없으면 캐시에 넣지 않는다', async () => {
+      resetKsPrefetchForTest();
+      const a = fake({ controller: null });
+      prefetchJjaemKs(a.win); await tick();
+      expect(a.calls).toHaveLength(2);
+      expect(a.fetched).toEqual([]);
+      const [[ev, fn]] = a.sw.listeners; expect(ev).toBe('controllerchange');
+      fn(); await tick();
+      expect(a.fetched).toEqual(JJAEM_CACHE_FILES);
+      resetKsPrefetchForTest();
+      const b = fake(); delete b.win.navigator.serviceWorker;
+      prefetchJjaemKs(b.win); await tick();
+      expect(b.calls).toHaveLength(2); expect(b.fetched).toEqual([]);
+      resetKsPrefetchForTest();
+    });
+    test('글꼴 설정이 시스템·나눔라운드면 받지 않는다(클라우드에서 받은 설정 포함)', async () => {
+      for (const font of ['system', 'gaegu']) {
+        resetKsPrefetchForTest();
+        const a = fake({ font });
+        expect(prefetchJjaemKs(a.win)).toBe(false);
+        await tick();
+        expect(a.calls).toEqual([]); expect(a.fetched).toEqual([]);
+      }
+      // 기기에는 기본 글꼴, 로그인해서 받은 설정은 system → 받기 직전 다시 보면 system 이라 받지 않음
+      resetKsPrefetchForTest();
+      const c = fake();
+      adoptCloudLook({ font: 'system' }, mem({ font: 'pretendard' }), c.win.document.documentElement);
+      expect(c.win.document.documentElement.dataset.font).toBe('system');
+      expect(prefetchJjaemKs(c.win)).toBe(false);
+      await tick();
+      expect(c.calls).toEqual([]);
+      resetKsPrefetchForTest();
+    });
+    test('기다리는 사이 설정을 시스템으로 바꾸면 그만두고, 나중에 기본으로 돌아오면 다시 받는다', async () => {
+      resetKsPrefetchForTest();
+      const a = fake({ idleQueue: true });
+      expect(prefetchJjaemKs(a.win)).toBe(true);
+      a.win.document.documentElement.dataset.font = 'system';
+      while (a.idles.length) { a.idles.shift()(); await tick(); }
+      expect(a.calls).toEqual([]); expect(a.fetched).toEqual([]);
+      a.win.document.documentElement.dataset.font = 'pretendard';
+      expect(prefetchJjaemKs(a.win)).toBe(true);
+      while (a.idles.length) { a.idles.shift()(); await tick(); }
+      expect(a.calls).toHaveLength(2); expect(a.fetched).toEqual(JJAEM_CACHE_FILES);
+      resetKsPrefetchForTest();
+    });
+    test('데이터 절약 모드·2G 에서는 받지 않는다', async () => {
+      for (const conn of [{ saveData: true }, { effectiveType: '2g' }, { effectiveType: 'slow-2g' }]) {
+        resetKsPrefetchForTest();
+        const b = fake({ conn });
+        expect(prefetchJjaemKs(b.win)).toBe(false);
+        await tick();
+        expect(b.calls).toEqual([]);
+      }
+      resetKsPrefetchForTest();
+    });
   });
 });
 

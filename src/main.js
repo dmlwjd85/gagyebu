@@ -1,7 +1,7 @@
 import './style.css';
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
-import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, toneList } from './lib/look.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, toneList, prefetchJjaemKs } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -15,7 +15,7 @@ import { editTarget } from './lib/restore.js';
 import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal, singleRun } from './ui/util.js';
 import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
 import { createNavHistory } from './lib/navBack.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
@@ -132,6 +132,19 @@ function pushLook(partial) {
   }
   render();
 }
+// 리포트 카드: 만드는 동안 또 눌러도 한 번만 만든다(대화상자 겹침 방지). 버튼은 '만드는 중…'으로 바꿔 기다리는 걸 알림(QA 3차 M1)
+function markReportBusy(on) {
+  app.querySelectorAll('[data-action="report"]').forEach((b) => {
+    const label = b.querySelector('.font-semibold');
+    if (on) { b.setAttribute('aria-busy', 'true'); b.setAttribute('aria-disabled', 'true'); if (label) { label.dataset.idle ??= label.textContent; label.textContent = '리포트 카드 만드는 중…'; } }
+    else { b.removeAttribute('aria-busy'); b.removeAttribute('aria-disabled'); if (label?.dataset.idle) { label.textContent = label.dataset.idle; delete label.dataset.idle; } }
+  });
+}
+const runReport = singleRun(async (m) => {
+  markReportBusy(true);
+  try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
+  finally { markReportBusy(false); }
+});
 function render() {
   if (state.user && state.settingsLoaded) adoptCloudLook(state.settings);
   if (redirectDone) exitGuard.sync({ loggedIn: !!state.user });
@@ -170,6 +183,9 @@ function render() {
   syncRailShift();
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
+  // 첫 데이터(기록·설정)를 그린 뒤에만 쨈 본문 .ks 를 한가할 때 받기 시작(로그인 화면·첫 데이터 전에는 안 함, 글꼴 설정이 기본일 때만, QA 3차 M5·M6)
+  if (state.txLoaded && state.settingsLoaded) prefetchJjaemKs();
+  if (runReport.busy()) markReportBusy(true); // 만드는 중에 다시 그려도 버튼 표시 유지
   renderTip();
   renderInstallHint();
 }
@@ -754,9 +770,7 @@ app.addEventListener('click', async (e) => {
       input.click();
       return;
     }
-    case 'report':
-      try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
-      return;
+    case 'report': return runReport(m);
     case 'theme': toggleTheme(); return render();
     case 'budget': return editBudget(m);
     case 'login':

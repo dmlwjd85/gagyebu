@@ -4,13 +4,14 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
-// 쨈 본문 첫 조각(.core: 앱 화면 글자 + 영문·숫자·기호, 400·700 두 굵기)만 미리 받기.
-// 설정 글꼴이 기본(쨈 본문)일 때만 건다: localStorage 'font' 가 system·gaegu 가 아니면 head 에 link 를 넣음.
-// 시스템·나눔라운드를 고른 사람은 쨈 본문을 받지 않는다. 나머지 조각 중 .ks 는 첫 화면 뒤 한가할 때 받고(src/lib/look.js prefetchJjaemKs), .ext 는 그 글자가 화면에 나올 때만 받음.
+// 쨈 본문 첫 조각 중 보통(400) .core 하나만 미리 받기(앱 화면 글자 + 영문·숫자·기호).
+// 설정 글꼴이 기본(쨈 본문)일 때만 건다: index.html 첫 스크립트가 정한 data-font 를 보고 head 에 link 를 넣음.
+// 시스템·나눔라운드를 고른 사람은 쨈 본문을 받지 않는다. 나머지 조각 중 .ks 는 첫 데이터를 그린 뒤 한가할 때 받고(src/lib/look.js prefetchJjaemKs), .ext 는 그 글자가 화면에 나올 때만 받음.
+// 자리·우선순위(QA 3차 M3): head 끝(앱 CSS·모듈 스크립트 뒤)에 낮은 우선순위(fetchpriority=low)로 넣어 첫 화면 CSS·JS 가 먼저 오게 한다.
+// 글꼴 CSS(@font-face 목록)는 미리 받지 않는다. 굵게(700) .core 도 미리 받지 않고 글꼴 CSS 가 온 뒤 화면에 쓰일 때 받는다
+// (둘 다 미리 받으면 로그인 버튼에 필요한 로그인 조각과 대역을 나눠 버튼이 main 보다 0.4s(slow4g)·1.2s(3G) 늦었음).
 const BASE = '/gagyebu/';
-const PRELOAD_FONT_FILES = [/JJAEMBody-Regular\.core-[^/]+\.woff2$/, /JJAEMBody-Bold\.core-[^/]+\.woff2$/];
-// 글꼴 CSS(@font-face 목록)는 앱 스크립트가 불러와서 늦게 시작한다 → 같이 미리 받아 둠(글꼴 파일만 일찍 와도 CSS 가 없으면 못 바꿈)
-const PRELOAD_FONT_CSS = /^assets\/jjaem-font-[^/]+\.css$/;
+const PRELOAD_FONT_FILES = [/JJAEMBody-Regular\.core-[^/]+\.woff2$/];
 function preloadMainFonts() {
   return {
     name: 'preload-main-fonts',
@@ -21,15 +22,17 @@ function preloadMainFonts() {
         const files = Object.keys(ctx.bundle).filter((f) => PRELOAD_FONT_FILES.some((re) => re.test(f)));
         if (!files.length) return html;
         const hrefs = JSON.stringify(files.map((f) => `${BASE}${f}`));
-        const css = Object.keys(ctx.bundle).find((f) => PRELOAD_FONT_CSS.test(f));
-        // head 맨 앞(CSS·모듈 스크립트보다 먼저)에 넣어 글꼴 요청이 늦게 시작하지 않게 한다(QA N3).
-        // 이 자리는 index.html 첫 스크립트보다 앞이라 data-font 대신 localStorage 'font' 를 같은 규칙으로 직접 읽는다(모르는 값 = 기본).
-        const js = `(function(){var f;try{f=localStorage.getItem('font')}catch(e){}if(f==='system'||f==='gaegu')return;${hrefs}.forEach(function(h){var l=document.createElement('link');l.rel='preload';l.as='font';l.type='font/woff2';l.crossOrigin='';l.href=h;document.head.appendChild(l);});${css ? `var c=document.createElement('link');c.rel='preload';c.as='style';c.crossOrigin='';c.href=${JSON.stringify(BASE + css)};document.head.appendChild(c);` : ''}})();`;
-        return [{ tag: 'script', children: js, injectTo: 'head-prepend' }];
+        const js = `(function(){var f=document.documentElement.dataset.font;if(f&&f!=='pretendard')return;${hrefs}.forEach(function(h){var l=document.createElement('link');l.rel='preload';l.as='font';l.type='font/woff2';l.crossOrigin='';l.fetchPriority='low';l.href=h;document.head.appendChild(l);});})();`;
+        return { html, tags: [{ tag: 'script', children: js, injectTo: 'head' }] };
       },
     },
   };
 }
+
+// 리포트 제목 조각(JJAEM Title Flat, 약 2KB)은 오프라인 첫 리포트에서도 제목이 바뀌지 않게 프리캐시(QA 3차 M4). 본문 조각은 쓰는 것만 런타임 캐시
+export const PRECACHE_GLOBS = ['**/*.{js,css,html,svg,png}', '**/JJAEM-TitleFlat-*.woff2'];
+// 글꼴 요청(destination font)과, 쨈 본문 미리 받기가 워커를 거쳐 다시 받는 woff2(look.js, destination 없음)를 같은 캐시·만료 규칙으로(QA 3차 M7)
+export const FONT_RUNTIME_CACHE = { urlPattern: ({ request, url }) => request.destination === 'font' || url.pathname.endsWith('.woff2'), handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } };
 
 export default defineConfig({
   base: BASE,
@@ -73,14 +76,14 @@ export default defineConfig({
       workbox: {
         skipWaiting: true,
         clientsClaim: true,
-        globPatterns: ['**/*.{js,css,html,svg,png}'],
+        globPatterns: PRECACHE_GLOBS,
         // 512 설치 아이콘·마스커블·favicon.svg는 페이지가 쓰지 않으므로 프리캐시에서 뺌
         globIgnores: ['**/pwa-512.png', '**/pwa-maskable-512.png', '**/pwa-maskable.svg', '**/favicon.svg'],
         // 예전 테마 그림 캐시(theme-art)·폰트 캐시(fonts)·workbox 프리캐시는 sw-cleanup.js 의 activate 에서 지운다.
         importScripts: ['sw-cleanup.js'],
         cacheId: 'gagyebu-v2',
         // 폰트 조각(woff2)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
-        runtimeCaching: [{ urlPattern: ({ request }) => request.destination === 'font', handler: 'CacheFirst', options: { cacheName: 'fonts-v2', expiration: { maxEntries: 120, maxAgeSeconds: 31536000 } } }],
+        runtimeCaching: [FONT_RUNTIME_CACHE],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
         // start_url에 ?source= 같은 쿼리가 붙어도 오프라인에서 index.html을 내준다.

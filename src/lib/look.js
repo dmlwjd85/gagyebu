@@ -149,36 +149,48 @@ export function ensureFont(font) {
   for (const name of fontsFor(font)) {
     if (loadedFonts.has(name)) continue;
     loadedFonts.add(name);
-    jobs.push(name === 'jjaem' ? fontLoaders.jjaem().then((m) => { prefetchJjaemKs(); return m; }) : fontLoaders[name]());
+    jobs.push(fontLoaders[name]());
   }
   return jobs.length ? Promise.all(jobs) : Promise.resolve();
 }
 
 // 쨈 본문 .ks 조각(자주 쓰는 한글 2,350자 중 첫 조각에 없는 글자, 400 약 411KB·700 약 421KB)을
-// 첫 화면이 다 뜨고 한가해진 뒤 조용히 받아 둔다(QA N2). 메모·검색·카테고리 이름에 처음 보는 글자를 쳐도 다른 글꼴이 섞이지 않게.
-// 받은 뒤 첫 조각·.ks 를 서비스 워커의 글꼴 캐시(fonts-v2, CacheFirst)에도 넣어 둔다 → 한 번 온라인으로 연 뒤에는 오프라인에서도 같음.
-// (첫 방문에는 워커가 아직 화면을 맡지 않아 글꼴 요청이 워커를 거치지 않으므로 직접 넣음. 방금 받은 파일이라 보통 브라우저 HTTP 캐시에서 나옴)
+// 첫 데이터가 홈에 그려지고(main.js render → prefetchJjaemKs) 한가해진 뒤 조용히 받아 둔다(QA N2·3차 M5).
+// 로그인 화면에서는 시작하지 않는다 → 처음 와서 바로 로그인하는 사람의 홈이 늦어지지 않게.
+// 받기 직전에 지금 글꼴 설정(클라우드에서 받은 값을 반영한 data-font)을 다시 보고 기본(쨈 본문)이 아니면 받지 않는다(M6).
+// 그 사이 설정이 바뀌어도 다음 그리기 때 다시 부르므로, 나중에 기본으로 돌아오면 그때 받는다.
+// 받은 파일은 서비스 워커를 거쳐 받아 글꼴 캐시(fonts-v2, CacheFirst + 만료 관리) 안에 둔다(M7: cache.add 로 직접 넣지 않음).
 // 데이터 절약 모드·2G 에서는 받지 않는다(그 글자가 나올 때만 받음). .ext(드문 한글 8,822자, 두 굵기 약 1MB)는 미리 받지 않는다.
 // KS_SAMPLE 은 두 굵기 .ks 범위 안에만 있는 글자(look.test.js 가 확인).
 export const KS_SAMPLE = String.fromCodePoint(0xac09); // 글자를 소스에 그대로 쓰면 첫 조각 만들 때 첫 조각에 들어가 버려서 코드값으로 씀
 export const JJAEM_CACHE_FILES = [coreRegularUrl, coreBoldUrl, ksRegularUrl, ksBoldUrl];
+const wantsJjaem = (w) => (w.document?.documentElement?.dataset?.font ?? DEFAULT_LOOK.font) === 'pretendard';
 let ksPrefetched = false;
 export function prefetchJjaemKs(w = globalThis) {
-  if (ksPrefetched) return false;
+  if (ksPrefetched || !wantsJjaem(w)) return false;
   const conn = w.navigator?.connection;
   if (!w.document?.fonts?.load || conn?.saveData || /(^|-)2g$/.test(conn?.effectiveType ?? '')) return false;
   ksPrefetched = true;
-  const idle = (fn) => (w.requestIdleCallback ? w.requestIdleCallback(fn, { timeout: 5000 }) : w.setTimeout(fn, 2000));
+  const idle = () => new Promise((r) => (w.requestIdleCallback ? w.requestIdleCallback(r, { timeout: 5000 }) : w.setTimeout(r, 2000)));
+  // 첫 방문에는 워커가 화면을 맡기 전에 받은 첫 조각이 워커 캐시에 없다 → 워커가 맡은 뒤 한 번 더 요청해서 워커의 글꼴 길(CacheFirst)로 넣음.
+  // 워커가 없거나(지원 안 함·막힘) 안 맡으면 넣지 않는다(브라우저 HTTP 캐시에는 있음).
   const keep = async () => {
-    if (!w.caches?.open) return;
-    const cache = await w.caches.open('fonts-v2');
-    for (const u of JJAEM_CACHE_FILES) if (!(await cache.match(u))) await cache.add(u);
+    const sw = w.navigator?.serviceWorker;
+    if (!sw || !w.fetch) return;
+    if (!sw.controller) await new Promise((r) => sw.addEventListener('controllerchange', r, { once: true }));
+    for (const u of JJAEM_CACHE_FILES) await w.fetch(u).catch(() => {});
   };
-  // 첫 조각이 다 오기 전에 시작하면 첫 화면 글꼴과 대역을 나눠 써서 늦어짐 → 받는 중인 글꼴이 다 끝나고(fonts.ready) 한 번 더 한가할 때 시작
-  const run = () => Promise.resolve(w.document.fonts.ready).then(() => new Promise((r) => idle(r)))
-    .then(() => Promise.all(['400', '700'].map((wt) => w.document.fonts.load(`${wt} 16px "JJAEM Body"`, KS_SAMPLE)))).then(keep).catch(() => {});
-  if (w.document.readyState === 'complete') idle(run);
-  else w.addEventListener('load', () => idle(run), { once: true });
+  const run = async () => {
+    // 첫 화면 글꼴이 다 오고(fonts.ready) 한가할 때. 그 사이 다른 글꼴로 바꿨으면 그만두고 다음 기회로
+    await w.document.fonts.ready; await idle();
+    if (!wantsJjaem(w)) { ksPrefetched = false; return; }
+    await fontLoaders.jjaem(); // @font-face 목록(이미 받았으면 바로 끝남)
+    await Promise.all(['400', '700'].map((wt) => w.document.fonts.load(`${wt} 16px "JJAEM Body"`, KS_SAMPLE)));
+    if (wantsJjaem(w)) await keep();
+  };
+  const start = () => idle().then(run).catch(() => {});
+  if (w.document.readyState === 'complete') start();
+  else w.addEventListener('load', start, { once: true });
   return true;
 }
 export function resetKsPrefetchForTest() { ksPrefetched = false; }

@@ -60,12 +60,15 @@ export function reportBodyText(t) {
   return [t.head, t.savedLabel, t.saved, t.rate, t.diff, t.sum, t.topTitle, ...t.top.flatMap((x) => [x.name, x.amount]), t.empty, ...t.chips, t.foot, '…'].filter(Boolean).join('\n');
 }
 
-/** 그리기 전에 쓰는 굵기(400·700 두 파일)마다 실제로 그릴 글자 전부로 글꼴을 받아 둔다. 너무 오래 걸리면(20초) 있는 글꼴로 그림 */
-export function loadReportFonts(t, fonts = globalThis.document?.fonts, wait = 20000) {
+/** 그리기 전에 쓰는 굵기(400·700 두 파일)마다 실제로 그릴 글자 전부로 글꼴을 받아 둔다.
+ *  한 조각이 실패해도 나머지는 끝까지 기다리고(allSettled, QA 3차 M2), 글꼴이 응답하지 않으면 3초 뒤 있는 글꼴로 그린다(M1). */
+export const REPORT_FONT_WAIT = 3000;
+export function loadReportFonts(t, fonts = globalThis.document?.fonts, wait = REPORT_FONT_WAIT) {
   if (!fonts?.load) return Promise.resolve();
   const text = reportBodyText(t);
   const jobs = [...['400', '700'].map((w) => fonts.load(`${w} 40px "JJAEM Body"`, text)), fonts.load('400 44px "JJAEM Title Flat"', t.title)];
-  return Promise.race([Promise.all(jobs).catch(() => {}), new Promise((r) => setTimeout(r, wait))]);
+  let timer;
+  return Promise.race([Promise.allSettled(jobs), new Promise((r) => { timer = setTimeout(r, wait); })]).finally(() => clearTimeout(timer));
 }
 
 /** 캔버스에 그리기 → PNG Blob */
