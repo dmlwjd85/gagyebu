@@ -134,8 +134,8 @@ function pushLook(partial) {
 }
 // 리포트 카드: 만드는 동안 또 눌러도 한 번만 만든다(대화상자 겹침 방지). 버튼은 '만드는 중…'으로 바꿔 기다리는 걸 알림(QA 3차 M1)
 function markReportBusy(on) {
-  app.querySelectorAll('[data-action="report"]').forEach((b) => {
-    const label = b.querySelector('.font-semibold');
+  app.querySelectorAll('[data-action="report"]').forEach((b) => { // 글자 칸은 굵기 클래스가 아닌 data-report-label 로 찾는다(굵기 정리 합치기 때 이름이 바뀌어 놓친 것 바로잡기)
+    const label = b.querySelector('[data-report-label]');
     if (on) { b.setAttribute('aria-busy', 'true'); b.setAttribute('aria-disabled', 'true'); if (label) { label.dataset.idle ??= label.textContent; label.textContent = '리포트 카드 만드는 중…'; } }
     else { b.removeAttribute('aria-busy'); b.removeAttribute('aria-disabled'); if (label?.dataset.idle) { label.textContent = label.dataset.idle; delete label.dataset.idle; } }
   });

@@ -91,4 +91,16 @@ describe('리포트 이미지 글꼴 미리 받기', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(await again).toBe(2);
   });
+
+  test("만드는 동안 리포트 버튼 글자를 '만드는 중…'으로 바꿀 칸을 버튼 안에서 실제로 찾는다(굵기 정리 뒤에도)", async () => {
+    const { readFileSync } = await import('node:fs');
+    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+    const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
+    const sel = main.match(/function markReportBusy[\s\S]*?b\.querySelector\('([^']+)'\)/)[1];
+    expect(sel).toBe('[data-report-label]');
+    const btn = views.match(/<button class="report-btn" data-action="report">[\s\S]*?<\/button>/)[0];
+    expect(btn.match(/data-report-label/g)).toHaveLength(1);
+    expect(btn).toMatch(/<span [^>]*data-report-label>\$\{Number\(m\.viewYm\.slice\(5\)\)\}월 리포트 카드 만들기<\/span>/);
+  });
 });
+
