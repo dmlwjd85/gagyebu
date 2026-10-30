@@ -4,6 +4,7 @@ Copyright (c) 2026 JJAEM Font Team (JJAEM Body: round dots on ㅎ·ㅊ, counter 
 
 JJAEM Body is a Modified Version of Resource Han Rounded. It does not use the Reserved Font Name.
 This font cannot be sold by itself. Bundling it in a product or document is allowed (SIL OFL 1.1).
+Font version: JJAEM Body 1.006 (쨈 폰트 v1.0.6). Changes are listed in FONTLOG.txt of the 쨈 폰트 v1.0.6 bundle.
 
 This Font Software is licensed under the SIL Open Font License, Version 1.1.
 This license is copied below, and is also available with a FAQ at:

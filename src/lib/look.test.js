@@ -156,7 +156,7 @@ describe('나눔라운드 숫자', () => {
   });
 });
 
-describe('쨈 폰트 v1.0.5', () => {
+describe('쨈 폰트 v1.0.6', () => {
   const face = readFileSync(new URL('../assets/fonts/jjaem/jjaem-font.css', import.meta.url), 'utf8');
   const blocks = face.match(/@font-face\{[^}]+\}/g);
   const range = (block) => {
@@ -186,6 +186,16 @@ describe('쨈 폰트 v1.0.5', () => {
     expect(FONT_OPTIONS.find((o) => o.id === 'pretendard').label).toBe('쨈 본문');
     const tw = readFileSync(new URL('../../tailwind.config.js', import.meta.url), 'utf8');
     expect(tw).toMatch(/sans: \['"JJAEM Body"', '"Pretendard Variable"'/);
+  });
+
+  test('판 번호와 라이선스 문서가 v1.0.6 에 맞는다', () => {
+    const dir = new URL('../assets/fonts/jjaem/', import.meta.url);
+    expect(face.split('\n')[0]).toContain('쨈 폰트 v1.0.6 웹 글꼴');
+    expect(face).not.toMatch(/v1\.0\.5/);
+    const ofl = readFileSync(new URL('OFL-JJAEMBody.txt', dir), 'utf8');
+    expect(ofl).toMatch(/SIL OPEN FONT LICENSE Version 1\.1/);
+    expect(ofl).toContain('Font version: JJAEM Body 1.006 (쨈 폰트 v1.0.6)');
+    expect(readFileSync(new URL('쨈제목_사용조건.md', dir), 'utf8')).toContain('판: 쨈 폰트 v1.0.6');
   });
 
   test('첫 조각(.core)·.ks·.ext 글자 범위는 겹치지 않고, 앱 소스의 한글·가운뎃점은 모두 첫 조각에 있다', () => {

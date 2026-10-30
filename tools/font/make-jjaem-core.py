@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""쨈 폰트 웹 조각 만들기 (쨈 폰트 v1.0.5 원본 묶음에서).
+"""쨈 폰트 웹 조각 만들기 (쨈 폰트 v1.0.6 원본 묶음에서).
 
 하는 일
 1. 앱 소스(src/**, index.html)의 화면 글자를 모아 '첫 조각'(.core.woff2)을 굵기마다 하나씩 만든다.
@@ -10,13 +10,16 @@
 4. jjaem-font.css 를 다시 쓴다. 원본 .ks/.ext 의 unicode-range 에서 첫 조각 글자를 빼서 서로 겹치지 않게 한다.
    굵기는 두 벌뿐이라 100~500 은 보통(400), 600~900 은 굵게(700) 파일로 일부러 묶는다(가짜 굵게 없음).
 
-사용: python3 tools/font/make-jjaem-core.py [쨈폰트_v1.0.5 폴더]
+5. 원본 웹용 .ks / .ext woff2 는 고치지 않고 그대로 복사한다.
+
+사용: python3 tools/font/make-jjaem-core.py [쨈폰트_v1.0.6 폴더]
 """
-import glob, os, re, sys
+import glob, os, re, shutil, sys
 from fontTools import subset
 from fontTools.ttLib import TTFont
 
-PKG = sys.argv[1] if len(sys.argv) > 1 else '/workspace/font/release/쨈폰트_v1.0.5'
+PKG = sys.argv[1] if len(sys.argv) > 1 else '/workspace/font/release/쨈폰트_v1.0.6'
+VER = re.search(r'v\d+\.\d+\.\d+', os.path.basename(PKG.rstrip('/'))).group(0)
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 OUT = os.path.join(ROOT, 'src/assets/fonts/jjaem')
 TITLE_TEXT = '쨈 가계부'
@@ -94,8 +97,8 @@ def narrow_dot(font):
     adv = width + 2 * DOT_SIDE
     font['hmtx'][name] = (adv, g.xMin)
     return adv
-HEAD = """/* 쨈 폰트 v1.0.5 웹 글꼴(쨈 폰트 팀, JJAEM Font Team). 이 파일은 tools/font/make-jjaem-core.py 가 만들어요. 손으로 고치지 마세요.
-   원본: 쨈폰트_v1.0.5/웹용/jjaem-font.css (.ks/.ext 파일은 원본 그대로), 설치용 TTF 에서 첫 조각·제목 조각을 잘라 냄.
+HEAD = """/* 쨈 폰트 {VER} 웹 글꼴(쨈 폰트 팀, JJAEM Font Team). 이 파일은 tools/font/make-jjaem-core.py 가 만들어요. 손으로 고치지 마세요.
+   원본: 쨈폰트_{VER}/웹용/jjaem-font.css (.ks/.ext 파일은 원본 그대로), 설치용 TTF 에서 첫 조각·제목 조각을 잘라 냄.
    - 쨈 본문(JJAEM Body): 화면 글자 전부. 숫자는 폭이 같아 금액 자리가 맞아요. SIL OFL 1.1, OFL-JJAEMBody.txt
      · .core = 앱 화면에 나오는 글자(소스에서 모음) + 영문·숫자·기호. 먼저 받는 작은 조각이에요. 가운뎃점(·)은 여기서 폭을 좁혔어요.
      · .ks = 자주 쓰는 한글 2,350자 중 나머지 / .ext = 나머지 한글. 사용자가 쓴 글자에 있을 때만 받아요.
@@ -132,6 +135,7 @@ def main():
         report.append(f'JJAEMBody-{style}.core.woff2 {os.path.getsize(dst):,}B 글자 {len(core)}(한글 {hangul}) 가운뎃점 폭 {adv}')
         rest = []
         for part in ('ks', 'ext'):
+            shutil.copyfile(os.path.join(PKG, f'웹용/fonts/JJAEMBody-{style}.{part}.woff2'), os.path.join(OUT, f'fonts/JJAEMBody-{style}.{part}.woff2'))
             b = find('JJAEM Body', f'JJAEMBody-{style}.{part}.woff2')
             rng = parse_range(re.search(r'unicode-range:([^;}]*)', b).group(1)) - core
             rest.append((part, rng))
@@ -150,7 +154,7 @@ def main():
     out_blocks.append("@font-face{font-family:'JJAEM Title Flat';font-style:normal;font-weight:400;font-display:swap;"
                       f"src:url('fonts/JJAEM-TitleFlat-Regular.title.woff2') format('woff2');unicode-range:{fmt_range(tcps)}}}")
     with open(os.path.join(OUT, 'jjaem-font.css'), 'w', encoding='utf-8') as fh:
-        fh.write(HEAD + '\n'.join(out_blocks) + '\n')
+        fh.write(HEAD.replace('{VER}', VER) + '\n'.join(out_blocks) + '\n')
     print('\n'.join(report))
 
 
