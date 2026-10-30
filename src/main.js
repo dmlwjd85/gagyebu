@@ -116,7 +116,7 @@ function gateView({ caption, card }) {
   const hero = $('#boot-hero');
   if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
     <h1 class="flex justify-center" id="boot-logo">${logo({ cls: 'boot-logo' })}</h1>
-    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
+    <section class="hero-card p-6" id="boot-hero"><p class="text-caption t-label" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
     <section class="card-solid p-5 flex flex-col gap-3" id="boot-card"></section></div></main>`;
   $('#boot-cap').textContent = caption;
   $('#boot-card').innerHTML = card;

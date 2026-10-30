@@ -187,7 +187,7 @@ describe('N13 긴 이름(공백 없는 20자) 넘침 방지 구조', () => {
   });
   test('반복 목록: 금액을 이름 아랫줄로(이름 칸이 금액에 눌리지 않음)', () => {
     const html = recurringView(model('2026-10', { extra: { recurring: [{ id: 'r', name: '가'.repeat(30), amount: 17000, kind: 'expense', categoryId: 'food', dayOfMonth: 5, active: true, startYm: '2026-10' }] } }));
-    expect(html).toMatch(/block text-body font-semibold break-words">가{30}<\/span>\s*<span class="block text-body font-semibold tabular-nums/);
+    expect(html).toMatch(/block text-body t-quiet break-words">가{30}<\/span>\s*<span class="block text-body font-bold tabular-nums/);
   });
 });
 

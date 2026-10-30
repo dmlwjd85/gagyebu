@@ -5,7 +5,7 @@ import {
   priceDateSummary, progressPct, summarizeAll, taxCredit, taxPrefs,
 } from '../lib/assets.js';
 
-const money = (n, cls = '') => `<span data-fit class="tabular-nums font-semibold ${cls}">${esc(formatWon(n))}</span>`;
+const money = (n, cls = '') => `<span data-fit class="tabular-nums font-bold ${cls}">${esc(formatWon(n))}</span>`;
 const diffText = (n) => (n > 0 ? `+${formatWon(n)}` : formatWon(n));
 const pctCls = (p) => (p > 0 ? 'text-income' : p < 0 ? 'text-expense' : '');
 
@@ -18,13 +18,13 @@ function priceBanner(holdings) {
 }
 
 function metric(label, value, cls = '') {
-  return `<div class="asset-line min-w-0" role="group" aria-label="${esc(label)} ${esc(value)}"><span class="text-caption text-ink-sub shrink-0">${esc(label)}</span><span data-fit class="text-body font-semibold tabular-nums min-w-0 ${cls}">${esc(value)}</span></div>`;
+  return `<div class="asset-line min-w-0" role="group" aria-label="${esc(label)} ${esc(value)}"><span class="text-caption text-ink-sub shrink-0">${esc(label)}</span><span data-fit class="text-body font-bold tabular-nums min-w-0 ${cls}">${esc(value)}</span></div>`;
 }
 
 function bar(label, used, limit, detail) {
   const pct = progressPct(used, limit);
   const width = Math.min(100, pct);
-  return `<div class="min-w-0"><div class="asset-line"><p class="text-body font-semibold min-w-0">${esc(label)}</p><p class="text-caption tabular-nums text-ink-sub">${esc(formatWon(used))} / ${esc(formatWon(limit))}</p></div>
+  return `<div class="min-w-0"><div class="asset-line"><p class="text-body t-quiet min-w-0">${esc(label)}</p><p class="text-caption tabular-nums text-ink-sub">${esc(formatWon(used))} / ${esc(formatWon(limit))}</p></div>
     <div class="mt-1.5 h-2 rounded-full bg-line overflow-hidden" role="progressbar" aria-valuemin="0" aria-valuemax="${limit}" aria-valuenow="${Math.min(used, limit)}" aria-label="${esc(label)} ${pct}%"><div class="h-2 rounded-full ${pct > 100 ? 'bg-expense' : 'bg-primary'}" style="width:${width}%"></div></div>
     <p class="mt-1 text-caption text-ink-sub">${esc(detail)}</p></div>`;
 }
@@ -35,7 +35,7 @@ function holdingBlock(h) {
   const now = priced ? formatWon(h.lastPrice) : '시세 없음';
   const dateLine = priced ? `시세 기준일 ${h.priceDate}${h.priceSource === 'dataGoKr' ? ' · 자동' : ' · 직접'}` : '시세 기준일 없음';
   return `<div class="py-3 border-t min-w-0" style="border-color:var(--line)">
-    <div class="asset-line"><p class="text-body font-semibold min-w-0 break-words">${esc(h.name)}</p><p class="text-caption text-ink-sub">${esc(HOLDING_KINDS[h.kind] || '')}${h.code ? ` ${esc(h.code)}` : ''}</p></div>
+    <div class="asset-line"><p class="text-body t-quiet min-w-0 break-words">${esc(h.name)}</p><p class="text-caption text-ink-sub">${esc(HOLDING_KINDS[h.kind] || '')}${h.code ? ` ${esc(h.code)}` : ''}</p></div>
     <p class="text-caption text-ink-sub break-words">${esc(formatQty(h.qtyE4))} · 평균 ${esc(formatWon(h.avgPrice))} · 현재 <span class="${gainCls}">${esc(now)}</span></p>
     <p class="text-caption">${esc(dateLine)}</p>
     <div class="asset-actions mt-2">
@@ -64,7 +64,7 @@ export function assetsView(m, ui) {
     const isOpen = open === a.id;
     const contribs = (m.contributions ?? []).filter((c) => c.assetAccountId === a.id).slice().sort((x, y) => y.date.localeCompare(x.date));
     return `<section class="card-solid p-4 min-w-0" aria-labelledby="acc-${esc(a.id)}">
-      <div class="asset-line gap-y-1"><h2 id="acc-${esc(a.id)}" class="text-head min-w-0 break-words">${esc(a.name)}</h2><p class="text-body font-semibold tabular-nums ${pctCls(r.returnPct)}">${esc(formatPct(r.returnPct))}</p></div>
+      <div class="asset-line gap-y-1"><h2 id="acc-${esc(a.id)}" class="text-head min-w-0 break-words">${esc(a.name)}</h2><p class="text-body font-bold tabular-nums ${pctCls(r.returnPct)}">${esc(formatPct(r.returnPct))}</p></div>
       <p class="text-caption text-ink-sub break-words">${esc(meta)}</p>
       <div class="mt-3 flex flex-col gap-1 min-w-0">
         ${metric('투자원금', formatWon(r.invested))}
@@ -82,9 +82,9 @@ export function assetsView(m, ui) {
         <button class="btn-ghost" data-asset-del="${esc(a.id)}">계좌 지우기</button>
       </div>
       ${isOpen ? `<div class="mt-3">
-        <h3 class="text-body font-semibold">보유</h3>
+        <h3 class="text-body t-label">보유</h3>
         ${r.holdings.length ? r.holdings.map(holdingBlock).join('') : '<p class="mt-1 text-caption text-ink-sub">아직 종목이 없어요.</p>'}
-        <h3 class="mt-4 text-body font-semibold">납입</h3>
+        <h3 class="mt-4 text-body t-label">납입</h3>
         ${contribs.length ? `<ul class="mt-1">${contribs.map((c) => `<li class="asset-line py-2 border-t min-w-0" style="border-color:var(--line)"><span class="text-body tabular-nums">${esc(c.date)} ${esc(formatWon(c.amount))}${c.deductible ? ' · 세액공제' : ''}</span><button class="btn-ghost" data-contrib-del="${esc(c.id)}">지우기</button></li>`).join('')}</ul>` : '<p class="mt-1 text-caption text-ink-sub">납입 기록이 없어요.</p>'}
       </div>` : ''}
     </section>`;
@@ -94,7 +94,7 @@ export function assetsView(m, ui) {
       <button class="btn-ghost ml-auto" data-nav="tax">올해 세액공제</button></div>
     ${priceBanner(m.holdings)}
     <section class="hero-card px-5 pt-[18px] pb-4" aria-label="총자산">
-      <p class="text-caption font-semibold">평가 자산</p>
+      <p class="text-caption t-label">평가 자산</p>
       <p data-fit class="text-display tabular-nums mt-1">${esc(formatWon(all.valuation))}</p>
       <p class="mt-2 text-caption">투자원금 ${esc(formatWon(all.invested))} · 손익 ${esc(diffText(all.gain))} (${esc(formatPct(all.returnPct))})</p>
       ${all.unpriced ? `<p class="mt-1 text-caption">시세 없는 종목 ${all.unpriced}개는 빠졌어요.</p>` : ''}
@@ -121,7 +121,7 @@ export function taxView(m) {
     <div class="flex items-center gap-2 min-w-0"><button class="icon-btn shrink-0" data-nav="assets" aria-label="자산으로">‹</button><h1 class="text-title min-w-0 break-words">${esc(year)}년 세액공제</h1></div>
     <p class="text-caption text-ink-sub">1월~12월 납입이에요. 세액공제에 체크한 연금저축·IRP·DC만 계산해요. 일반 주식·ISA·공무원연금은 이 한도에 넣지 않아요.</p>
     <section class="hero-card px-5 pt-[18px] pb-4" aria-label="예상 환급">
-      <p class="text-caption font-semibold">예상 환급</p>
+      <p class="text-caption t-label">예상 환급</p>
       <p data-fit class="text-display tabular-nums mt-1">${esc(formatWon(t.refund))}</p>
       <p class="mt-2 text-caption">공제 대상 ${esc(formatWon(t.base))} · 세율 ${esc(formatRateBp(t.rateBp))}</p>
     </section>

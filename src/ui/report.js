@@ -88,19 +88,19 @@ export async function drawReport(d, { dark = false } = {}) {
   // 머리: 쨈 가계부 · N월 리포트
   ctx.fillStyle = ink; ctx.font = `400 44px ${TITLE_FONT}`; ctx.textBaseline = 'alphabetic';
   ctx.fillText(t.title, 80, 130);
-  ctx.fillStyle = sub; ctx.font = `600 36px ${FONT}`; ctx.textAlign = 'right';
+  ctx.fillStyle = sub; ctx.font = `400 36px ${FONT}`; ctx.textAlign = 'right';
   ctx.fillText(t.head, W - 80, 130); ctx.textAlign = 'left';
   // 큰 카드: 아이콘과 같은 색 계열(보라 #6D4AFF → 파랑 #2F6FD6 → 청록 #16897C) + 남긴 돈
   const g = ctx.createLinearGradient(80, 190, W - 80, 640); g.addColorStop(0, '#6D4AFF'); g.addColorStop(.55, '#2F6FD6'); g.addColorStop(1, '#16897C');
   roundRect(ctx, 80, 190, W - 160, 450, 56); ctx.fillStyle = g; ctx.fill();
-  ctx.fillStyle = '#fff'; ctx.font = `600 40px ${FONT}`; ctx.fillText(t.savedLabel, 140, 290);
+  ctx.fillStyle = '#fff'; ctx.font = `700 40px ${FONT}`; ctx.fillText(t.savedLabel, 140, 290);
   // 큰 금액(수십억)도 카드 밖으로 넘치지 않게 글자 크기를 폭에 맞춤(QA L1)
   ctx.fillText(fit(ctx, t.saved, 800, 120, W - 280), 140, 430);
-  ctx.font = `600 36px ${FONT}`;
+  ctx.font = `400 36px ${FONT}`;
   const rateText = t.rate;
   ctx.fillText(rateText, 140, 520);
   if (t.diff != null) {
-    const dtFit = fit(ctx, t.diff, 600, 36, W - 280 - ctx.measureText(rateText).width - 40);
+    const dtFit = fit(ctx, t.diff, 400, 36, W - 280 - ctx.measureText(rateText).width - 40);
     ctx.textAlign = 'right'; ctx.fillText(dtFit, W - 140, 520); ctx.textAlign = 'left';
   }
   const sum = fit(ctx, t.sum, 500, 32, W - 280); ctx.fillText(sum, 140, 590);
@@ -114,7 +114,7 @@ export async function drawReport(d, { dark = false } = {}) {
     ctx.font = `48px ${FONT}`; ctx.fillText(x.emoji, 140, y + 14);
     // 긴 카테고리 이름(공백 없는 20자)이 금액과 겹치지 않게 이름 칸 폭을 정함
     ctx.fillStyle = ink; ctx.textAlign = 'right'; const amt = fit(ctx, x.amount, 700, 36, 360); const aw = ctx.measureText(amt).width; ctx.fillText(amt, W - 140, y + 8); ctx.textAlign = 'left';
-    ctx.fillText(fit(ctx, x.name, 600, 36, W - 140 - aw - 40 - 210), 210, y + 8);
+    ctx.fillText(fit(ctx, x.name, 400, 36, W - 140 - aw - 40 - 210), 210, y + 8);
     // 1위 보라는 테마별 명도: 흰 카드 #4F2FD6 7.75:1(L* 35), 다크 카드 #B3A3FF 7.76:1(L* 72) → 2위 파랑(L* 48)과 밝기로도 갈림(QA R1)
     roundRect(ctx, 210, y + 24, (W - 350) * (amount / max), 12, 6); ctx.fillStyle = (dark ? ['#B3A3FF', '#2F6FD6', '#16897C'] : ['#4F2FD6', '#2F6FD6', '#16897C'])[i]; ctx.fill(); ctx.fillStyle = ink;
   });
