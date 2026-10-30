@@ -3,6 +3,8 @@ import { colors, backgroundImage, boxShadow } from './design/tailwind-tokens-a.j
 /** @type {import('tailwindcss').Config} */
 export default {
   content: ['./index.html', './src/**/*.js'],
+  // JS 조건문 `!key`·`!on` 을 Tailwind 가 '!important 붙인 .key/.on' 으로 읽어 쓸모없는 규칙을 한 벌 더 만들던 것 막기(첫 화면 CSS 줄이기, 4차)
+  blocklist: ['!key', '!on'],
   darkMode: 'class',
   theme: {
     extend: {
