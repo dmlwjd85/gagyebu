@@ -134,7 +134,7 @@ function render() {
       <p class="text-caption text-ink-sub break-words">${s.kind === 'income' ? '배우자 입금이면 배우자를 고르세요. ' : ''}같이 쓴 지출은 공동이에요. 나는 기록에 누구 돈을 적지 않아요.</p></div>` : ''}
     ${s.showOpts ? `<div class="px-5 pt-3 grid gap-2">
         <label class="opt-row relative"><span aria-hidden="true">📅</span>
-          <span class="flex-1 text-body" aria-hidden="true">${esc(longDate(s.date, today))}</span><span class="text-caption text-ink-sub font-semibold" aria-hidden="true">바꾸기 ›</span>
+          <span class="flex-1 text-body" aria-hidden="true">${esc(longDate(s.date, today))}</span><span class="text-caption text-ink-sub t-quiet" aria-hidden="true">바꾸기 ›</span>
           <input type="date" name="date" lang="ko" value="${s.date}" max="2100-12-31" class="date-overlay" aria-label="날짜, ${esc(longDate(s.date, today))}" /></label>
         <div class="flex gap-2 flex-wrap" role="radiogroup" aria-label="결제수단">
           ${st.accounts.filter((a) => !a.archived).map((a) => `<button role="radio" aria-checked="${a.id === s.accountId}" class="chip" data-acc="${esc(a.id)}"><span aria-hidden="true">${esc(a.emoji ?? '')}</span> ${esc(a.name)}</button>`).join('')}

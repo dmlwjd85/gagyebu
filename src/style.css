@@ -74,7 +74,9 @@
   /* 16%·14%면 '남았어요'·'넘쳤어요'(13px)가 같은 색 위에서 4.27·4.24로 4.5:1 아래다. */
   .bud-hero.is-ok, .bud-chip.is-ok { background: color-mix(in srgb, var(--income) 8%, var(--surface-solid)); border: 1px solid color-mix(in srgb, var(--income) 36%, transparent); }
   .bud-hero.is-over, .bud-chip.is-over { background: color-mix(in srgb, var(--expense) 8%, var(--surface-solid)); border: 1px solid color-mix(in srgb, var(--expense) 38%, transparent); }
-  .bud-kicker, .bud-sub, .bud-meta, .bud-fact-k { margin: 0; max-width: 100%; font-size: calc(13px * var(--fs, 1)); line-height: 1.35; font-weight: 600; color: var(--ink-sub); }
+  .bud-kicker, .bud-sub, .bud-meta, .bud-fact-k { margin: 0; max-width: 100%; font-size: calc(13px * var(--fs, 1)); line-height: 1.35; font-weight: 400; color: var(--ink-sub); }
+  /* 예산 머리말만 2단 라벨(700+자간), 나머지 보조 문구는 400 */
+  .bud-kicker { font-weight: 700; letter-spacing: 0.02em; }
   .bud-hero-num, .bud-chip-num { display: block; width: 100%; max-width: 100%; margin: 0; font-weight: 800; letter-spacing: -0.03em; line-height: 1.15; white-space: nowrap; overflow-wrap: normal; text-align: center; }
   .bud-hero-num { font-size: min(calc(36px * var(--fs, 1)), 11vw); color: var(--primary); }
   .bud-chip-num { font-size: min(calc(26px * var(--fs, 1)), 8.5vw); }
@@ -100,7 +102,7 @@
   @supports not (backdrop-filter: blur(1px)) { .glass { background: var(--surface-solid); } }
   .card-solid { background: var(--surface-solid); border: 1px solid var(--line); @apply shadow-glass rounded-3xl; }
   .hero-card { background-image: var(--hero-gradient); color: var(--hero-ink); text-shadow: var(--hero-shadow); @apply shadow-glow rounded-3xl; }
-  .hero-btn { @apply inline-flex items-center min-h-[44px] px-4 rounded-2xl bg-white font-semibold; color: var(--hero-btn-ink, #4b2fc4); text-shadow: none; }
+  .hero-btn { @apply inline-flex items-center min-h-[44px] px-4 rounded-2xl bg-white font-bold; color: var(--hero-btn-ink, #4b2fc4); text-shadow: none; }
   /* 금액은 절대 자르지 않음(말줄임 없음, 줄바꿈 없음) */
   .stat-v { @apply text-head font-bold whitespace-nowrap; overflow-wrap: normal; }
   /* 지출·수입·남긴 돈: 칸마다 '실제 금액 폭'만큼은 꼭 확보하고, 한 줄에 다 안 들어가면 다음 줄로(글자 배율·금액 길이에 따라 3칸 → 2+1 → 1칸) */
@@ -109,7 +111,7 @@
   @media (max-width: 380px) { .stat-v { font-size: calc(15px * var(--fs, 1)); } }
 
   .icon-btn { @apply inline-grid place-items-center w-11 h-11 rounded-full text-lg transition-colors; }
-  .nav-home { @apply inline-flex items-center justify-center gap-0.5 shrink-0 min-h-[44px] min-w-[44px] px-3 rounded-full text-body font-semibold; }
+  .nav-home { @apply inline-flex items-center justify-center gap-0.5 shrink-0 min-h-[44px] min-w-[44px] px-3 rounded-full text-body font-normal; }
   .nav-home:hover { background: var(--line); }
   .icon-btn:hover:not(:disabled) { background: var(--line); }
   .icon-btn:disabled { opacity: .35; }
@@ -119,7 +121,7 @@
   .period-row { flex: 1 0 100%; display: flex; flex-wrap: nowrap; align-items: center; column-gap: 8px; min-width: 0; overflow: hidden; }
   .period-row > .period-label { flex: 0 0 auto; }
   /* 기간 글자와 같은 줄 높이(18px×글자 배율). 테두리는 높이에 안 들어가게 inset 그림자로 */
-  .payday-chip { --fs: var(--content-scale, 1); display: inline-flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; margin: 0; padding: 0 7px; border-radius: 999px; font-size: calc(12px * var(--fs, 1)); line-height: calc(18px * var(--fs, 1)); height: calc(18px * var(--fs, 1)); font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-sub); background: color-mix(in srgb, var(--primary, #6d4aff) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary, #6d4aff) 22%, transparent); }
+  .payday-chip { --fs: var(--content-scale, 1); display: inline-flex; align-items: center; gap: 4px; flex: 0 1 auto; min-width: 0; margin: 0; padding: 0 7px; border-radius: 999px; font-size: calc(12px * var(--fs, 1)); line-height: calc(18px * var(--fs, 1)); height: calc(18px * var(--fs, 1)); font-weight: 400; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--ink-sub); background: color-mix(in srgb, var(--primary, #6d4aff) 10%, transparent); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--primary, #6d4aff) 22%, transparent); }
   .payday-chip > span:first-child { flex: none; }
   .payday-chip > span { overflow: hidden; text-overflow: ellipsis; }
   .payday-chip .pd-short, .payday-chip.is-short .pd-long { display: none; }
@@ -127,20 +129,20 @@
   .day-grid { display: grid; grid-template-columns: repeat(6, minmax(44px, 1fr)); gap: 4px; width: 100%; }
   .day-tile { display: inline-flex; align-items: center; justify-content: center; box-sizing: border-box; width: 100%; min-width: 44px; min-height: 44px; padding: 0; border-radius: 12px; border: 1px solid var(--line); background: var(--surface-solid); color: var(--ink); font-size: calc(15px * var(--fs, 1)); line-height: 1; font-weight: 700; font-variant-numeric: tabular-nums; cursor: pointer; }
   .day-tile[aria-checked="true"] { border-color: var(--primary); background: var(--primary); color: var(--on-primary); }
-  .link-btn { @apply min-h-[44px] px-2 text-caption font-semibold; color: var(--primary); }
-  .chip { @apply inline-flex items-center gap-1 min-h-[44px] px-3 rounded-full text-caption font-semibold border; border-color: var(--line); background: var(--surface-solid); }
+  .link-btn { @apply min-h-[44px] px-2 text-caption font-normal; color: var(--primary); }
+  .chip { @apply inline-flex items-center gap-1 min-h-[44px] px-3 rounded-full text-caption font-normal border; border-color: var(--line); background: var(--surface-solid); }
   .chip:disabled { opacity: .4; }
   .chip[aria-checked="true"] { border-color: var(--primary); color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
   .btn-primary { @apply inline-flex items-center justify-center min-h-[44px] px-5 rounded-2xl font-bold transition-transform; background: var(--primary); color: var(--on-primary); }
   .btn-primary:active:not([aria-disabled="true"]) { transform: scale(.98); }
   .btn-primary[aria-disabled="true"] { opacity: .45; }
-  .btn-ghost { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-semibold border; border-color: var(--line); background: var(--surface-solid); }
+  .btn-ghost { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-normal border; border-color: var(--line); background: var(--surface-solid); }
   .btn-ghost:hover { border-color: var(--primary); }
-  .btn-danger { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-semibold border; color: var(--expense); border-color: var(--expense); background: transparent; }
+  .btn-danger { @apply inline-flex items-center justify-center min-h-[44px] px-4 rounded-2xl font-bold border; color: var(--expense); border-color: var(--expense); background: transparent; }
   .btn-google { @apply flex items-center justify-center gap-3 min-h-[52px] rounded-2xl font-bold border text-ink; border-color: var(--line); background: var(--surface-solid); }
   .btn-google:hover { border-color: var(--primary); }
   .seg { @apply inline-flex p-1 rounded-2xl; background: var(--line); max-width: 100%; }
-  .seg > button { @apply min-h-[44px] px-4 rounded-xl text-caption font-semibold text-ink-sub; flex: 1 1 auto; min-width: 0; }
+  .seg > button { @apply min-h-[44px] px-4 rounded-xl text-caption font-normal text-ink-sub; flex: 1 1 auto; min-width: 0; }
   @media (max-width: 299px) { .seg > button { padding-left: 8px; padding-right: 8px; } }
   .seg > button[aria-checked="true"] { background: var(--surface-solid); color: var(--ink); box-shadow: 0 1px 3px rgba(0,0,0,.12); }
   /* 긴 옵션(공백 없는 20자 결제수단 등)이 있어도 화면 밖으로 밀리지 않게: 폭은 부모 안, 넘치면 말줄임(QA N13) */
@@ -357,7 +359,7 @@
   .tip > p { @apply flex-1 py-1.5; }
   .tip-x { @apply grid place-items-center w-11 h-11 rounded-full text-ink-sub shrink-0; }
 
-  .toast { @apply fixed left-1/2 z-[60] flex items-center gap-3 w-max max-w-[min(92vw,440px)] px-4 py-3 rounded-2xl text-caption font-semibold shadow-glass pointer-events-none opacity-0;
+  .toast { @apply fixed left-1/2 z-[60] flex items-center gap-3 w-max max-w-[min(92vw,440px)] px-4 py-3 rounded-2xl text-caption font-normal shadow-glass pointer-events-none opacity-0;
     bottom: calc(100px + env(safe-area-inset-bottom)); transform: translate(-50%, 8px); transition: opacity .22s ease-out, transform .22s ease-out;
     background: #1E1B3A; color: #F3F1FF; }
   html.dark .toast { background: #F3F1FF; color: #1E1B3A; }
@@ -398,7 +400,7 @@
   .date-overlay::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: 100%; height: 100%; cursor: pointer; }
   .opt-row:has(.date-overlay:focus-visible) { outline: 2px solid var(--primary); outline-offset: 2px; }
   .keypad { @apply grid grid-cols-3 gap-2; }
-  .key { @apply h-14 rounded-2xl text-[26px] leading-8 font-semibold tabular-nums transition-colors; background: var(--bg); }
+  .key { @apply h-14 rounded-2xl text-[28px] leading-8 font-normal tabular-nums transition-colors; background: var(--bg); }
   /* 문자 붙여넣기: 본문 글자 배율(--content-scale)을 이 영역만 따른다. 줄바꿈·최소 높이로 390px·160%에서도 겹치지 않게 */
   .sms-scale { --fs: var(--content-scale, 1); font-size: calc(15px * var(--fs)); line-height: calc(22px * var(--fs)); }
   .sms-btn { height: auto; white-space: normal; text-align: center; padding-top: 10px; padding-bottom: 10px; }
@@ -433,10 +435,10 @@
   .drop:has(input:focus-visible) { outline: 2px solid var(--primary); outline-offset: 3px; }
   .chip-ok { border-color: var(--income); color: var(--income); }
   .map-table { @apply w-max min-w-full border-separate text-caption; border-spacing: 0; }
-  .map-table th { @apply align-top text-left font-semibold p-2 min-w-[136px] max-w-[160px] lg:min-w-[150px] lg:max-w-[200px] border-b-2; border-color: var(--line); }
+  .map-table th { @apply align-top text-left font-bold p-2 min-w-[136px] max-w-[160px] lg:min-w-[150px] lg:max-w-[200px] border-b-2; border-color: var(--line); }
   .map-table th.on { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 7%, transparent); }
   .map-table td { @apply p-2 whitespace-nowrap max-w-[160px] lg:max-w-[200px] overflow-hidden text-ellipsis tabular-nums border-b; border-color: var(--line); color: var(--ink); }
-  .map-sel { @apply w-full min-h-[44px] mt-1 px-2 rounded-xl border text-caption font-semibold; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
+  .map-sel { @apply w-full min-h-[44px] mt-1 px-2 rounded-xl border text-caption font-normal; border-color: var(--line); background: var(--surface-solid); color: var(--ink); }
   .map-table th.on .map-sel { border-color: var(--primary); color: var(--primary); }
   .imp-foot { @apply sticky z-20 mt-3 max-w-[560px] lg:max-w-[880px] mx-auto px-1 pt-3; bottom: 0; padding-bottom: max(12px, env(safe-area-inset-bottom)); background: linear-gradient(transparent, var(--bg) 30%); }
   .done-check { @apply grid place-items-center w-20 h-20 rounded-full; background: var(--income); }
@@ -489,6 +491,10 @@
   .owner-chip.is-deposit { font-weight: 700; color: var(--income); border-color: var(--income); background: color-mix(in srgb, var(--income) 8%, transparent); }
   .owner-chip.is-shared { border-color: var(--primary); background: color-mix(in srgb, var(--primary) 12%, transparent); }
   .mode-later { width: 100%; height: auto; white-space: normal; text-align: center; line-height: 1.4; }
+  /* 글자 굵기 위계: 글꼴은 400·700 두 벌뿐이라 600(semibold)은 쓰지 않는다(가짜 굵게 금지).
+     1단 제목 = text-display/title/head(크기·700·자간 좁힘) · 2단 라벨/강조 = t-label·font-bold · 3단 본문/조작 = 400(t-quiet) */
+  .t-label { font-weight: 700; letter-spacing: 0.02em; }
+  .t-quiet { font-weight: 400; letter-spacing: 0.01em; }
 }
 
 /* 동적으로 붙는 클래스 (Tailwind 정리 대상에서 제외하려고 레이어 밖에 둠) */
@@ -652,7 +658,7 @@ html.dark .dlg-card .btn-ghost {
 }
 
 /* 홈 요약 카드: 항목별 남은 예산 펼치기/접기 */
-.hero-fold { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 12px; background: rgb(255 255 255 / 0.16); font-weight: 600; text-align: left; }
+.hero-fold { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 12px; background: rgb(255 255 255 / 0.16); font-weight: 700; text-align: left; }
 .hero-fold:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
 .hero-warn { color: #fff; background: rgb(220 38 38 / 0.85); padding: 1px 6px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
 .hero-cats { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
