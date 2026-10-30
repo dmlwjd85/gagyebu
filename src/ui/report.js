@@ -61,20 +61,58 @@ export function reportBodyText(t) {
 }
 
 /** 그리기 전에 쓰는 굵기(400·700 두 파일)마다 실제로 그릴 글자 전부로 글꼴을 받아 둔다.
- *  한 조각이 실패해도 나머지는 끝까지 기다리고(allSettled, QA 3차 M2), 글꼴이 응답하지 않으면 3초 뒤 있는 글꼴로 그린다(M1). */
+ *  한 조각이 실패해도 나머지는 끝까지 기다리고(allSettled, QA 3차 M2), 글꼴이 응답하지 않으면 3초 뒤 있는 글꼴로 그린다(M1).
+ *  돌려주는 값: 다 받았으면 true, 3초가 지났거나 취소(signal)됐으면 false. */
 export const REPORT_FONT_WAIT = 3000;
-export function loadReportFonts(t, fonts = globalThis.document?.fonts, wait = REPORT_FONT_WAIT) {
-  if (!fonts?.load) return Promise.resolve();
-  const text = reportBodyText(t);
-  const jobs = [...['400', '700'].map((w) => fonts.load(`${w} 40px "JJAEM Body"`, text)), fonts.load('400 44px "JJAEM Title Flat"', t.title)];
-  let timer;
-  return Promise.race([Promise.allSettled(jobs), new Promise((r) => { timer = setTimeout(r, wait); })]).finally(() => clearTimeout(timer));
+const REPORT_FACES = (t) => [['400 40px "JJAEM Body"', reportBodyText(t)], ['700 40px "JJAEM Body"', reportBodyText(t)], ['400 44px "JJAEM Title Flat"', t.title]];
+export function settleReportFonts(t, fonts = globalThis.document?.fonts) {
+  if (!fonts?.load) return Promise.resolve(true);
+  return Promise.allSettled(REPORT_FACES(t).map(([f, x]) => fonts.load(f, x))).then(() => true);
+}
+/** 지금 바로 그려도 되는지(그릴 글자의 글꼴이 다 와 있는지). check 가 없으면 알 수 없으니 false */
+export function reportFontsReady(t, fonts = globalThis.document?.fonts) {
+  if (!fonts?.check) return false;
+  try { return REPORT_FACES(t).every(([f, x]) => fonts.check(f, x)); } catch { return false; }
+}
+export function loadReportFonts(t, fonts = globalThis.document?.fonts, wait = REPORT_FONT_WAIT, signal) {
+  if (!fonts?.load) return Promise.resolve(true);
+  let timer, onAbort;
+  const stop = new Promise((r) => {
+    timer = setTimeout(() => r(false), wait);
+    if (signal) { onAbort = () => r(false); if (signal.aborted) onAbort(); else signal.addEventListener('abort', onAbort, { once: true }); }
+  });
+  return Promise.race([settleReportFonts(t, fonts), stop]).finally(() => { clearTimeout(timer); signal?.removeEventListener?.('abort', onAbort); });
 }
 
-/** 캔버스에 그리기 → PNG Blob */
-export async function drawReport(d, { dark = false } = {}) {
+/** 그림 한 장 만들기(QA 4차 P1).
+ *  3초 안에 글꼴이 다 오면 그 그림 그대로. 못 오면 있는 글꼴로 먼저 그리고(img.fresh=false), 글꼴이 다 오면 다시 그려 img.late 로 알림.
+ *  저장·공유 직전에는 img.current() 로 받는다: 글꼴이 이미 다 왔으면 다시 그린 그림, 아직이면 지금 그림.
+ *  signal 이 취소되면(화면을 떠남, P2) null. */
+export async function makeReport(d, { dark = false, fonts = globalThis.document?.fonts, wait = REPORT_FONT_WAIT, signal, late = true } = {}) {
   const t = reportStrings(d);
-  await loadReportFonts(t);
+  const inTime = await loadReportFonts(t, fonts, wait, signal);
+  if (signal?.aborted) return null;
+  const img = { blob: await paintReport(d, t, dark), fresh: inTime, late: null, stopped: false };
+  if (signal?.aborted) return null;
+  img.stop = () => { img.stopped = true; };
+  if (!inTime && late) {
+    img.late = settleReportFonts(t, fonts).then(async () => {
+      if (img.stopped || signal?.aborted) return null;
+      img.blob = await paintReport(d, t, dark); img.fresh = true;
+      return img.blob;
+    });
+  }
+  img.current = async () => { if (!img.fresh && img.late && reportFontsReady(t, fonts)) await img.late; return img.blob; };
+  return img;
+}
+
+/** 글꼴을 (3초까지) 기다린 뒤 캔버스에 그리기 → PNG Blob. 요약 공유처럼 한 번 그리고 끝나는 곳에서 씀 */
+export async function drawReport(d, { dark = false } = {}) {
+  return (await makeReport(d, { dark, late: false })).blob;
+}
+
+/** 캔버스에 그리기(기다리지 않음) → PNG Blob */
+function paintReport(d, t, dark) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
   const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#1C1A2E' : '#FFFFFF';
@@ -133,15 +171,22 @@ export async function drawReport(d, { dark = false } = {}) {
   return new Promise((res) => c.toBlob(res, 'image/png'));
 }
 
-/** 미리보기 대화상자 + 공유/저장 */
-export async function openReport(m, { toast }) {
+/** 미리보기 대화상자 + 공유/저장. signal 이 취소되면(만드는 동안 화면을 떠남, QA 4차 P2) 창을 열지 않고 null */
+export async function openReport(m, { toast, signal } = {}) {
   const d = reportData(m);
-  const blob = await drawReport(d, { dark: m.dark });
-  const url = URL.createObjectURL(blob);
+  const img = await makeReport(d, { dark: m.dark, signal });
+  if (!img || signal?.aborted) { img?.stop?.(); return null; }
+  let blob = img.blob, url = URL.createObjectURL(blob);
   const name = `쨈가계부_${d.ym}_리포트.png`;
-  const file = new File([blob], name, { type: 'image/png' });
+  let file = new File([blob], name, { type: 'image/png' });
   const canShare = navigator.canShare?.({ files: [file] });
   const wrap = document.createElement('div');
+  // 늦게 온 글꼴로 다시 그린 그림으로 바꿔 끼움(미리보기·저장·공유 모두 새 그림)
+  const swap = (next) => {
+    if (!next || next === blob || !wrap.isConnected) return;
+    URL.revokeObjectURL(url); blob = next; url = URL.createObjectURL(blob); file = new File([blob], name, { type: 'image/png' });
+    const pic = wrap.querySelector('img'); if (pic) pic.src = url;
+  };
   wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-4 fade-in';
   wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="rp-t" class="dlg-card">
     <h2 id="rp-t">${d.month}월 리포트 카드</h2>
@@ -151,17 +196,20 @@ export async function openReport(m, { toast }) {
     <div class="dlg-actions"><button class="btn-ghost" data-rp="close">닫기</button>
       ${canShare ? '<button class="btn-ghost" data-rp="save">저장</button><button class="btn-primary" data-rp="share">공유하기</button>' : '<button class="btn-primary" data-rp="save">이미지 저장</button>'}</div></div>`;
   const app = document.getElementById('app'), back = document.activeElement;
-  const done = () => { wrap.remove(); URL.revokeObjectURL(url); document.removeEventListener('keydown', onKey); if (app) app.inert = false; back?.focus?.(); };
+  // 만드는 동안 버튼이 disabled 라 포커스가 빠졌을 수 있음 → 닫으면 리포트 버튼으로 돌려줌
+  const done = () => { img.stop(); wrap.remove(); URL.revokeObjectURL(url); document.removeEventListener('keydown', onKey); if (app) app.inert = false; (back?.isConnected && back !== document.body ? back : document.querySelector('[data-action="report"]'))?.focus?.(); };
   if (app) app.inert = true;
   const onKey = (e) => e.key === 'Escape' && done();
   wrap.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-rp]');
     if (e.target === wrap || b?.dataset.rp === 'close') return done();
+    if (b?.dataset.rp === 'save' || b?.dataset.rp === 'share') swap(await img.current()); // 저장·공유 직전: 글꼴이 다 왔으면 다시 그린 그림으로
     if (b?.dataset.rp === 'save') { const a = Object.assign(document.createElement('a'), { href: url, download: name }); document.body.append(a); a.click(); a.remove(); toast('이미지를 저장했어요.'); }
     if (b?.dataset.rp === 'share') { try { await navigator.share({ files: [file], title: `${d.month}월 리포트` }); } catch (err) { if (err?.name !== 'AbortError') toast('공유하지 못했어요. 이미지 저장을 써 보세요.'); } }
   });
   document.addEventListener('keydown', onKey);
   document.body.append(wrap);
+  img.late?.then(swap);
   wrap.querySelector('[data-rp="share"],[data-rp="save"]').focus();
   return d;
 }

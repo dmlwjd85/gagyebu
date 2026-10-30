@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test, vi } from 'vitest';
-import { reportStrings, reportBodyText, loadReportFonts, drawReport, REPORT_FONT_WAIT } from '../ui/report.js';
+import { reportStrings, reportBodyText, loadReportFonts, drawReport, makeReport, reportFontsReady, REPORT_FONT_WAIT } from '../ui/report.js';
+import { reportRunner, reportScreenKey, markReportBusy, prefetchAfterData } from '../ui/reportRun.js';
+import { readFileSync } from 'node:fs';
 import { singleRun } from '../ui/util.js';
 
 // QA 2차 N1: 리포트 첫 그림에 첫 조각 밖 글자(떡·볶·쌀)가 대체 글꼴로 구워지던 것
@@ -91,16 +93,150 @@ describe('리포트 이미지 글꼴 미리 받기', () => {
     await vi.advanceTimersByTimeAsync(3000);
     expect(await again).toBe(2);
   });
+});
 
-  test("만드는 동안 리포트 버튼 글자를 '만드는 중…'으로 바꿀 칸을 버튼 안에서 실제로 찾는다(굵기 정리 뒤에도)", async () => {
-    const { readFileSync } = await import('node:fs');
-    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
-    const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
-    const sel = main.match(/function markReportBusy[\s\S]*?b\.querySelector\('([^']+)'\)/)[1];
-    expect(sel).toBe('[data-report-label]');
-    const btn = views.match(/<button class="report-btn" data-action="report">[\s\S]*?<\/button>/)[0];
-    expect(btn.match(/data-report-label/g)).toHaveLength(1);
-    expect(btn).toMatch(/<span [^>]*data-report-label>\$\{Number\(m\.viewYm\.slice\(5\)\)\}월 리포트 카드 만들기<\/span>/);
+// QA 4차 P1: 느린 망에서 3초 제한에 걸린 첫 그림은 글꼴이 다 오면 다시 그리고, 저장·공유 직전에도 다시 그린 그림을 쓴다
+describe('늦게 온 글꼴로 다시 그리기(QA 4차 P1)', () => {
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals(); });
+  // arrive: 글꼴이 다 오는 시각(ms). check 는 그 뒤에만 true. 캔버스는 그릴 때마다 새 그림 번호를 돌려줌
+  const setup = (arrive) => {
+    let n = 0;
+    const fonts = { load: () => new Promise((r) => setTimeout(r, Math.max(0, arrive - Date.now()))), check: () => Date.now() >= arrive };
+    const ctx = new Proxy({}, { get: (o, k) => (k in o ? o[k] : k === 'measureText' ? (t) => ({ width: String(t).length * 20 }) : /^create.*Gradient$/.test(k) ? () => ({ addColorStop() {} }) : () => {}), set: (o, k, v) => { o[k] = v; return true; } });
+    vi.stubGlobal('document', { fonts, createElement: () => ({ getContext: () => ctx, toBlob: (cb) => cb(`png${++n}`) }) });
+    return fonts;
+  };
+  test('3초 안에 다 오면 한 번만 그리고 다시 그리지 않는다', async () => {
+    vi.useFakeTimers({ now: 0 }); setup(1000);
+    let img; makeReport(d).then((x) => { img = x; });
+    await vi.advanceTimersByTimeAsync(1000);
+    expect(img.blob).toBe('png1'); expect(img.fresh).toBe(true); expect(img.late).toBe(null);
+    expect(await img.current()).toBe('png1');
+  });
+  test('3초에 먼저 그리고, 글꼴이 다 오면(5초) 다시 그린다. 저장 직전 current()는 새 그림', async () => {
+    vi.useFakeTimers({ now: 0 }); setup(5000);
+    let img; makeReport(d).then((x) => { img = x; });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(img.blob).toBe('png1'); expect(img.fresh).toBe(false);
+    expect(await img.current()).toBe('png1'); // 아직 글꼴이 없으면 기다리지 않고 지금 그림
+    let late; img.late.then((b) => { late = b; });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(late).toBe('png2'); expect(img.fresh).toBe(true);
+    expect(await img.current()).toBe('png2');
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  test('글꼴은 다 왔는데 아직 다시 그리기 전이면 current()가 다시 그린 그림을 기다린다', async () => {
+    vi.useFakeTimers({ now: 0 }); const fonts = setup(5000);
+    let img; makeReport(d).then((x) => { img = x; });
+    await vi.advanceTimersByTimeAsync(3000);
+    fonts.check = () => true; // 글꼴은 이미 있음(다른 화면에서 받음), load 약속만 아직
+    let saved; img.current().then((b) => { saved = b; });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(saved).toBe('png2');
+    expect(reportFontsReady(reportStrings(d), fonts)).toBe(true);
+    expect(reportFontsReady(reportStrings(d), { load() {} })).toBe(false);
+  });
+  test('창을 닫으면(stop) 늦게 와도 다시 그리지 않는다. 요약 공유(drawReport)는 다시 그리기를 걸지 않는다', async () => {
+    vi.useFakeTimers({ now: 0 }); setup(5000);
+    let img; makeReport(d).then((x) => { img = x; });
+    await vi.advanceTimersByTimeAsync(3000);
+    img.stop();
+    let late = 'x'; img.late.then((b) => { late = b; });
+    await vi.advanceTimersByTimeAsync(2000);
+    expect(late).toBe(null); expect(img.blob).toBe('png1');
+    let blob; drawReport(d).then((b) => { blob = b; });
+    await vi.advanceTimersByTimeAsync(3000);
+    expect(blob).toBe('png2');
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(vi.getTimerCount()).toBe(0);
+  });
+  test('기다리는 중 취소(signal)하면 바로 끝나고 그리지 않는다(QA 4차 P2)', async () => {
+    vi.useFakeTimers({ now: 0 }); setup(60000);
+    const ctl = new AbortController();
+    let img = 'x'; makeReport(d, { signal: ctl.signal }).then((x) => { img = x; });
+    await vi.advanceTimersByTimeAsync(500);
+    ctl.abort();
+    await vi.advanceTimersByTimeAsync(0);
+    expect(img).toBe(null);
+    expect(await loadReportFonts(reportStrings(d), document.fonts, 3000, ctl.signal)).toBe(false); // 이미 취소된 신호면 바로 false
   });
 });
 
+// QA 4차 P2·P4·P5: main.js 와 잇는 부분(버튼 표시·화면 떠나면 취소·첫 데이터 뒤 미리 받기)
+describe('리포트 버튼과 화면 그리기 잇기', () => {
+  const button = () => {
+    const attrs = {}, label = { textContent: '10월 리포트 카드 만들기', dataset: {} }, icon = { textContent: '📤', dataset: {} };
+    return { attrs, label, icon, disabled: false, setAttribute: (k, v) => { attrs[k] = v; }, removeAttribute: (k) => { delete attrs[k]; }, querySelector: (q) => ({ '[data-report-label]': label, '[data-report-icon]': icon })[q] ?? null };
+  };
+  const rootWith = (b) => ({ querySelectorAll: (q) => (q === '[data-action="report"]' ? [b] : []) });
+  test('만드는 동안 버튼은 disabled·aria-busy·만드는 중 글자·⏳, 끝나면 원래대로(QA 4차 P4)', () => {
+    const b = button(), root = rootWith(b);
+    markReportBusy(root, true);
+    expect(b.disabled).toBe(true); expect(b.attrs['aria-busy']).toBe('true');
+    expect(b.label.textContent).toBe('리포트 카드 만드는 중…'); expect(b.icon.textContent).toBe('⏳');
+    markReportBusy(root, true); // 다시 불러도 원래 글자를 잃지 않음
+    markReportBusy(root, false);
+    expect(b.disabled).toBe(false); expect(b.attrs['aria-busy']).toBeUndefined();
+    expect(b.label.textContent).toBe('10월 리포트 카드 만들기'); expect(b.icon.textContent).toBe('📤');
+    const views = readFileSync(new URL('../ui/views.js', import.meta.url), 'utf8');
+    const btn = views.match(/<button class="report-btn" data-action="report">[\s\S]*?<\/button>/)[0];
+    expect(btn).toMatch(/<span [^>]*data-report-icon>📤<\/span>/);
+    expect(btn).toMatch(/<span [^>]*data-report-label>\$\{Number\(m\.viewYm\.slice\(5\)\)\}월 리포트 카드 만들기<\/span>/);
+    const css = readFileSync(new URL('../style.css', import.meta.url), 'utf8');
+    expect(css).toMatch(/\.report-btn\[aria-busy="true"\] \{[^}]*border-style: dashed[^}]*\}/);
+    expect(css).not.toMatch(/\.report-btn\[aria-busy="true"\] \{[^}]*opacity/);
+  });
+  test('만드는 동안 다른 화면·달로 가면 취소하고 창을 열지 않는다. 같은 화면을 다시 그리면 그대로(QA 4차 P2)', async () => {
+    const b = button(); let opened = 0, sig;
+    let finish; const open = (m, { signal }) => { sig = signal; return new Promise((r) => { finish = () => { if (!signal.aborted) opened += 1; r(); }; }); };
+    const r = reportRunner({ root: rootWith(b), open });
+    const home = reportScreenKey('chart', '2026-10', 'u1');
+    const job = r.run({}, home); await Promise.resolve(); await Promise.resolve();
+    expect(r.busy()).toBe(true); expect(b.disabled).toBe(true);
+    r.afterRender(home); expect(sig.aborted).toBe(false); expect(b.disabled).toBe(true);
+    r.afterRender(reportScreenKey('home', '2026-10', 'u1'));
+    expect(sig.aborted).toBe(true);
+    finish(); await job;
+    expect(opened).toBe(0); expect(r.busy()).toBe(false); expect(b.disabled).toBe(false);
+    // 달을 바꾸거나 로그아웃(null)해도 취소
+    for (const k of [reportScreenKey('chart', '2026-09', 'u1'), null]) {
+      const j = r.run({}, home); await Promise.resolve(); await Promise.resolve();
+      r.afterRender(k); expect(sig.aborted).toBe(true); finish(); await j;
+    }
+    // 그대로 있으면 연다
+    const j2 = r.run({}, home); await Promise.resolve(); await Promise.resolve(); r.afterRender(home); finish(); await j2;
+    expect(opened).toBe(1);
+  });
+  test('실패는 알리고, 취소해서 끝난 것은 알리지 않는다', async () => {
+    const errs = [];
+    const r = reportRunner({ root: rootWith(button()), open: async () => { throw new Error('x'); }, onError: (e) => errs.push(e.message) });
+    await r.run({}, 'a');
+    expect(errs).toEqual(['x']);
+    const r2 = reportRunner({ root: rootWith(button()), open: (m, { signal }) => new Promise((ok, no) => signal.addEventListener('abort', () => no(new Error('abort')))), onError: (e) => errs.push(e.message) });
+    const j = r2.run({}, 'a'); await Promise.resolve(); await Promise.resolve(); r2.afterRender('b'); await j;
+    expect(errs).toEqual(['x']);
+  });
+  test('첫 데이터(기록·설정)를 다 그린 뒤에만 .ks 미리 받기를 부른다(QA 3차 M5)', () => {
+    const calls = []; const p = () => calls.push(1);
+    for (const st of [{ user: null, txLoaded: true, settingsLoaded: true }, { user: {}, txLoaded: false, settingsLoaded: true }, { user: {}, txLoaded: true, settingsLoaded: false }]) prefetchAfterData(st, p);
+    expect(calls).toEqual([]);
+    prefetchAfterData({ user: {}, txLoaded: true, settingsLoaded: true }, p);
+    expect(calls).toEqual([1]);
+  });
+  test('main.js 가 실제로 이 부분을 쓴다: render 끝·로그인 화면에서 afterRender, 첫 데이터 뒤 미리 받기, 리포트 열기에 signal 전달', () => {
+    const main = readFileSync(new URL('../main.js', import.meta.url), 'utf8');
+    const render = main.slice(main.indexOf('function render() {'), main.indexOf('const tabBar ='));
+    expect(render).toMatch(/if \(!state\.user\) \{ report\.afterRender\(null\); return gateView/);
+    expect(render).toContain('prefetchAfterData(state, prefetchJjaemKs);');
+    expect(render).toContain('report.afterRender(reportScreenKey(ui.view, m.viewYm, state.user?.uid));');
+    expect(render).not.toMatch(/prefetchJjaemKs\(\)/);
+    expect(main.match(/prefetchJjaemKs/g)).toHaveLength(2); // 가져오기 한 번 + render 끝 한 곳뿐(로그인 직후 홈이 늦어지지 않게)
+    expect(main).toMatch(/const runReport = \(m\) => report\.run\(m, reportScreenKey\(ui\.view, m\.viewYm, state\.user\?\.uid\)\);/);
+    expect(main).toMatch(/case 'report': return runReport\(m\);/);
+    expect(main).toMatch(/open: async \(m, opts\) => \{ const \{ openReport \} = await import\('\.\/ui\/report\.js'\); if \(!opts\.signal\.aborted\) await openReport\(m, \{ toast, \.\.\.opts \}\); \}/);
+    const rep = readFileSync(new URL('../ui/report.js', import.meta.url), 'utf8');
+    expect(rep).toMatch(/const img = await makeReport\(d, \{ dark: m\.dark, signal \}\);\n  if \(!img \|\| signal\?\.aborted\)/);
+    expect(rep).toMatch(/swap\(await img\.current\(\)\)/);
+    expect(rep).toMatch(/img\.late\?\.then\(swap\)/);
+  });
+});

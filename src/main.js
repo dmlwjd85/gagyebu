@@ -15,7 +15,8 @@ import { editTarget } from './lib/restore.js';
 import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal, singleRun } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
+import { reportRunner, reportScreenKey, prefetchAfterData } from './ui/reportRun.js';
 import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
 import { createNavHistory } from './lib/navBack.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
@@ -132,25 +133,19 @@ function pushLook(partial) {
   }
   render();
 }
-// 리포트 카드: 만드는 동안 또 눌러도 한 번만 만든다(대화상자 겹침 방지). 버튼은 '만드는 중…'으로 바꿔 기다리는 걸 알림(QA 3차 M1)
-function markReportBusy(on) {
-  app.querySelectorAll('[data-action="report"]').forEach((b) => { // 글자 칸은 굵기 클래스가 아닌 data-report-label 로 찾는다(굵기 정리 합치기 때 이름이 바뀌어 놓친 것 바로잡기)
-    const label = b.querySelector('[data-report-label]');
-    if (on) { b.setAttribute('aria-busy', 'true'); b.setAttribute('aria-disabled', 'true'); if (label) { label.dataset.idle ??= label.textContent; label.textContent = '리포트 카드 만드는 중…'; } }
-    else { b.removeAttribute('aria-busy'); b.removeAttribute('aria-disabled'); if (label?.dataset.idle) { label.textContent = label.dataset.idle; delete label.dataset.idle; } }
-  });
-}
-const runReport = singleRun(async (m) => {
-  markReportBusy(true);
-  try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
-  finally { markReportBusy(false); }
+// 리포트 카드: 만드는 동안 또 눌러도 한 번만, 버튼은 disabled·'만드는 중…'(QA 3차 M1·4차 P4), 화면을 떠나면 취소(4차 P2). src/ui/reportRun.js
+const report = reportRunner({
+  root: app,
+  open: async (m, opts) => { const { openReport } = await import('./ui/report.js'); if (!opts.signal.aborted) await openReport(m, { toast, ...opts }); },
+  onError: (err) => { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); },
 });
+const runReport = (m) => report.run(m, reportScreenKey(ui.view, m.viewYm, state.user?.uid));
 function render() {
   if (state.user && state.settingsLoaded) adoptCloudLook(state.settings);
   if (redirectDone) exitGuard.sync({ loggedIn: !!state.user });
   if (!isFirebaseConfigured) return gateView(setupView());
   if (!state.ready) return; // index.html 의 첫 화면(브랜드 카드)을 그대로 둠
-  if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
+  if (!state.user) { report.afterRender(null); return gateView(loginView({ emulator: useEmulator, error: ui.loginError })); }
   const m = model();
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
@@ -184,8 +179,8 @@ function render() {
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
   // 첫 데이터(기록·설정)를 그린 뒤에만 쨈 본문 .ks 를 한가할 때 받기 시작(로그인 화면·첫 데이터 전에는 안 함, 글꼴 설정이 기본일 때만, QA 3차 M5·M6)
-  if (state.txLoaded && state.settingsLoaded) prefetchJjaemKs();
-  if (runReport.busy()) markReportBusy(true); // 만드는 중에 다시 그려도 버튼 표시 유지
+  prefetchAfterData(state, prefetchJjaemKs);
+  report.afterRender(reportScreenKey(ui.view, m.viewYm, state.user?.uid)); // 다른 화면·달로 갔으면 만들던 리포트 취소, 같은 화면이면 버튼 표시 유지
   renderTip();
   renderInstallHint();
 }
