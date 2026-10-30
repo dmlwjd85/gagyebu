@@ -646,3 +646,13 @@ html.dark .dlg-card .btn-ghost {
   background: transparent;
   border-width: 1.5px;
 }
+
+/* 홈 요약 카드: 항목별 남은 예산 펼치기/접기 */
+.hero-fold { display: flex; width: 100%; min-height: 44px; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 12px; border-radius: 12px; background: rgb(255 255 255 / 0.16); font-weight: 600; text-align: left; }
+.hero-fold:focus-visible { outline: 2px solid #fff; outline-offset: 2px; }
+.hero-warn { color: #fff; background: rgb(220 38 38 / 0.85); padding: 1px 6px; border-radius: 999px; font-weight: 700; white-space: nowrap; }
+.hero-cats { margin-top: 6px; display: flex; flex-direction: column; gap: 2px; }
+.hero-cat { display: flex; align-items: center; gap: 6px; min-height: 32px; padding: 4px 12px; border-radius: 10px; }
+.hero-cat-name { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+.hero-cat-amt { font-weight: 700; white-space: nowrap; }
+.hero-cat.is-over { background: rgb(220 38 38 / 0.85); color: #fff; }

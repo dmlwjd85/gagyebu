@@ -191,7 +191,7 @@ describe('설정·홈 표시', () => {
     for (const decor of [true, false]) {
       const html = homeView(homeFixture({ mood: 'sakura', font: 'pretendard', decor }));
       expect(html).not.toMatch(/hero-art|theme-banner|\.webp/);
-      expect(html).toContain('오늘 쓸 수 있는 돈');
+      expect(html).toContain('이번 달 남은 예산');
       expect(html).toContain('hero-card px-5');
     }
   });

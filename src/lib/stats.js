@@ -53,7 +53,7 @@ export function trend(txs, periods) {
 
 /**
  * 돈 날씨 (스펙 3절). base = 오늘 아침 기준 하루 권장액 = (예산 − 어제까지 지출) / 남은 일수(오늘 포함).
- * 홈 큰 숫자 = 오늘 남은 쓸 돈 = max(0, base − 오늘 지출). 날씨는 오늘 지출 / base 비율.
+ * available = 오늘 남은 쓸 돈 = max(0, base − 오늘 지출). 날씨는 오늘 지출 / base 비율. (홈 큰 숫자는 monthBudgetLeft 의 이번 달 남은 예산)
  */
 export function moneyWeather({ budget, periodTxs, p, today }) {
   if (!budget || budget <= 0) return { hasBudget: false };
@@ -107,4 +107,24 @@ export function topIncrease(cur, prev, minPrev = 10000) {
     if (pct > 0 && (!best || pct > best.pct)) best = { categoryId: c.categoryId, pct, diff: c.amount - before };
   }
   return best;
+}
+
+/**
+ * 이번 달 남은 예산 = 예산 합계 − 이번 달 지출(환불이 더 많으면 0원으로 봄).
+ * byCategory(나눠서 관리)에 한도가 있으면 항목별 남은 예산도 돌려줌(한도 큰 순 아님, 카테고리 순서 유지).
+ */
+export function monthBudgetLeft({ budget, periodTxs, categories = [] }) {
+  const total = budget?.total ?? 0;
+  if (!total || total <= 0) return { hasBudget: false, items: [] };
+  let net = 0;
+  const by = new Map();
+  for (const t of periodTxs) if (t.kind === 'expense') { net += t.amount; by.set(t.categoryId, (by.get(t.categoryId) ?? 0) + t.amount); }
+  const spent = Math.max(0, net);
+  const lims = budget?.byCategory ?? {};
+  const order = new Map(categories.map((c, i) => [c.id, i]));
+  const items = Object.entries(lims).filter(([, lim]) => Number(lim) > 0).map(([id, lim]) => {
+    const used = Math.max(0, by.get(id) ?? 0);
+    return { categoryId: id, limit: Number(lim), spent: used, left: Number(lim) - used, over: used > Number(lim) };
+  }).sort((a, b) => (order.get(a.categoryId) ?? 1e9) - (order.get(b.categoryId) ?? 1e9));
+  return { hasBudget: true, total, spent, left: total - spent, over: spent > total, usedPct: Math.min(999, Math.round((spent / total) * 100)), items };
 }
