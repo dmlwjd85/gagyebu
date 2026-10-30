@@ -226,7 +226,7 @@ function paceCard(m) {
   const tone = (n) => (n < 0 ? 'text-expense' : '');
   return `<section class="card-solid p-4" aria-labelledby="pace-h"><h2 id="pace-h" class="text-head">오늘·이번 주 몫</h2>
     ${paceCells('이번 주 몫 중 남은 돈', formatWon(w.weekLeft), tone(w.weekLeft), '오늘 몫 중 남은 돈', formatWon(w.todayLeft), tone(w.todayLeft))}
-    <p class="mt-2 text-caption text-ink-sub break-words">몫에서 오늘까지 쓴 돈을 뺀 남은 돈이에요. 한 달 예산을 기간의 모든 날로 나눈 뒤, 그날까지 쓴 지출을 빼요. 위의 큰 숫자는 남은 예산을 남은 날로 나눈 값이라 금액이 다를 수 있어요.</p></section>`;
+    <p class="mt-2 text-caption text-ink-sub break-words">몫에서 오늘까지 쓴 돈을 뺀 남은 돈이에요. 한 달 예산을 기간의 모든 날로 나눈 뒤, 그날까지 쓴 지출을 빼요. 위의 큰 숫자는 이번 달 남은 예산 전체라 이 카드의 하루·주 몫과 금액이 달라요.</p></section>`;
 }
 function allowanceCard(m) {
   const a = allowanceFrom(m.settings);

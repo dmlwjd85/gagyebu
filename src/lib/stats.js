@@ -53,7 +53,7 @@ export function trend(txs, periods) {
 
 /**
  * 돈 날씨 (스펙 3절). base = 오늘 아침 기준 하루 권장액 = (예산 − 어제까지 지출) / 남은 일수(오늘 포함).
- * 홈 큰 숫자 = 오늘 남은 쓸 돈 = max(0, base − 오늘 지출). 날씨는 오늘 지출 / base 비율.
+ * available = 오늘 남은 쓸 돈 = max(0, base − 오늘 지출). 날씨는 오늘 지출 / base 비율. (홈 큰 숫자는 monthBudgetLeft 의 이번 달 남은 예산)
  */
 export function moneyWeather({ budget, periodTxs, p, today }) {
   if (!budget || budget <= 0) return { hasBudget: false };
