@@ -1,14 +1,14 @@
 import { readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { describe, expect, test } from 'vitest';
+import { describe, expect, test, vi } from 'vitest';
 import { normalizeSettings } from './modes.js';
 import { homeView, settingsView } from '../ui/views.js';
 import { symbol, logo, JJAEM_D, JJAEM_ICON_D, JJAEM_ICON_VB, FAB_INNER } from '../ui/brand.js';
 import {
   DEFAULT_LOOK, DEFAULT_TONE, MOODS, FONTS, ART_MOODS,
   readLook, writeLook, sanitizeLook, applyLook, lookFromCloud, adoptCloudLook,
-  fontsFor, toneList, FONT_OPTIONS, KS_SAMPLE, JJAEM_CACHE_FILES, prefetchJjaemKs, resetKsPrefetchForTest,
+  fontsFor, toneList, FONT_OPTIONS, KS_SAMPLE, JJAEM_CACHE_FILES, prefetchJjaemKs, resetKsPrefetchForTest, ensureFont,
 } from './look.js';
 
 function mem(init = {}) {
@@ -330,6 +330,43 @@ describe('쨈 폰트 v1.0.6', () => {
       while (a.idles.length) { a.idles.shift()(); await tick(); }
       expect(a.calls).toHaveLength(2); expect(a.fetched).toEqual(JJAEM_CACHE_FILES);
       resetKsPrefetchForTest();
+    });
+    // QA 4차 P5: 변이 시험에서 못 잡던 세 가지
+    test('첫 화면 글꼴이 다 오기(fonts.ready) 전에는 한가해도 받지 않는다(M5)', async () => {
+      resetKsPrefetchForTest();
+      const a = fake();
+      let ready; a.win.document.fonts.ready = new Promise((r) => { ready = r; });
+      expect(prefetchJjaemKs(a.win)).toBe(true);
+      await tick(); await tick();
+      expect(a.calls).toEqual([]); expect(a.fetched).toEqual([]);
+      ready(); await tick();
+      expect(a.calls).toHaveLength(2); expect(a.fetched).toEqual(JJAEM_CACHE_FILES);
+      resetKsPrefetchForTest();
+    });
+    test('.ks 를 받는 사이 설정을 바꾸면 워커 캐시에 넣지 않는다(keep 직전 다시 확인, M6)', async () => {
+      resetKsPrefetchForTest();
+      const a = fake();
+      const waits = [];
+      a.win.document.fonts.load = (f, t) => { a.calls.push([f, t]); return new Promise((r) => waits.push(r)); };
+      prefetchJjaemKs(a.win); await tick();
+      expect(a.calls).toHaveLength(2);
+      a.win.document.documentElement.dataset.font = 'system';
+      waits.forEach((r) => r([])); await tick();
+      expect(a.fetched).toEqual([]);
+      resetKsPrefetchForTest();
+    });
+    test('글꼴 CSS 를 불러오는 ensureFont 는 미리 받기를 시작하지 않는다(로그인 화면·첫 데이터 전, M5)', async () => {
+      resetKsPrefetchForTest();
+      const a = fake();
+      vi.stubGlobal('document', a.win.document); vi.stubGlobal('navigator', a.win.navigator); vi.stubGlobal('requestIdleCallback', a.win.requestIdleCallback); vi.stubGlobal('fetch', a.win.fetch);
+      try {
+        await ensureFont('pretendard'); await ensureFont('gaegu'); await tick();
+        expect(a.calls).toEqual([]);
+        expect(prefetchJjaemKs(a.win)).toBe(true); // 아직 아무도 시작하지 않았음
+      } finally { vi.unstubAllGlobals(); resetKsPrefetchForTest(); }
+      const src = readFileSync(new URL('./look.js', import.meta.url), 'utf8');
+      const ens = src.slice(src.indexOf('export function ensureFont'), src.indexOf('// 쨈 본문 .ks 조각'));
+      expect(ens).not.toMatch(/prefetch/);
     });
     test('데이터 절약 모드·2G 에서는 받지 않는다', async () => {
       for (const conn of [{ saveData: true }, { effectiveType: '2g' }, { effectiveType: 'slow-2g' }]) {
