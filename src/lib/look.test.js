@@ -155,22 +155,62 @@ describe('나눔라운드 숫자', () => {
 });
 
 describe('쨈 폰트 v1.0.5', () => {
+  const face = readFileSync(new URL('../assets/fonts/jjaem/jjaem-font.css', import.meta.url), 'utf8');
+  const blocks = face.match(/@font-face\{[^}]+\}/g);
+  const range = (block) => {
+    const out = new Set();
+    for (const tok of block.match(/unicode-range:([^;}]+)/)[1].split(',')) {
+      const [a, b = a] = tok.replace('U+', '').split('-').map((x) => parseInt(x, 16));
+      for (let c = a; c <= b; c++) out.add(c);
+    }
+    return out;
+  };
+  const body = (weight) => blocks.filter((x) => x.includes("font-family:'JJAEM Body'") && x.includes(`font-weight:${weight};`));
+
   test('기본 값(pretendard)은 쨈 본문 조각판으로 그리고, 전체 TTF·한 파일판은 싣지 않는다', () => {
-    const face = readFileSync(new URL('../assets/fonts/jjaem/jjaem-font.css', import.meta.url), 'utf8');
-    const blocks = face.match(/@font-face\{[^}]+\}/g);
-    expect(blocks).toHaveLength(6);
+    expect(blocks).toHaveLength(7);
     for (const block of blocks) {
       expect(block).toMatch(/font-display:swap/);
       expect(block).toMatch(/unicode-range:U\+/);
-      expect(block).toMatch(/url\('fonts\/JJAEM[^']*\.(ks|ext)\.woff2'\) format\('woff2'\)/);
+      expect(block).toMatch(/url\('fonts\/JJAEM[^']*\.(core|ks|ext|title)\.woff2'\) format\('woff2'\)/);
+      const file = block.match(/url\('([^']+)'\)/)[1];
+      expect(readdirSync(new URL('../assets/fonts/jjaem/fonts/', import.meta.url))).toContain(file.replace('fonts/', ''));
     }
-    expect(face.match(/font-family:'JJAEM Body';[^}]*font-weight:400/g)).toHaveLength(2);
-    expect(face.match(/font-family:'JJAEM Body';[^}]*font-weight:700/g)).toHaveLength(2);
-    expect(face.match(/font-family:'JJAEM Title Flat'/g)).toHaveLength(2);
+    // 굵기는 두 벌: 100~500 → 보통, 600~900 → 굵게 (가짜 굵게 없이 semibold·extrabold 도 굵게 파일로)
+    expect(body('100 500').map((x) => x.match(/\.(core|ks|ext)\.woff2/)[1])).toEqual(['core', 'ks', 'ext']);
+    expect(body('600 900').map((x) => x.match(/\.(core|ks|ext)\.woff2/)[1])).toEqual(['core', 'ks', 'ext']);
+    expect(face.match(/font-family:'JJAEM Title Flat'/g)).toHaveLength(1);
     expect(face).not.toMatch(/\.ttf|\.otf|한파일판/);
     expect(FONT_OPTIONS.find((o) => o.id === 'pretendard').label).toBe('쨈 본문');
     const tw = readFileSync(new URL('../../tailwind.config.js', import.meta.url), 'utf8');
     expect(tw).toMatch(/sans: \['"JJAEM Body"', '"Pretendard Variable"'/);
+  });
+
+  test('첫 조각(.core)·.ks·.ext 글자 범위는 겹치지 않고, 앱 소스의 한글·가운뎃점은 모두 첫 조각에 있다', () => {
+    for (const w of ['100 500', '600 900']) {
+      const [core, ks, ext] = body(w).map(range);
+      for (const c of core) { expect(ks.has(c)).toBe(false); expect(ext.has(c)).toBe(false); }
+      expect(core.has(0xb7)).toBe(true);
+      const src = fileURLToPath(new URL('..', import.meta.url));
+      const files = [];
+      const walk = (d) => { for (const e of readdirSync(d, { withFileTypes: true })) { const p = join(d, e.name); if (e.isDirectory()) walk(p); else if (/\.(js|css|html)$/.test(e.name) && !e.name.endsWith('.test.js')) files.push(p); } };
+      walk(src);
+      const missing = new Set();
+      for (const f of files) {
+        const text = readFileSync(f, 'utf8').replace(/\/\*[\s\S]*?\*\//g, '').replace(/(^|\s)\/\/[^\n]*/g, '');
+        for (const ch of text) { const c = ch.codePointAt(0); if (c >= 0xac00 && c <= 0xd7a3 && !core.has(c)) missing.add(ch); }
+      }
+      // 화면 글자를 새로 넣었으면 tools/font/make-jjaem-core.py 를 다시 돌려 첫 조각을 만들어 주세요.
+      expect([...missing].join('')).toBe('');
+    }
+  });
+
+  test('미리 받기(preload)는 첫 조각만, 설정 글꼴이 기본일 때만 건다', () => {
+    const vite = readFileSync(new URL('../../vite.config.js', import.meta.url), 'utf8');
+    expect(vite).toMatch(/JJAEMBody-Regular\\\.core-/);
+    expect(vite).toMatch(/JJAEMBody-Bold\\\.core-/);
+    expect(vite).toMatch(/if\(f&&f!=='pretendard'\)return;/);
+    expect(vite).not.toMatch(/\.ks-\[/);
   });
 });
 

@@ -4,10 +4,11 @@ import { readFileSync } from 'node:fs';
 
 const pkg = JSON.parse(readFileSync(new URL('./package.json', import.meta.url), 'utf8'));
 
-// 첫 화면 글자(쨈 가계부, 로그인 안내)가 든 쨈 본문 조각만 미리 받기.
-// .ks: 영문·숫자·기호 + 자주 쓰는 한글 2,350자(400·700 두 굵기). 나머지 한글 조각(.ext)은 필요할 때 받음.
+// 쨈 본문 첫 조각(.core: 앱 화면 글자 + 영문·숫자·기호, 400·700 두 굵기)만 미리 받기.
+// 설정 글꼴이 기본(쨈 본문)일 때만 건다: index.html 첫 스크립트가 정한 data-font 를 보고 head 에 link 를 넣음.
+// 시스템·나눔라운드를 고른 사람은 쨈 본문을 받지 않는다. 나머지 조각(.ks/.ext)은 그 글자가 화면에 나올 때만 받음.
 const BASE = '/gagyebu/';
-const PRELOAD_FONT_FILES = [/JJAEMBody-Regular\.ks-[^/]+\.woff2$/, /JJAEMBody-Bold\.ks-[^/]+\.woff2$/];
+const PRELOAD_FONT_FILES = [/JJAEMBody-Regular\.core-[^/]+\.woff2$/, /JJAEMBody-Bold\.core-[^/]+\.woff2$/];
 function preloadMainFonts() {
   return {
     name: 'preload-main-fonts',
@@ -16,7 +17,10 @@ function preloadMainFonts() {
       handler(html, ctx) {
         if (!ctx.bundle) return html;
         const files = Object.keys(ctx.bundle).filter((f) => PRELOAD_FONT_FILES.some((re) => re.test(f)));
-        return files.map((f) => ({ tag: 'link', attrs: { rel: 'preload', as: 'font', type: 'font/woff2', href: `${BASE}${f}`, crossorigin: '' }, injectTo: 'head' }));
+        if (!files.length) return html;
+        const hrefs = JSON.stringify(files.map((f) => `${BASE}${f}`));
+        const js = `(function(){var f=document.documentElement.dataset.font;if(f&&f!=='pretendard')return;${hrefs}.forEach(function(h){var l=document.createElement('link');l.rel='preload';l.as='font';l.type='font/woff2';l.crossOrigin='';l.href=h;document.head.appendChild(l);});})();`;
+        return [{ tag: 'script', children: js, injectTo: 'head' }];
       },
     },
   };
@@ -86,6 +90,8 @@ export default defineConfig({
     // 실제 전송량은 gzip 149kB이고, 로그인한 뒤에만 불러오므로(store.js) 첫 화면 속도에는 영향이 없음.
     // 다른 조각이 500kB를 넘기면 여전히 경고가 뜨도록 해당 조각 크기에 딱 맞춰 600으로만 올림.
     chunkSizeWarningLimit: 600,
+    // 글꼴(woff2)은 CSS 안에 base64로 넣지 않고 파일로 둠(리포트 제목 조각 약 2KB 포함): 브랜드 검사·캐시 규칙을 그대로 쓰기 위해.
+    assetsInlineLimit: (file) => (file.endsWith('.woff2') ? false : undefined),
     rollupOptions: {
       output: {
         manualChunks(id) {
