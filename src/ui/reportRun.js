@@ -1,5 +1,5 @@
 // 리포트 카드 만들기 버튼과 화면 그리기를 잇는 부분(main.js 에서 씀, 시험하려고 따로 둠)
-import { singleRun } from './util.js';
+import { singleRun, onModalOpen } from './util.js';
 
 /** 만드는 동안 버튼 표시: disabled·aria-busy, 글자 '리포트 카드 만드는 중…', 아이콘 ⏳(모양은 style.css .report-btn[aria-busy]).
  *  글자 칸은 굵기 클래스가 아닌 data-report-label 로 찾는다(QA 3차 M1·4차 P4). */
@@ -21,15 +21,17 @@ export function markReportBusy(root, on) {
 /** 지금 보는 화면 열쇠: 화면·달·사람이 바뀌면 다른 화면 */
 export const reportScreenKey = (view, ym, uid) => `${view}|${ym}|${uid ?? ''}`;
 
-/** 리포트 만들기: 여러 번 눌러도 한 번만(M1), 만드는 동안 화면을 떠나면 취소해서 다른 화면 위에 창이 뜨지 않게(QA 4차 P2).
+/** 리포트 만들기: 여러 번 눌러도 한 번만(M1), 만드는 동안 화면을 떠나거나(QA 4차 P2) 기록 시트·대화상자가 열리면(4차 정식 R1)
+ *  취소해서 다른 화면·창 위에 리포트 창이 뜨지 않게.
  *  open(m, { signal }) 는 ui/report.js openReport. afterRender(key) 는 화면을 다 그린 뒤 main.js render 가 부름. */
 export function reportRunner({ root, open, onError }) {
   let job = null;
   const run = singleRun(async (m, key) => {
     const ctl = new AbortController();
     job = { key, ctl };
+    const off = onModalOpen((who) => { if (who !== 'report') ctl.abort(); });
     markReportBusy(root, true);
-    try { await open(m, { signal: ctl.signal }); } catch (err) { if (!ctl.signal.aborted) onError?.(err); } finally { job = null; markReportBusy(root, false); }
+    try { await open(m, { signal: ctl.signal }); } catch (err) { if (!ctl.signal.aborted) onError?.(err); } finally { off(); job = null; markReportBusy(root, false); }
   });
   return {
     run,
@@ -40,6 +42,12 @@ export function reportRunner({ root, open, onError }) {
     },
   };
 }
+
+/** 리포트 화면 코드(report.js)를 받은 뒤에도 취소됐으면 열지 않는다(받는 동안 화면을 떠나거나 다른 창이 열림) */
+export const openAfterLoad = (load, extra = {}) => async (m, opts) => {
+  const { openReport } = await load();
+  if (!opts.signal.aborted) await openReport(m, { ...extra, ...opts });
+};
 
 /** 첫 데이터(기록·설정)를 그린 뒤에만 쨈 본문 .ks 미리 받기를 부른다(로그인 화면·첫 데이터 전에는 안 함, QA 3차 M5) */
 export function prefetchAfterData(state, prefetch) {

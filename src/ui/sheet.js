@@ -1,5 +1,5 @@
 // 10초 입력 시트: 쨈 컵 버튼 → 숫자 → 카테고리 → 저장
-import { esc, $, $$, haptic, confirmDialog, fitNums } from './util.js';
+import { esc, $, $$, haptic, confirmDialog, fitNums, lockApp } from './util.js';
 import { formatWon } from '../lib/money.js';
 import { ymd, prettyDate, parseYmd, WEEK } from '../lib/dates.js';
 const longDate = (d, today) => { const x = parseYmd(d); return `${x.getFullYear()}년 ${x.getMonth() + 1}월 ${x.getDate()}일 (${WEEK[x.getDay()]})${d === today ? ' · 오늘' : ''}`; };
@@ -62,6 +62,7 @@ export function initSheet(context) {
   el.addEventListener('pointerup', stop); el.addEventListener('pointercancel', stop);
   document.addEventListener('keydown', onKey);
 }
+let unlockApp = null;
 export const isSheetOpen = () => el?.classList.contains('open');
 
 export function openSheet(tx = null, { date } = {}) {
@@ -74,7 +75,7 @@ export function openSheet(tx = null, { date } = {}) {
   render();
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
-  document.getElementById('app').inert = true;
+  unlockApp?.(); unlockApp = lockApp('sheet'); // 뒤 화면 잠금은 util.js lockApp 이 셈(리포트 창 등과 겹쳐도 맞게, QA 4차 정식 R1)
   ctx.onHistory?.('open');
   requestAnimationFrame(() => $('.sheet', el).focus());
 }
@@ -82,7 +83,7 @@ export function closeSheet({ fromPop = false } = {}) {
   if (!isSheetOpen()) return;
   el.classList.remove('open');
   document.documentElement.classList.remove('sheet-open');
-  document.getElementById('app').inert = false;
+  unlockApp?.(); unlockApp = null;
   lastFocus?.focus?.();
   if (!fromPop) ctx.onHistory?.('close');
 }

@@ -207,6 +207,17 @@ describe('리포트 버튼과 화면 그리기 잇기', () => {
     const j2 = r.run({}, home); await Promise.resolve(); await Promise.resolve(); r.afterRender(home); finish(); await j2;
     expect(opened).toBe(1);
   });
+  test('만드는 동안 같은 화면을 다시 그려 버튼이 새로 생겨도 새 버튼에 만드는 중 표시를 다시 건다(QA 4차 정식 R4)', async () => {
+    let b = button(); const root = { querySelectorAll: (q) => (q === '[data-action="report"]' ? [b] : []) };
+    let finish; const r = reportRunner({ root, open: () => new Promise((ok) => { finish = ok; }) });
+    const job = r.run({}, 'chart'); await Promise.resolve(); await Promise.resolve();
+    b = button(); // render 가 innerHTML 로 버튼을 새로 만듦
+    r.afterRender('chart');
+    expect(b.disabled).toBe(true); expect(b.attrs['aria-busy']).toBe('true'); expect(b.label.textContent).toBe('리포트 카드 만드는 중…');
+    finish(); await job;
+    expect(b.disabled).toBe(false);
+    b = button(); r.afterRender('chart'); expect(b.disabled).toBe(false); // 끝난 뒤엔 걸지 않음
+  });
   test('실패는 알리고, 취소해서 끝난 것은 알리지 않는다', async () => {
     const errs = [];
     const r = reportRunner({ root: rootWith(button()), open: async () => { throw new Error('x'); }, onError: (e) => errs.push(e.message) });
@@ -233,7 +244,7 @@ describe('리포트 버튼과 화면 그리기 잇기', () => {
     expect(main.match(/prefetchJjaemKs/g)).toHaveLength(2); // 가져오기 한 번 + render 끝 한 곳뿐(로그인 직후 홈이 늦어지지 않게)
     expect(main).toMatch(/const runReport = \(m\) => report\.run\(m, reportScreenKey\(ui\.view, m\.viewYm, state\.user\?\.uid\)\);/);
     expect(main).toMatch(/case 'report': return runReport\(m\);/);
-    expect(main).toMatch(/open: async \(m, opts\) => \{ const \{ openReport \} = await import\('\.\/ui\/report\.js'\); if \(!opts\.signal\.aborted\) await openReport\(m, \{ toast, \.\.\.opts \}\); \}/);
+    expect(main).toMatch(/open: openAfterLoad\(\(\) => import\('\.\/ui\/report\.js'\), \{ toast \}\),/);
     const rep = readFileSync(new URL('../ui/report.js', import.meta.url), 'utf8');
     expect(rep).toMatch(/const img = await makeReport\(d, \{ dark: m\.dark, signal \}\);\n  if \(!img \|\| signal\?\.aborted\)/);
     expect(rep).toMatch(/swap\(await img\.current\(\)\)/);

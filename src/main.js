@@ -16,7 +16,7 @@ import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
-import { reportRunner, reportScreenKey, prefetchAfterData } from './ui/reportRun.js';
+import { reportRunner, reportScreenKey, prefetchAfterData, openAfterLoad } from './ui/reportRun.js';
 import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
 import { createNavHistory } from './lib/navBack.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
@@ -136,7 +136,7 @@ function pushLook(partial) {
 // 리포트 카드: 만드는 동안 또 눌러도 한 번만, 버튼은 disabled·'만드는 중…'(QA 3차 M1·4차 P4), 화면을 떠나면 취소(4차 P2). src/ui/reportRun.js
 const report = reportRunner({
   root: app,
-  open: async (m, opts) => { const { openReport } = await import('./ui/report.js'); if (!opts.signal.aborted) await openReport(m, { toast, ...opts }); },
+  open: openAfterLoad(() => import('./ui/report.js'), { toast }),
   onError: (err) => { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); },
 });
 const runReport = (m) => report.run(m, reportScreenKey(ui.view, m.viewYm, state.user?.uid));

@@ -1,5 +1,5 @@
 // 월간 리포트 공유 이미지 카드(1080×1350, 인스타 세로 비율). 기기 안에서 그리고, 공유·저장만 함.
-import { esc } from './util.js';
+import { esc, lockApp } from './util.js';
 import { formatWon, spendParts, spendText, rateNote } from '../lib/money.js';
 import { byCategory } from '../lib/stats.js';
 
@@ -156,7 +156,7 @@ function paintReport(d, t, dark) {
     // 1위 보라는 테마별 명도: 흰 카드 #4F2FD6 7.75:1(L* 35), 다크 카드 #B3A3FF 7.76:1(L* 72) → 2위 파랑(L* 48)과 밝기로도 갈림(QA R1)
     roundRect(ctx, 210, y + 24, (W - 350) * (amount / max), 12, 6); ctx.fillStyle = (dark ? ['#B3A3FF', '#2F6FD6', '#16897C'] : ['#4F2FD6', '#2F6FD6', '#16897C'])[i]; ctx.fill(); ctx.fillStyle = ink;
   });
-  if (t.empty) { ctx.fillStyle = sub; ctx.font = `500 34px ${FONT}`; ctx.fillText(t.empty, 140, 860); }
+  if (t.empty) { ctx.fillStyle = sub; ctx.font = `400 34px ${FONT}`; ctx.fillText(t.empty, 140, 860); }
   // 스티커: 무지출·연속 기록·기록 수
   const chips = t.chips;
   ctx.font = `700 34px ${FONT}`;
@@ -166,7 +166,7 @@ function paintReport(d, t, dark) {
     roundRect(ctx, x, 1120, w, 84, 42); ctx.fillStyle = card; ctx.fill();
     ctx.fillStyle = ink; ctx.fillText(chip, x + 32, 1174); x += w + 20;
   }
-  ctx.fillStyle = sub; ctx.font = `500 28px ${FONT}`;
+  ctx.fillStyle = sub; ctx.font = `400 28px ${FONT}`;
   ctx.fillText(t.foot, 80, 1290);
   return new Promise((res) => c.toBlob(res, 'image/png'));
 }
@@ -195,10 +195,10 @@ export async function openReport(m, { toast, signal } = {}) {
     <p class="mt-2 text-caption text-ink-sub">이 기기에서 만든 이미지예요. 공유하기 전에 숫자를 한 번 확인해 주세요.</p>
     <div class="dlg-actions"><button class="btn-ghost" data-rp="close">닫기</button>
       ${canShare ? '<button class="btn-ghost" data-rp="save">저장</button><button class="btn-primary" data-rp="share">공유하기</button>' : '<button class="btn-primary" data-rp="save">이미지 저장</button>'}</div></div>`;
-  const app = document.getElementById('app'), back = document.activeElement;
+  const back = document.activeElement;
   // 만드는 동안 버튼이 disabled 라 포커스가 빠졌을 수 있음 → 닫으면 리포트 버튼으로 돌려줌
-  const done = () => { img.stop(); wrap.remove(); URL.revokeObjectURL(url); document.removeEventListener('keydown', onKey); if (app) app.inert = false; (back?.isConnected && back !== document.body ? back : document.querySelector('[data-action="report"]'))?.focus?.(); };
-  if (app) app.inert = true;
+  const done = () => { img.stop(); wrap.remove(); URL.revokeObjectURL(url); document.removeEventListener('keydown', onKey); unlock(); (back?.isConnected && back !== document.body ? back : document.querySelector('[data-action="report"]'))?.focus?.(); };
+  const unlock = lockApp('report');
   const onKey = (e) => e.key === 'Escape' && done();
   wrap.addEventListener('click', async (e) => {
     const b = e.target.closest('[data-rp]');
