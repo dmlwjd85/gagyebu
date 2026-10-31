@@ -1,7 +1,7 @@
 import './style.css';
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
-import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, toneList } from './lib/look.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, toneList, prefetchJjaemKs } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
@@ -16,6 +16,7 @@ import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
 import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
+import { reportRunner, reportScreenKey, prefetchAfterData, openAfterLoad } from './ui/reportRun.js';
 import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
 import { createNavHistory } from './lib/navBack.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
@@ -116,7 +117,7 @@ function gateView({ caption, card }) {
   const hero = $('#boot-hero');
   if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
     <h1 class="flex justify-center" id="boot-logo">${logo({ cls: 'boot-logo' })}</h1>
-    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
+    <section class="hero-card p-6" id="boot-hero"><p class="text-caption t-label" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
     <section class="card-solid p-5 flex flex-col gap-3" id="boot-card"></section></div></main>`;
   $('#boot-cap').textContent = caption;
   $('#boot-card').innerHTML = card;
@@ -132,12 +133,19 @@ function pushLook(partial) {
   }
   render();
 }
+// 리포트 카드: 만드는 동안 또 눌러도 한 번만, 버튼은 disabled·'만드는 중…'(QA 3차 M1·4차 P4), 화면을 떠나면 취소(4차 P2). src/ui/reportRun.js
+const report = reportRunner({
+  root: app,
+  open: openAfterLoad(() => import('./ui/report.js'), { toast }),
+  onError: (err) => { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); },
+});
+const runReport = (m) => report.run(m, reportScreenKey(ui.view, m.viewYm, state.user?.uid));
 function render() {
   if (state.user && state.settingsLoaded) adoptCloudLook(state.settings);
   if (redirectDone) exitGuard.sync({ loggedIn: !!state.user });
   if (!isFirebaseConfigured) return gateView(setupView());
   if (!state.ready) return; // index.html 의 첫 화면(브랜드 카드)을 그대로 둠
-  if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
+  if (!state.user) { report.afterRender(null); return gateView(loginView({ emulator: useEmulator, error: ui.loginError })); }
   const m = model();
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
@@ -170,6 +178,9 @@ function render() {
   syncRailShift();
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
+  // 첫 데이터(기록·설정)를 그린 뒤에만 쨈 본문 .ks 를 한가할 때 받기 시작(로그인 화면·첫 데이터 전에는 안 함, 글꼴 설정이 기본일 때만, QA 3차 M5·M6)
+  prefetchAfterData(state, prefetchJjaemKs);
+  report.afterRender(reportScreenKey(ui.view, m.viewYm, state.user?.uid)); // 다른 화면·달로 갔으면 만들던 리포트 취소, 같은 화면이면 버튼 표시 유지
   renderTip();
   renderInstallHint();
 }
@@ -754,9 +765,7 @@ app.addEventListener('click', async (e) => {
       input.click();
       return;
     }
-    case 'report':
-      try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
-      return;
+    case 'report': return runReport(m);
     case 'theme': toggleTheme(); return render();
     case 'budget': return editBudget(m);
     case 'login':

@@ -73,8 +73,32 @@ export function dismissTopModal() {
   fn();
   return true;
 }
+// 뒤 화면(#app) 잠금을 센다: 시트·대화상자·리포트 창이 겹쳐도 마지막 것이 닫혀야 풀린다(QA 4차 정식 R1).
+// 창이 열릴 때마다 알림을 돌려, 만드는 중인 리포트가 다른 창 위에 뜨지 않게 취소한다(reportRun.js)
+const appLocks = new WeakMap();
+const openWatchers = new Set();
+/** 다른 창(시트·대화상자)이 열릴 때 who('sheet'·'dialog'·'report')를 받는다. 끄는 함수를 돌려줌 */
+export function onModalOpen(fn) { openWatchers.add(fn); return () => openWatchers.delete(fn); }
+const noteOpen = (who) => { for (const fn of [...openWatchers]) fn(who); };
+/** #app 을 잠그고 푸는 함수를 돌려준다. 푸는 함수는 여러 번 불러도 한 번만 셈 */
+export function lockApp(who) {
+  noteOpen(who);
+  const app = document.getElementById('app');
+  if (!app) return () => {};
+  appLocks.set(app, (appLocks.get(app) ?? 0) + 1);
+  app.inert = true;
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    const n = Math.max(0, (appLocks.get(app) ?? 1) - 1);
+    appLocks.set(app, n);
+    if (!n) app.inert = false;
+  };
+}
 function attachModal(settle, { history = true, cancelValue = null } = {}) {
   let done = false;
+  noteOpen('dialog');
   if (history) modalCtl.open();
   const finish = (value, fromPop = false) => {
     if (done) return;
@@ -96,7 +120,7 @@ export function confirmDialog({ title, body = '', ok = '확인', cancel = '취�
     wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
     wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="dlg-card">
       <h2 id="cd-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
-      ${typeToConfirm ? `<label class="mt-4 block">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
+      ${typeToConfirm ? `<label class="mt-4 block">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent" style="border-color:var(--ctl-line)" autocomplete="off" /></label>` : ''}
       <div class="dlg-actions">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
@@ -167,9 +191,9 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       const id = `fd-${f.name}`;
       let ctrl;
       if (f.type === 'select') ctrl = `<select id="${id}" name="${f.name}" class="select w-full mt-1">${f.options.map(([v, l]) => `<option value="${esc(v)}" ${String(f.value) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-      else if (f.type === 'amount') ctrl = `<div class="mt-1 flex items-center gap-2 rounded-xl border px-3 min-h-[44px]" style="border-color:var(--line)"><input id="${id}" name="${f.name}" data-amount inputmode="numeric" autocomplete="off" class="w-full bg-transparent text-body tabular-nums text-right outline-none min-h-[44px]" value="${f.value ? Number(f.value).toLocaleString('ko-KR') : ''}" placeholder="0" /><span>원</span></div>`;
+      else if (f.type === 'amount') ctrl = `<div class="mt-1 flex items-center gap-2 rounded-xl border px-3 min-h-[44px]" style="border-color:var(--ctl-line)"><input id="${id}" name="${f.name}" data-amount inputmode="numeric" autocomplete="off" class="w-full bg-transparent text-body tabular-nums text-right outline-none min-h-[44px]" value="${f.value ? Number(f.value).toLocaleString('ko-KR') : ''}" placeholder="0" /><span>원</span></div>`;
       else if (f.type === 'checkbox') return `<label class="flex items-center justify-between gap-2 text-body min-h-[44px]">${esc(f.label)}<span class="switch"><input type="checkbox" id="${id}" name="${f.name}" ${f.value ? 'checked' : ''} /><span></span></span></label>`;
-      else ctrl = `<input id="${id}" name="${f.name}" type="${f.type === 'date' ? 'date' : 'text'}" ${f.inputmode ? `inputmode="${esc(f.inputmode)}"` : ''} class="${inputCls}" style="border-color:var(--line)" value="${esc(f.value ?? '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} autocomplete="off" />`;
+      else ctrl = `<input id="${id}" name="${f.name}" type="${f.type === 'date' ? 'date' : 'text'}" ${f.inputmode ? `inputmode="${esc(f.inputmode)}"` : ''} class="${inputCls}" style="border-color:var(--ctl-line)" value="${esc(f.value ?? '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} autocomplete="off" />`;
       return `<div><label for="${id}" class="text-caption text-ink-sub">${esc(f.label)}</label>${ctrl}${f.hint ? `<p class="mt-1 text-caption text-ink-sub">${esc(f.hint)}</p>` : ''}</div>`;
     };
     wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="fd-t" class="dlg-card"><form>
@@ -178,9 +202,9 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       <p class="mt-2 min-h-5 text-expense" role="alert"></p>
       <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const form = wrap.querySelector('form'), err = wrap.querySelector('[role=alert]');
-    const app = document.getElementById('app'), back = document.activeElement;
-    const done = attachModal((v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); }, { cancelValue: null });
-    if (app) app.inert = true; // 대화상자 뒤 화면은 잠금(포커스·스크린리더가 뒤로 새지 않게)
+    const back = document.activeElement;
+    const done = attachModal((v) => { wrap.remove(); unlock(); back?.focus?.(); resolve(v); }, { cancelValue: null });
+    const unlock = lockApp('dialog'); // 대화상자 뒤 화면은 잠금(포커스·스크린리더가 뒤로 새지 않게), 겹친 창이 있으면 그것이 닫힐 때까지 유지
     form.querySelectorAll('[data-amount]').forEach((input) => input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
       input.value = d ? Number(d).toLocaleString('ko-KR') : '';
@@ -201,4 +225,12 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
     document.body.append(wrap);
     form.querySelector('input,select')?.focus();
   });
+}
+
+/** 도는 동안 또 부르면 새로 시작하지 않고 같은 약속을 돌려준다(연타로 같은 일이 겹치지 않게). 끝나면 다시 부를 수 있음 */
+export function singleRun(fn) {
+  let job = null;
+  const run = (...args) => job ?? (job = Promise.resolve().then(() => fn(...args)).finally(() => { job = null; }));
+  run.busy = () => !!job;
+  return run;
 }
