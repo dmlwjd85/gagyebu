@@ -253,7 +253,7 @@ function limitCard(m) {
 const assetHomeLink = (m) => {
   const roll = summarizeAll(m.assetAccounts, m.holdings);
   const sub = roll.rows.length ? `평가 ${formatWon(roll.valuation)}` : '계좌·납입·세액공제';
-  return `<button class="glass w-full px-4 py-3 text-left flex items-center gap-2 min-h-[44px] min-w-0" data-nav="assets"><span class="shrink-0" aria-hidden="true">📈</span><span class="min-w-0 flex-1"><span class="block text-body">주식·연금</span><span class="block text-caption text-ink-sub break-words">${esc(sub)}</span></span><span class="shrink-0" aria-hidden="true">›</span></button>`;
+  return `<button class="glass w-full px-4 py-3 text-left flex items-center gap-2 min-h-[44px] min-w-0" style="border-color:var(--ctl-line)" data-nav="assets"><span class="shrink-0" aria-hidden="true">📈</span><span class="min-w-0 flex-1"><span class="block text-body">주식·연금</span><span class="block text-caption text-ink-sub break-words">${esc(sub)}</span></span><span class="shrink-0" aria-hidden="true">›</span></button>`;
 };
 
 export function calendarView(m, ui) {
