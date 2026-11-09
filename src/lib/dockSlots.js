@@ -84,11 +84,13 @@ export function moveDock(order, slot, dir, features = {}) {
   return next;
 }
 
-/** 지금 화면에서 켜질 칸: 같은 화면, 없으면 부모 화면 칸(세액공제 → 연금) */
+/** 지금 화면에서 켜질 칸: 같은 화면 → 부모 화면 칸(세액공제 → 연금) → 독에 없는 화면이면 '더'(교무수첩과 같이).
+ *  '더'를 배치에서 뺐으면 켜지는 칸 없음(위쪽 ⚙️·검색으로 이동, 배치 바꾸기에서 안내) */
 const ON_PARENT = { tax: 'assets' };
 export function activeDockId(order, view) {
   const hit = order.find((id) => dockItem(id)?.view === view);
   if (hit) return hit;
   const parent = ON_PARENT[view];
-  return parent && order.includes(parent) ? parent : null;
+  if (parent && order.includes(parent)) return parent;
+  return view && order.includes('more') ? 'more' : null;
 }

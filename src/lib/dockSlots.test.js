@@ -56,8 +56,16 @@ describe('아래 독 칸 배치', () => {
   });
   it('켜질 칸: 같은 화면, 세액공제는 연금 칸', () => {
     expect(activeDockId(DEFAULT_DOCK, 'chart')).toBe('chart');
-    expect(activeDockId(DEFAULT_DOCK, 'settings')).toBeNull();
     expect(activeDockId(['assets', ...DEFAULT_DOCK.slice(1)], 'tax')).toBe('assets');
+  });
+  it('독에 없는 화면(세액공제·검색·설정·가져오기·반복·연금)은 「더」 칸이 켜짐', () => {
+    for (const v of ['tax', 'search', 'settings', 'import', 'recurring', 'assets']) expect(activeDockId(DEFAULT_DOCK, v)).toBe('more');
+  });
+  it('「더」를 뺀 배치: 독에 있는 화면은 그 칸, 없는 화면은 켜지는 칸 없음', () => {
+    const noMore = ['home', 'calendar', 'chart', 'budget', 'calc', 'settings'];
+    expect(activeDockId(noMore, 'settings')).toBe('settings');
+    expect(activeDockId(noMore, 'search')).toBeNull();
+    expect(activeDockId(noMore, 'tax')).toBeNull();
   });
 });
 
@@ -74,6 +82,14 @@ describe('아래 독 HTML', () => {
     expect(html).toMatch(/data-dock="calendar" data-nav="calendar" aria-current="page"/);
     expect(html).toContain('aria-label="주요 화면"');
     expect(html).toContain('id="dock-hint"');
+  });
+  it('독에 없는 화면에서는 「더」가 켜지고 접근 이름에 지금 화면을 알림(메뉴 단추라 aria-current="true")', () => {
+    const html = dockHtml({ view: 'tax', order: DEFAULT_DOCK, mid });
+    expect(html).toMatch(/class="tab dock-key on" data-dock="more" [^>]*aria-current="true" aria-label="더 보기\(모든 메뉴\) \(지금 화면: 세액공제\)"/);
+    expect(html).not.toContain('aria-current="page"');
+    const noMore = dockHtml({ view: 'tax', order: ['home', 'calendar', 'chart', 'budget', 'calc', 'search'], mid });
+    expect(noMore).not.toMatch(/dock-key on/);
+    expect(noMore).not.toContain('aria-current');
   });
   it('보이는 글자가 접근 이름에 들어 있음(WCAG 2.5.3)', () => {
     for (const t of DOCK_POOL) {

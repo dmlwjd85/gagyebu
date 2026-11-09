@@ -33,17 +33,22 @@ function keyAttrs(item) {
 }
 
 /** 옆 칸 하나 */
-export function dockKey(id, on) {
+export function dockKey(id, on, here = '') {
   const item = dockItem(id);
   if (!item) return '';
   const label = item.name === item.label ? item.label : `${item.label}(${item.name})`;
-  return `<button type="button" class="tab dock-key${on ? ' on' : ''}" data-dock="${esc(id)}" ${keyAttrs(item)} ${on ? 'aria-current="page"' : ''} aria-label="${esc(item.name === item.label ? item.label : item.name)}" aria-describedby="dock-hint" title="${esc(label)}"><span class="dock-well" aria-hidden="true"><span class="dock-cap">${dockIcon(id)}</span></span><span class="dock-label" aria-hidden="true">${esc(item.label)}</span></button>`;
+  // '더'는 메뉴를 여는 단추라 aria-current="page" 대신 지금 화면 이름을 접근 이름에 덧붙임
+  const isMore = item.action === 'more';
+  const name = (item.name === item.label ? item.label : item.name) + (on && isMore && here ? ` (지금 화면: ${here})` : '');
+  const cur = on ? (isMore ? 'aria-current="true"' : 'aria-current="page"') : '';
+  return `<button type="button" class="tab dock-key${on ? ' on' : ''}" data-dock="${esc(id)}" ${keyAttrs(item)} ${cur} aria-label="${esc(name)}" aria-describedby="dock-hint" title="${esc(label)}"><span class="dock-well" aria-hidden="true"><span class="dock-cap">${dockIcon(id)}</span></span><span class="dock-label" aria-hidden="true">${esc(item.label)}</span></button>`;
 }
 
 /** 독 본체. mid = 가운데 '기록' 버튼 HTML(main.js 가 넘김) */
 export function dockHtml({ view, order, mid, logo = '' }) {
   const on = activeDockId(order, view);
-  const side = (ids) => ids.map((id) => dockKey(id, id === on)).join('');
+  const here = DOCK_POOL.find((t) => t.view === view)?.name ?? '';
+  const side = (ids) => ids.map((id) => dockKey(id, id === on, here)).join('');
   return `<nav class="tabbar dock" aria-label="주요 화면">
   ${logo}<span id="dock-hint" hidden>길게 누르면 칸 배치를 바꿀 수 있어요.</span>
   ${side(order.slice(0, 3))}

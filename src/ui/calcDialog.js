@@ -48,13 +48,22 @@ export function openCalc({ mode = 'free', value = 0, start = '', title = '계산
         ${mode === 'amount'
           ? '<button type="button" class="btn-ghost" data-calc-close>닫기</button><button type="button" class="btn-primary" data-calc-done>금액에 넣고 닫기</button>'
           : '<button type="button" class="btn-ghost" data-calc-copy>결과 복사</button><button type="button" class="btn-primary" data-calc-record>이 금액으로 기록</button>'}
-      </div></div>`;
+      </div>
+      <p class="calc-more" data-calc-more aria-hidden="true"><span>아래로 밀면 더 있어요</span><span class="calc-more-arrow">↓</span></p></div>`;
     const card = wrap.querySelector('.calc-card');
     const $ = (s) => wrap.querySelector(s);
     const app = document.getElementById('app');
     const wasInert = app?.inert ?? false;
     const back = document.activeElement;
+    // 아주 낮은 화면(가로 + 글자 크게 등)에서만 카드 안이 스크롤됨 → 아래에 '더 있어요' 표시
+    const fit = () => {
+      const more = card.scrollHeight - card.clientHeight - card.scrollTop > 4;
+      card.classList.toggle('can-scroll', more);
+    };
+    const ro = typeof ResizeObserver === 'function' ? new ResizeObserver(fit) : null;
     const done = attachModal(() => {
+      ro?.disconnect();
+      window.removeEventListener('resize', fit);
       wrap.remove();
       if (app) app.inert = wasInert;
       openNow = null;
@@ -164,8 +173,12 @@ export function openCalc({ mode = 'free', value = 0, start = '', title = '계산
       setMsg('');
       paint();
     });
+    card.addEventListener('scroll', fit, { passive: true });
+    window.addEventListener('resize', fit);
     document.body.append(wrap);
     paint();
+    ro?.observe(card);
+    fit();
     card.focus({ preventScroll: true });
   });
   return openNow;

@@ -104,3 +104,19 @@ describe('계산기 대화상자', () => {
     expect(await p).toBe(900000);
   });
 });
+
+describe('낮은 화면(가로 휴대폰)에서도 잘리지 않게', () => {
+  test('카드는 화면 높이를 넘지 않고, 넘치면 카드 안 스크롤 + 「더 있어요」 표시', async () => {
+    const { readFileSync } = await import('node:fs');
+    const { resolve } = await import('node:path');
+    const css = readFileSync(resolve(process.cwd(), 'src/style.css'), 'utf8');
+    expect(css).toMatch(/\.calc-wrap > \.calc-card \{ max-height: calc\(100dvh[^}]*overflow-y: auto/);
+    expect(css).toMatch(/@media \(orientation: landscape\) and \(max-height: 560px\) \{[^@]*grid-template-areas: "head keys" "screen keys" "actions keys" "more more"/);
+    expect(css).toMatch(/\.calc-card\.can-scroll \.calc-more \{ display: flex; position: sticky/);
+    const done = openCalc();
+    expect(document.querySelector('.calc-card [data-calc-more]')).not.toBeNull();
+    expect(document.querySelector('.calc-card').classList.contains('can-scroll')).toBe(false); // 넘치지 않으면 표시 없음
+    dismissTopModal();
+    await done;
+  });
+});
