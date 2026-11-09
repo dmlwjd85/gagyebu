@@ -12,6 +12,8 @@ import { topBar, homeView, calendarView, chartView, budgetView, settingsView, on
 import { logo, symbol, FAB_INNER } from '../ui/brand.js';
 import { resolveMode, settingsForMode } from '../lib/modes.js';
 import { initSheet, openSheet } from '../ui/sheet.js';
+import { dockHtml } from '../ui/dock.js';
+import { DEFAULT_DOCK } from '../lib/dockSlots.js';
 
 const q = new URLSearchParams(location.search);
 const screen = q.get('screen') || 'home';
@@ -113,7 +115,7 @@ app.innerHTML = `
   <div class="app-frame ${nav ? 'has-nav' : ''}">
     <div class="app-top"><div class="app-shell">${topBar(m, { month: screen !== 'settings', back: screen === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null })}</div></div>
     <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell">${body}</div></main>
-    ${nav ? `<nav class="tabbar" aria-label="주요 화면"><button class="tab on"><span>🏠</span><span>홈</span></button><button class="tab"><span>📅</span><span>달력</span></button><button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button><button class="tab"><span>📊</span><span>차트</span></button><button class="tab"><span>💰</span><span>예산</span></button></nav><button class="fab desk-fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>` : ''}
+    ${nav ? `${dockHtml({ view: screen, order: DEFAULT_DOCK, logo: `<div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쨈 가계부' })}</div>`, mid: `<button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>` })}<button class="fab desk-fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>` : ''}
   </div>`;
 fitNums(document);
 document.fonts?.ready?.then(() => fitNums(document));
