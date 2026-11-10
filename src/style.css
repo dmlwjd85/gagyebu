@@ -843,7 +843,7 @@ html.dark .calc-card.can-scroll .calc-more { color: #E4E1FF; }
 .calc-chip { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; border-radius: 14px; font-size: 14px; font-weight: 700; color: var(--cup-ink);
   background: linear-gradient(180deg, #FFFEFF, #E9E6F2); border: 1.5px solid rgba(30, 27, 58, .3); box-shadow: 0 2px 0 #ADA8BF; }
 .calc-chip:active { transform: translateY(2px); box-shadow: none; }
-html.dark .calc-chip { color: #E4E9FF; background: linear-gradient(180deg, #4E4878, #3A3462); border-color: rgba(243, 241, 255, .3); box-shadow: 0 2px 0 #16132A; }
+html.dark .calc-chip { color: #E4E9FF; background: linear-gradient(180deg, var(--dock-cap-1, #5A6BB0), var(--dock-cap-3, #2A3568)); border-color: rgba(243, 241, 255, .3); box-shadow: 0 2px 0 #0B1020; }
 .calc-chip-svg { width: 18px; height: 18px; }
 .calc-in { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: var(--cup-ink); }
 .calc-in:hover { background: var(--line); }
