@@ -237,14 +237,14 @@
   .dark .dock-cap { color: #F3F1FF; background: linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, transparent 40%), linear-gradient(180deg, #5A5388, #423B6C 55%, #322C57);
     box-shadow: inset 0 2px 1px rgba(255, 255, 255, .22), inset 0 -3px 5px rgba(0, 0, 0, .3), 0 1px 0 #241F40, 0 2px 0 #1D1935, 0 3px 0 #16132A, 0 4px 0 #100D20, 0 6px 10px rgba(0, 0, 0, .45); }
   .dock-svg { width: 17px; height: 17px; overflow: visible; }
-  .dock-label { font-size: 11px; font-weight: 500; line-height: 1.25; letter-spacing: -.03em; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: clip; }
+  .dock-label { font-size: 11px; font-weight: 400; line-height: 1.25; letter-spacing: -.03em; white-space: nowrap; max-width: 100%; overflow: hidden; text-overflow: clip; }
   /* 지금 화면: 눌린 쨈색 키캡 */
   .tabbar .tab.on .dock-well { background: linear-gradient(180deg, color-mix(in srgb, var(--cup-j2) 55%, #fff), color-mix(in srgb, var(--cup-j1) 25%, #fff));
     box-shadow: inset 0 6px 9px rgba(20, 10, 40, .4), inset 0 1px 0 rgba(20, 10, 40, .15), inset 0 -1px 0 rgba(255, 255, 255, .3); }
   .tabbar .tab.on .dock-cap { transform: translateY(1px); color: #fff;
     background: linear-gradient(180deg, rgba(255, 255, 255, .45) 0%, transparent 32%), linear-gradient(180deg, var(--cup-j3), var(--cup-j1) 50%, var(--cup-j2));
     box-shadow: inset 0 4px 6px rgba(255, 255, 255, .35), inset 0 -4px 6px rgba(0, 0, 0, .32), 0 1px 0 var(--cup-j2), 0 2px 5px rgba(20, 10, 40, .4); }
-  .tabbar .tab.on .dock-label { color: var(--dock-on); font-weight: 700; }
+  .tabbar .tab.on .dock-label { color: var(--dock-on); } /* 고른 칸은 색만, 굵기는 그대로(400) */
   /* 누르는 동안 말랑하게(가로로 넓어지며 납작), 떼면 0.46초 동안 통 튀어 제자리 */
   .tabbar .tab.is-squish .dock-cap, .tabbar .tab:active .dock-cap { transform: translateY(1px) scale(1.06, .9); transition: transform .07s cubic-bezier(.2, .8, .3, 1); }
   /* 가운데 '기록': 바 위로 솟은 큰 키캡(쨈색 링·두꺼운 측면) 안에 쨈 컵, 아래에 '기록' 글자(겹치지 않게 따로) */
@@ -760,7 +760,7 @@ html.dark .dlg-card .btn-ghost {
 @media (min-width: 1024px) { .dock-sheet-grab { display: none; } }
 .dock-card h2.text-head { font-size: calc(20px * var(--content-scale, 1)); }
 .dock-menu { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(8.25rem * min(var(--content-scale, 1), 1.3)), 1fr)); gap: 8px; }
-.dock-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 10px; border-radius: 14px; text-align: left; font-weight: 600; line-height: 1.3;
+.dock-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 10px; border-radius: 14px; text-align: left; font-weight: 700; line-height: 1.3;
   border: 1.5px solid rgba(30, 27, 58, .25); background: #F6F4FB; color: #1E1B3A; }
 .dock-menu-item:hover { border-color: var(--primary); }
 .dock-menu-item.on { border-color: var(--cup-j1); box-shadow: inset 0 0 0 1.5px var(--cup-j1); }
@@ -862,9 +862,9 @@ html.dark .calc-card.can-scroll .calc-more { color: #E4E1FF; }
 @media (prefers-reduced-motion: reduce) { .calc-key, .calc-key:active, .calc-key.is-hit { transition: none; transform: none; } }
 /* 기록 시트 금액 옆 '계산' 단추, 대화상자 금액 칸 안 계산기 단추 */
 .calc-chip { flex: none; display: inline-flex; align-items: center; gap: 4px; min-height: 44px; padding: 0 12px; border-radius: 14px; font-size: 14px; font-weight: 700; color: var(--cup-ink);
-  background: linear-gradient(180deg, #FFFEFF, #E9E6F2); border: 1.5px solid rgba(30, 27, 58, .3); box-shadow: 0 2px 0 #ADA8BF; }
+  background: linear-gradient(180deg, #FFFEFF, #E9E6F2); border: 1.5px solid var(--ctl-line); box-shadow: 0 2px 0 var(--ctl-line); }
 .calc-chip:active { transform: translateY(2px); box-shadow: none; }
-html.dark .calc-chip { color: #E4E9FF; background: linear-gradient(180deg, #4E4878, #3A3462); border-color: rgba(243, 241, 255, .3); box-shadow: 0 2px 0 #16132A; }
+html.dark .calc-chip { color: #E4E9FF; background: linear-gradient(180deg, #4E4878, #3A3462); border-color: var(--ctl-line); box-shadow: 0 2px 0 var(--ctl-line); }
 .calc-chip-svg { width: 18px; height: 18px; }
 .calc-in { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: var(--cup-ink); }
 .calc-in:hover { background: var(--line); }

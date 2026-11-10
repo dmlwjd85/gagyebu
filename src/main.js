@@ -15,7 +15,7 @@ import { editTarget } from './lib/restore.js';
 import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal, attachModal } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal, attachModal, lockApp } from './ui/util.js';
 import { loadDock, saveDock, pickDock, moveDock, dockItem } from './lib/dockSlots.js';
 import { dockHtml, dockMenuHtml, dockEditHtml, HOLD_MS, MOVE_PX } from './ui/dock.js';
 import { openCalc } from './ui/calcDialog.js';
@@ -208,9 +208,8 @@ function dockDialog(html, labelId, onClick, { onChange } = {}) {
   wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="${labelId}" class="dlg-card dock-card" tabindex="-1">${html}</div>`;
   const card = wrap.firstElementChild;
   const back = document.activeElement;
-  const appWas = app.inert;
-  const done = attachModal(() => { wrap.remove(); app.inert = appWas; back?.isConnected && back.focus?.({ preventScroll: true }); });
-  app.inert = true;
+  const done = attachModal(() => { wrap.remove(); unlock(); back?.isConnected && back.focus?.({ preventScroll: true }); });
+  const unlock = lockApp('dialog'); // 독 대화상자도 셈으로 잠금(겹친 창이 있으면 그것이 닫힐 때까지 유지)
   wrap.addEventListener('click', (e) => { if (e.target === wrap) return done(); onClick(e, done, card); });
   if (onChange) wrap.addEventListener('change', (e) => onChange(e, done, card));
   wrap.addEventListener('keydown', (e) => {

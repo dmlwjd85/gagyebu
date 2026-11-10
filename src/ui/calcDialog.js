@@ -3,7 +3,7 @@
 // - mode 'free'  : 아래 독·'더' 메뉴에서 연 계산기. 결과를 복사하거나 '이 금액으로 기록'(onRecord).
 // - 휴대폰 뒤로 가기·Esc·바깥 누르기로 닫힘(확인 창과 같은 히스토리, util.attachModal).
 // - 키보드: 숫자 · + - * / x · Enter/= · Backspace · Delete/C(모두 지우기) · 붙여넣기.
-import { esc, haptic, attachModal } from './util.js';
+import { esc, haptic, attachModal, lockApp } from './util.js';
 import { press, calcWon, formatExpr, speakExpr, exprFromWon, exprFromText, normalizeOp, ERRORS } from '../lib/calc.js';
 
 const KEYS = [
@@ -52,8 +52,6 @@ export function openCalc({ mode = 'free', value = 0, start = '', title = '계산
       <p class="calc-more" data-calc-more aria-hidden="true"><span>아래로 밀면 더 있어요</span><span class="calc-more-arrow">↓</span></p></div>`;
     const card = wrap.querySelector('.calc-card');
     const $ = (s) => wrap.querySelector(s);
-    const app = document.getElementById('app');
-    const wasInert = app?.inert ?? false;
     const back = document.activeElement;
     // 아주 낮은 화면(가로 + 글자 크게 등)에서만 카드 안이 스크롤됨 → 아래에 '더 있어요' 표시
     const fit = () => {
@@ -65,12 +63,12 @@ export function openCalc({ mode = 'free', value = 0, start = '', title = '계산
       ro?.disconnect();
       window.removeEventListener('resize', fit);
       wrap.remove();
-      if (app) app.inert = wasInert;
+      unlock();
       openNow = null;
       back?.isConnected && back.focus?.({ preventScroll: true });
       resolve();
     });
-    if (app) app.inert = true;
+    const unlock = lockApp('dialog'); // 계산기도 셈으로 잠금(시트·다른 창과 겹쳐도 마지막이 닫혀야 풀림)
 
     const setMsg = (text, bad = false) => { const m = $('[data-calc-msg]'); m.textContent = text; m.classList.toggle('is-bad', bad); };
     const paint = () => {
