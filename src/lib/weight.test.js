@@ -43,13 +43,13 @@ describe('누를 곳 모양 보완', () => {
   test('누를 곳 테두리 --ctl-line 은 라이트·다크 면과 바탕 모두 3:1 이상, 고른 칩 글자는 4.5:1 이상', () => {
     const light = css.match(/:root \{ --ctl-line: (#[0-9A-F]{6});/)[1];
     const dark = css.match(/html\.dark \{ --ctl-line: (#[0-9A-F]{6});/)[1];
-    for (const bg of ['#FFFFFF', '#F6F4FF']) expect(ratio(light, bg)).toBeGreaterThanOrEqual(3);
-    for (const bg of ['#1C1A2E', '#0F0E1A']) expect(ratio(dark, bg)).toBeGreaterThanOrEqual(3);
+    for (const bg of ['#FFFFFF', '#F2F5FA']) expect(ratio(light, bg)).toBeGreaterThanOrEqual(3);
+    for (const bg of ['#161C38', '#0C1228', '#2A3568']) expect(ratio(dark, bg)).toBeGreaterThanOrEqual(3);
     expect(css).toMatch(/\.chip\[aria-checked="true"\] \{[^}]*background: color-mix\(in srgb, var\(--primary\) 8%, var\(--surface-solid\)\)/);
-    expect(ratio('#6D4AFF', mix('#6D4AFF', '#FFFFFF', 0.08))).toBeGreaterThanOrEqual(4.5);
-    expect(ratio('#A994FF', mix('#A994FF', '#1C1A2E', 0.08))).toBeGreaterThanOrEqual(4.5);
-    // 고른 칸(seg)의 보라 테두리는 회색 틀(#E5E3EF)·흰 면 모두 3:1 이상
-    expect(ratio('#6D4AFF', mix('#1E1B3A', '#F6F4FF', 0.08))).toBeGreaterThanOrEqual(3);
+    expect(ratio('#2B44C4', mix('#2B44C4', '#FFFFFF', 0.08))).toBeGreaterThanOrEqual(4.5);
+    expect(ratio('#93A4FF', mix('#93A4FF', '#161C38', 0.08))).toBeGreaterThanOrEqual(4.5);
+    // 고른 칸(seg)의 사파이어 테두리는 회색 틀·흰 면 모두 3:1 이상
+    expect(ratio('#2B44C4', mix('#1E1B3A', '#F2F5FA', 0.08))).toBeGreaterThanOrEqual(3);
   });
 
   test('칩·버튼·숫자판 등은 --ctl-line 테두리와 44px 이상 높이를 쓴다', () => {

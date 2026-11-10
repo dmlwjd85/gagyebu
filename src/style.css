@@ -14,9 +14,9 @@
   @media (min-width: 1600px) { :root { --shell-max: 1320px; } }
   html.dark { color-scheme: dark; }
   /* 누를 곳 테두리(--ctl-line): 글자 굵기 대신 모양으로 '누를 수 있음'을 보인다. --line(장식용 8%)과 달리 흰 면·바탕 둘 다 3:1 이상
-     라이트 #85809F 흰 면 3.76:1·바탕 3.46:1 / 다크 #8A84B0(밝은 대화상자 면 #3A3460 위도 3.27:1). 검사: tools/qa/ctl_boundary.py. --ctl-press: 누를 때 살짝 들어가는 말랑한 손맛 */
-  :root { --ctl-line: #85809F; --ctl-shadow: 0 1px 2px rgba(30, 27, 58, 0.10); --ctl-press: scale(.97); }
-  html.dark { --ctl-line: #8A84B0; --ctl-shadow: 0 1px 2px rgba(0, 0, 0, 0.40); }
+     라이트 #7A8496 흰 면 3.77:1·바탕 #F2F5FA 3.45:1 / 다크 #8B93A8(대화상자 면 #2A3568 위 3.78:1). 옛 연보라 #85809F/#8A84B0를 남색 회색으로. 검사: tools/qa/ctl_boundary.py. --ctl-press: 누를 때 살짝 들어가는 말랑한 손맛 */
+  :root { --ctl-line: #7A8496; --ctl-shadow: 0 1px 2px rgba(30, 27, 58, 0.10); --ctl-press: scale(.97); }
+  html.dark { --ctl-line: #8B93A8; --ctl-shadow: 0 1px 2px rgba(0, 0, 0, 0.40); }
   body { @apply bg-bg text-ink font-sans antialiased text-body; min-height: 100dvh; word-break: keep-all; overflow-wrap: anywhere; }
   html.sheet-open body { overflow: hidden; }
   body.has-frame { overflow: hidden; } /* 문서 자체는 스크롤하지 않고 본문(#main)만 스크롤 */
