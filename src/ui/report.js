@@ -115,21 +115,23 @@ export async function drawReport(d, { dark = false } = {}) {
 function paintReport(d, t, dark) {
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#1C1A2E' : '#FFFFFF';
-  // 배경: 오로라 파스텔
-  ctx.fillStyle = dark ? '#0F0E1A' : '#F6F4FF'; ctx.fillRect(0, 0, W, H);
+  const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#161C38' : '#FFFFFF';
+  // 배경: 사파이어 밤 바탕 + 남색·청록 오로라
+  ctx.fillStyle = dark ? '#0C1228' : '#F2F5FA'; ctx.fillRect(0, 0, W, H);
   // 'transparent'는 검은 투명으로 섞여 회색 띠가 생기므로 같은 색의 알파 0으로 끝냄
   const glow = (x, y, r, rgb, a) => { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); };
-  glow(120, 60, 620, dark ? '109,74,255' : '176,156,255', dark ? 0.35 : 0.55);
-  glow(1000, 200, 560, dark ? '47,111,214' : '160,195,255', dark ? 0.28 : 0.5);
-  glow(540, 1350, 700, dark ? '63,209,190' : '160,230,220', dark ? 0.15 : 0.45);
+  glow(120, 60, 620, dark ? '147,164,255' : '170,186,255', dark ? 0.35 : 0.55); /* 사파이어, 옛 보라 109,74,255·176,156,255 */
+  glow(1000, 200, 560, dark ? '99,208,245' : '160,210,240', dark ? 0.28 : 0.5);
+  glow(540, 1350, 700, dark ? '52,191,174' : '160,220,215', dark ? 0.15 : 0.45);
   // 머리: 쨈 가계부 · N월 리포트
   ctx.fillStyle = ink; ctx.font = `400 44px ${TITLE_FONT}`; ctx.textBaseline = 'alphabetic';
   ctx.fillText(t.title, 80, 130);
   ctx.fillStyle = sub; ctx.font = `400 36px ${FONT}`; ctx.textAlign = 'right';
   ctx.fillText(t.head, W - 80, 130); ctx.textAlign = 'left';
-  // 큰 카드: 아이콘과 같은 색 계열(보라 #6D4AFF → 파랑 #2F6FD6 → 청록 #16897C) + 남긴 돈
-  const g = ctx.createLinearGradient(80, 190, W - 80, 640); g.addColorStop(0, '#6D4AFF'); g.addColorStop(.55, '#2F6FD6'); g.addColorStop(1, '#16897C');
+  // 큰 카드: 사파이어 밤 홈 카드와 같은 계열 + 남긴 돈
+  const g = ctx.createLinearGradient(80, 190, W - 80, 640);
+  if (dark) { g.addColorStop(0, '#1B2260'); g.addColorStop(.55, '#2A3FA8'); g.addColorStop(1, '#0E5F6A'); }
+  else { g.addColorStop(0, '#141A46'); g.addColorStop(.55, '#23359A'); g.addColorStop(1, '#0B5560'); }
   roundRect(ctx, 80, 190, W - 160, 450, 56); ctx.fillStyle = g; ctx.fill();
   ctx.fillStyle = '#fff'; ctx.font = `700 40px ${FONT}`; ctx.fillText(t.savedLabel, 140, 290);
   // 큰 금액(수십억)도 카드 밖으로 넘치지 않게 글자 크기를 폭에 맞춤(QA L1)
@@ -153,8 +155,8 @@ function paintReport(d, t, dark) {
     // 긴 카테고리 이름(공백 없는 20자)이 금액과 겹치지 않게 이름 칸 폭을 정함
     ctx.fillStyle = ink; ctx.textAlign = 'right'; const amt = fit(ctx, x.amount, 700, 36, 360); const aw = ctx.measureText(amt).width; ctx.fillText(amt, W - 140, y + 8); ctx.textAlign = 'left';
     ctx.fillText(fit(ctx, x.name, 400, 36, W - 140 - aw - 40 - 210), 210, y + 8);
-    // 1위 보라는 테마별 명도: 흰 카드 #4F2FD6 7.75:1(L* 35), 다크 카드 #B3A3FF 7.76:1(L* 72) → 2위 파랑(L* 48)과 밝기로도 갈림(QA R1)
-    roundRect(ctx, 210, y + 24, (W - 350) * (amount / max), 12, 6); ctx.fillStyle = (dark ? ['#B3A3FF', '#2F6FD6', '#16897C'] : ['#4F2FD6', '#2F6FD6', '#16897C'])[i]; ctx.fill(); ctx.fillStyle = ink;
+    // 1위는 강조 사파이어(차트 1), 2·3위는 청록·하늘. 흰 카드 #2B44C4 7.70:1, 다크 카드 #93A4FF 7.15:1
+    roundRect(ctx, 210, y + 24, (W - 350) * (amount / max), 12, 6); ctx.fillStyle = (dark ? ['#93A4FF', '#34BFAE', '#63D0F5'] : ['#2B44C4', '#0E8A7E', '#0089B6'])[i]; ctx.fill(); ctx.fillStyle = ink;
   });
   if (t.empty) { ctx.fillStyle = sub; ctx.font = `400 34px ${FONT}`; ctx.fillText(t.empty, 140, 860); }
   // 스티커: 무지출·연속 기록·기록 수

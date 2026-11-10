@@ -505,8 +505,8 @@ function varsIn(css, selector) {
 describe('테마 글자 대비', () => {
   const css = readFileSync(new URL('../themes.css', import.meta.url), 'utf8');
   const neutral = {
-    light: { bg: '#F6F4FF', ink: '#1E1B3A', sub: '#5B5775', surface: '#FFFFFF' },
-    dark: { bg: '#0F0E1A', ink: '#F3F1FF', sub: '#B4AFCF', surface: '#1C1A2E' },
+    light: { bg: '#F2F5FA', ink: '#1E1B3A', sub: '#5B5775', surface: '#FFFFFF' },
+    dark: { bg: '#0C1228', ink: '#F3F1FF', sub: '#B4AFCF', surface: '#161C38' },
   };
   const pairs = (p, n, label) => {
     const fails = [];
