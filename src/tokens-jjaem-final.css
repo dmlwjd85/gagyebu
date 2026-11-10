@@ -122,12 +122,12 @@
 .tabbar .fab-disc { box-shadow: 0 0 0 3px var(--fab-1), inset 0 4px 3px #fff, inset 0 -5px 8px rgba(30, 27, 58, .16), 0 3px 0 3px var(--fab-1), 0 6px 0 3px var(--fab-2), 0 11px 0 3px color-mix(in srgb, var(--fab-2) 75%, #000), 0 20px 28px rgba(30, 27, 58, .35); }
 .tabbar .fab.is-pressed .fab-disc { box-shadow: 0 0 0 3px var(--fab-1), inset 0 6px 10px rgba(30, 27, 58, .3), 0 1px 0 2px var(--fab-1), 0 2px 0 2px var(--fab-2), 0 4px 8px rgba(30, 27, 58, .28); }
 .tabbar .tab.on .dock-well { background: linear-gradient(180deg, color-mix(in srgb, var(--fab-2) 55%, #fff), color-mix(in srgb, var(--fab-1) 25%, #fff)); }
-.dark .tabbar .tab.on .dock-well { background: linear-gradient(180deg, color-mix(in srgb, var(--fab-2) 70%, #000), color-mix(in srgb, var(--fab-1) 35%, #1D1934)); }
+.dark .tabbar .tab.on .dock-well { background: linear-gradient(180deg, color-mix(in srgb, var(--fab-2) 70%, #000), color-mix(in srgb, var(--fab-1) 35%, #141A32)); }
 .tabbar .tab.on .dock-cap { background: linear-gradient(180deg, rgba(255, 255, 255, .40) 0%, transparent 32%), linear-gradient(180deg, var(--fab-3), var(--fab-1) 50%, var(--fab-2));
   box-shadow: inset 0 4px 6px rgba(255, 255, 255, .35), inset 0 -4px 6px rgba(0, 0, 0, .32), 0 1px 0 var(--fab-2), 0 2px 5px rgba(20, 10, 40, .4); }
 .tabbar .tab.on .dock-label { color: var(--nav-accent); }
 .dark .tabbar .tab.on .dock-label { color: #FFFFFF; }
-.fab-disc::after { background: var(--fab-1); }
+/* .fab-disc::after 는 style.css 의 --cup-j1(테마 쨈 맛)을 씀. --fab-1 로 덮으면 움직임 줄이기에서 접시 깜빡임이 남색 고리가 됨 */
 /* 상태 표시 3:1 — 스위치·세그 (색만 바꿈, 크기·움직임 그대로) */
 .switch input:not(:checked) + span { background: var(--switch-off); }
 .switch input:checked + span::after { background: var(--switch-thumb-on); }

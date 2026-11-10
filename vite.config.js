@@ -47,8 +47,8 @@ export default defineConfig({
         start_url: '/gagyebu/',
         scope: '/gagyebu/',
         display: 'standalone',
-        background_color: '#F6F4FF',
-        theme_color: '#6D4AFF',
+        background_color: '#F2F5FA',
+        theme_color: '#2B44C4',
         icons: [
           { src: 'pwa-192.png', sizes: '192x192', type: 'image/png' },
           { src: 'pwa-512.png', sizes: '512x512', type: 'image/png' },
