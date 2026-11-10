@@ -1,3 +1,5 @@
+import { openCalc } from './calcDialog.js';
+import { normalizeOp } from '../lib/calc.js';
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -96,7 +98,7 @@ export function lockApp(who) {
     if (!n) app.inert = false;
   };
 }
-function attachModal(settle, { history = true, cancelValue = null } = {}) {
+export function attachModal(settle, { history = true, cancelValue = null } = {}) {
   let done = false;
   noteOpen('dialog');
   if (history) modalCtl.open();
@@ -146,6 +148,38 @@ export function toast(msg, { action, onAction, duration = 3500 } = {}) {
   toastTimer = setTimeout(() => el.classList.remove('show'), action ? Math.max(duration, 5000) : duration);
 }
 
+// 금액 칸 옆 계산기 단추: 누르거나 칸에서 + − × ÷ 를 치면 계산기가 열리고, '=' 결과(0원 이상)를 칸에 넣음
+const CALC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8 7.5h8M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg>';
+export const calcBtn = (label = '계산기로 금액 계산') => `<button type="button" class="calc-in" data-calc-in aria-label="${esc(label)}" title="계산기 (+ − × ÷ 키로도 열려요)">${CALC_SVG}</button>`;
+export function bindAmountCalc(root, { max = 100_000_000_000, title = '금액 계산' } = {}) {
+  const digitsOf = (input) => Number(input.value.replace(/[^0-9]/g, '') || 0);
+  const open = (input, start = '') => openCalc({
+    mode: 'amount', value: digitsOf(input), start, title,
+    onApply: (won) => {
+      if (won < 0) return '0원 이상만 넣을 수 있어요.';
+      if (won > max) return `${max.toLocaleString('ko-KR')}원까지 넣을 수 있어요.`;
+      if (!input.isConnected) return '입력 칸이 닫혀 넣지 못했어요.';
+      input.value = won ? won.toLocaleString('ko-KR') : '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return null;
+    },
+  });
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-calc-in]');
+    if (!b) return;
+    const input = b.parentElement.querySelector('input');
+    if (input) open(input);
+  });
+  root.addEventListener('beforeinput', (e) => {
+    const input = e.target;
+    if (!input.matches?.('[data-amount], [data-amount-calc]') || !e.data || e.data.length !== 1) return;
+    const op = /[xX]/.test(e.data) ? null : normalizeOp(e.data);
+    if (!op) return;
+    e.preventDefault();
+    open(input, op);
+  });
+}
+
 // 금액 입력 대화상자 (예산 등). 숫자만 남김. 취소 시 null
 export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
   return new Promise((resolve) => {
@@ -153,13 +187,14 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
     wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
     wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="dlg-card"><form>
       <h2 id="pa-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
-      <label class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg px-4 h-14 focus-within:ring-2 focus-within:ring-primary">
-        <input inputmode="numeric" autocomplete="off" aria-label="금액" class="w-full bg-transparent tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
-        <span>원</span></label>
+      <div class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg pl-4 pr-1 h-14 focus-within:ring-2 focus-within:ring-primary">
+        <input inputmode="numeric" autocomplete="off" aria-label="금액" data-amount-calc class="w-full bg-transparent tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
+        <span>원</span>${calcBtn()}</div>
       <p class="mt-1 h-5 text-expense" role="alert"></p>
       <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const input = wrap.querySelector('input'), err = wrap.querySelector('[role=alert]');
     const done = attachModal((v) => { wrap.remove(); resolve(v); }, { cancelValue: null });
+    bindAmountCalc(wrap);
     input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
       input.value = d ? Number(d).toLocaleString('ko-KR') : '';
@@ -191,7 +226,7 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
       const id = `fd-${f.name}`;
       let ctrl;
       if (f.type === 'select') ctrl = `<select id="${id}" name="${f.name}" class="select w-full mt-1">${f.options.map(([v, l]) => `<option value="${esc(v)}" ${String(f.value) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-      else if (f.type === 'amount') ctrl = `<div class="mt-1 flex items-center gap-2 rounded-xl border px-3 min-h-[44px]" style="border-color:var(--ctl-line)"><input id="${id}" name="${f.name}" data-amount inputmode="numeric" autocomplete="off" class="w-full bg-transparent text-body tabular-nums text-right outline-none min-h-[44px]" value="${f.value ? Number(f.value).toLocaleString('ko-KR') : ''}" placeholder="0" /><span>원</span></div>`;
+      else if (f.type === 'amount') ctrl = `<div class="mt-1 flex items-center gap-2 rounded-xl border px-3 min-h-[44px]" style="border-color:var(--ctl-line)"><input id="${id}" name="${f.name}" data-amount inputmode="numeric" autocomplete="off" class="w-full bg-transparent text-body tabular-nums text-right outline-none min-h-[44px]" value="${f.value ? Number(f.value).toLocaleString('ko-KR') : ''}" placeholder="0" /><span>원</span>${calcBtn(`${f.label} 계산기로 계산`)}</div>`;
       else if (f.type === 'checkbox') return `<label class="flex items-center justify-between gap-2 text-body min-h-[44px]">${esc(f.label)}<span class="switch"><input type="checkbox" id="${id}" name="${f.name}" ${f.value ? 'checked' : ''} /><span></span></span></label>`;
       else ctrl = `<input id="${id}" name="${f.name}" type="${f.type === 'date' ? 'date' : 'text'}" ${f.inputmode ? `inputmode="${esc(f.inputmode)}"` : ''} class="${inputCls}" style="border-color:var(--ctl-line)" value="${esc(f.value ?? '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} autocomplete="off" />`;
       return `<div><label for="${id}" class="text-caption text-ink-sub">${esc(f.label)}</label>${ctrl}${f.hint ? `<p class="mt-1 text-caption text-ink-sub">${esc(f.hint)}</p>` : ''}</div>`;
@@ -205,6 +240,7 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
     const back = document.activeElement;
     const done = attachModal((v) => { wrap.remove(); unlock(); back?.focus?.(); resolve(v); }, { cancelValue: null });
     const unlock = lockApp('dialog'); // 대화상자 뒤 화면은 잠금(포커스·스크린리더가 뒤로 새지 않게), 겹친 창이 있으면 그것이 닫힐 때까지 유지
+    bindAmountCalc(wrap);
     form.querySelectorAll('[data-amount]').forEach((input) => input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
       input.value = d ? Number(d).toLocaleString('ko-KR') : '';

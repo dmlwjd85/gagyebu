@@ -13,6 +13,9 @@ import {
 import { ownerPickHtml } from './views.js';
 import { ownerOf, ownerForSave, spouseLabel } from '../lib/couple.js';
 import { createTapBurst, BURST_QUIET_MS, BURST_KEY_MS } from './fabPop.js';
+import { openCalc, isCalcOpen } from './calcDialog.js';
+import { normalizeOp } from '../lib/calc.js';
+import { dockIcon } from './dock.js';
 
 let el, ctx, s, lastFocus, longPressAt = 0;
 const burst = createTapBurst(), keyBurst = createTapBurst();
@@ -65,13 +68,13 @@ export function initSheet(context) {
 let unlockApp = null;
 export const isSheetOpen = () => el?.classList.contains('open');
 
-export function openSheet(tx = null, { date } = {}) {
+export function openSheet(tx = null, { date, digits } = {}) {
   const st = ctx.getState();
   lastFocus = document.activeElement;
   const lastAcc = localStorage.getItem('lastAccount');
   s = tx
     ? { id: tx.id, orig: tx, refund: tx.amount < 0, createdAt: tx.createdAt, kind: tx.kind, digits: String(Math.abs(tx.amount)), categoryId: tx.categoryId, date: tx.date, accountId: tx.accountId ?? '', memo: tx.memo ?? '', owner: ownerOf(tx), more: false, showOpts: true, error: '' }
-    : { kind: 'expense', digits: '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', owner: '나', more: false, showOpts: false, error: '' };
+    : { kind: 'expense', digits: /^[1-9]\d{0,9}$/.test(digits ?? '') && Number(digits) <= MAX_AMOUNT ? digits : '', categoryId: null, date: date ?? ymd(new Date()), accountId: st.accounts.some((a) => a.id === lastAcc) ? lastAcc : st.accounts[0]?.id ?? '', memo: '', owner: '나', more: false, showOpts: false, error: '' };
   render();
   el.classList.add('open');
   document.documentElement.classList.add('sheet-open');
@@ -120,8 +123,11 @@ function render() {
     </div>
     ${s.id || st.features?.sms === false ? '' : smsPasteRow()}
     <div class="px-5 pt-3 pb-1 text-right">
-      <p data-fit class="amount-display tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
+      <div class="flex items-center gap-2 min-w-0">
+      <button type="button" class="calc-chip" data-calc aria-label="계산기로 금액 계산" title="계산기 (+ − × ÷ 키로도 열려요)">${dockIcon('calc', 'calc-chip-svg')}<span aria-hidden="true">계산</span></button>
+      <p data-fit class="amount-display flex-1 min-w-0 tabular-nums ${amt ? '' : 'text-ink-sub'} ${s.shake ? 'shake' : ''}" aria-live="polite" aria-label="금액 ${formatWon(amt)}">
         <span class="${s.kind === 'income' || (s.refund && s.kind === 'expense') ? 'text-income' : 'text-expense'}">${amt ? (s.kind === 'income' || (s.refund && s.kind === 'expense') ? '+' : '−') : ''}</span>${amt.toLocaleString('ko-KR')}<span class="text-head ml-1 text-ink">원</span></p>
+      </div>
       ${s.refund && s.kind === 'expense' && !s.error ? '<p class="h-5 text-caption text-ink-sub">↩️ 카드 환불 · 이 달 지출에서 빼요</p>' : `<p class="h-5 text-caption text-expense" role="alert">${esc(s.error)}</p>`}
     </div>
     <div class="px-4">
@@ -168,6 +174,22 @@ function press(k) {
   if (k === '⌫') return setDigits(s.digits.slice(0, -1));
   if (!s.digits && (k === '0' || k === '000')) return;
   setDigits(s.digits + k);
+}
+
+// 계산기: 지금 금액에서 시작(연산자 키로 열면 그 연산자까지). '=' 결과를 바로 금액에 넣음(1원~10억 원)
+function openAmountCalc(start = '') {
+  haptic();
+  openCalc({
+    mode: 'amount', value: amount(), start, title: '금액 계산',
+    onApply: (won) => {
+      if (won <= 0) return '0원보다 큰 결과만 금액에 넣을 수 있어요.';
+      if (won > MAX_AMOUNT) return '한 번에 10억 원까지 입력할 수 있어요.';
+      if (!isSheetOpen()) return '기록 창이 닫혀 금액을 넣지 못했어요.';
+      s.digits = String(won); s.error = '';
+      render();
+      return null;
+    },
+  });
 }
 
 async function save() {
@@ -265,6 +287,7 @@ function onClick(e) {
   if (t.hasAttribute('data-sms')) return runSms();
   if (s.sms) return onSmsClick(t);
   if (t.dataset.key) return press(t.dataset.key);
+  if (t.hasAttribute('data-calc')) return openAmountCalc();
   if (t.dataset.kind) { if (s.kind !== t.dataset.kind) { s.kind = t.dataset.kind; s.categoryId = null; s.more = false; } return render(); }
   if (t.dataset.cat) { s.categoryId = t.dataset.cat; s.error = ''; haptic(); render(); $(`[data-cat="${CSS.escape(s.categoryId)}"]`, el)?.classList.add('pop'); return; }
   if (t.hasAttribute('data-more')) { s.more = true; return render(); }
@@ -287,7 +310,7 @@ function onPaste(e) {
   if (digits) setDigits(digits);
 }
 function onKey(e) {
-  if (!isSheetOpen() || document.querySelector('[role=alertdialog]')) return;
+  if (!isSheetOpen() || isCalcOpen() || document.querySelector('[role=alertdialog]')) return;
   if (s?.sms) {
     if (e.key === 'Escape') { e.preventDefault(); return closeSheet(); }
     if (e.key === 'Tab') {
@@ -313,5 +336,6 @@ function onKey(e) {
   }
   if (inField) return;
   if (/^[0-9]$/.test(e.key)) { e.preventDefault(); press(e.key); }
+  else if (!e.ctrlKey && !e.metaKey && !e.altKey && normalizeOp(e.key) && !/^[xX]$/.test(e.key)) { e.preventDefault(); openAmountCalc(normalizeOp(e.key)); }
   else if (e.key === 'Backspace') { e.preventDefault(); press('⌫'); }
 }

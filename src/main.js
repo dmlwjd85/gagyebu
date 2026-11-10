@@ -15,7 +15,10 @@ import { editTarget } from './lib/restore.js';
 import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal, attachModal } from './ui/util.js';
+import { loadDock, saveDock, pickDock, moveDock, dockItem } from './lib/dockSlots.js';
+import { dockHtml, dockMenuHtml, dockEditHtml, HOLD_MS, MOVE_PX } from './ui/dock.js';
+import { openCalc } from './ui/calcDialog.js';
 import { reportRunner, reportScreenKey, prefetchAfterData, openAfterLoad } from './ui/reportRun.js';
 import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
 import { createNavHistory } from './lib/navBack.js';
@@ -71,10 +74,8 @@ function onInstallChange(kind) {
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
 const app = $('#app');
-const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
 const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring', 'assets', 'tax'];
-// 아래 탭은 홈·달력·차트·예산과 기록 버튼만. 설정·검색·가져오기·반복·자산·세액공제는
-// 그 위의 화면이라 탭을 숨긴다(긴 설정이 탭·기록 버튼에 가리지 않게). 나가는 길은 헤더의 홈/뒤로.
+// 설정·검색·가져오기·반복·자산·세액공제는 위 메뉴에 달 이동이 없는 화면(아래 독은 어느 화면에서나 보임, #38).
 const NO_NAV = new Set(['settings', 'import', 'search', 'recurring', 'assets', 'tax']);
 const headerBack = (view) => (view === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null);
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
@@ -166,7 +167,7 @@ function render() {
     <div class="app-frame ${nav ? 'has-nav' : ''}">
       <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view), back: headerBack(ui.view), payday: ui.view === 'home' && m.viewYm === m.curYm && featureOn(m.features, 'monthStart') ? paydayChip(m.today, m.settings) : null })}</div></div>
       <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
-      ${nav ? tabBar() : ''}
+      ${nav ? tabBar(m) : ''}
     </div>`;
   // 홈 숫자 롤링
   const hero = $('#hero-num');
@@ -184,13 +185,119 @@ function render() {
   renderTip();
   renderInstallHint();
 }
-const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
-  <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쨈 가계부' })}</div>
-  ${TABS.slice(0, 2).map(tabBtn).join('')}
-  <button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>
-  ${TABS.slice(2).map(tabBtn).join('')}</nav>
+// 아래 독: 쨈 교무수첩과 같은 키캡 독(ui/dock.js). 칸 배치는 이 기기에만(localStorage 'dockTabs'), 가운데 '기록'(쨈 컵)은 고정
+const dockFeatures = (m) => ({ recurring: featureOn(m?.features ?? state?.features, 'recurring') });
+const tabBar = (m) => `${dockHtml({ view: ui.view, order: loadDock(localStorage, dockFeatures(m)), logo: `<div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쨈 가계부' })}</div>`,
+  mid: `<button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>` })}
 <button class="fab desk-fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>`;
-const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on' : ''}" data-nav="${id}" ${ui.view === id ? 'aria-current="page"' : ''}><span aria-hidden="true">${icon}</span><span>${label}</span></button>`;
+
+// 대화상자(히스토리 한 칸)를 닫은 직후 화면을 옮기면, 닫기의 history.go(-1)보다 push 가 먼저 돼 뒤로 가기 순서가 꼬임.
+// → 닫기로 생긴 popstate 를 한 번 받은 뒤에(늦으면 0.4초 뒤) 이어서 함
+function afterModalPop(fn) {
+  let ran = false;
+  const run = () => { if (ran) return; ran = true; window.removeEventListener('popstate', onPop); clearTimeout(timer); setTimeout(fn, 0); };
+  const onPop = () => run();
+  window.addEventListener('popstate', onPop);
+  const timer = setTimeout(run, 400);
+}
+
+// 바닥에서 올라오는 독 대화상자(모든 메뉴·칸 배치). 뒤로 가기·Esc·바깥 누르기로 닫힘
+function dockDialog(html, labelId, onClick, { onChange } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'fixed inset-0 z-[70] dlg-wrap dock-dlg fade-in';
+  wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="${labelId}" class="dlg-card dock-card" tabindex="-1">${html}</div>`;
+  const card = wrap.firstElementChild;
+  const back = document.activeElement;
+  const appWas = app.inert;
+  const done = attachModal(() => { wrap.remove(); app.inert = appWas; back?.isConnected && back.focus?.({ preventScroll: true }); });
+  app.inert = true;
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) return done(); onClick(e, done, card); });
+  if (onChange) wrap.addEventListener('change', (e) => onChange(e, done, card));
+  wrap.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return done(); }
+    if (e.key !== 'Tab') return;
+    const f = [...card.querySelectorAll('button:not([disabled]), select')];
+    if (!f.length) return;
+    if (e.shiftKey && (document.activeElement === f[0] || document.activeElement === card)) { e.preventDefault(); f.at(-1).focus(); }
+    else if (!e.shiftKey && document.activeElement === f.at(-1)) { e.preventDefault(); f[0].focus(); }
+  });
+  document.body.append(wrap);
+  (card.querySelector('[aria-current="page"]') ?? card.querySelector('button, select'))?.focus({ preventScroll: true });
+  return { done, card };
+}
+
+function openDockMenu() {
+  haptic();
+  dockDialog(dockMenuHtml({ view: ui.view, features: dockFeatures() }), 'dock-menu-t', (e, done) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.hasAttribute('data-menu-close')) return done();
+    const item = dockItem(b.dataset.menu);
+    if (!item) return;
+    done();
+    afterModalPop(() => (item.view ? go(item.view) : openCalculator()));
+  });
+}
+
+function openDockEdit() {
+  haptic(20);
+  const f = dockFeatures();
+  let draft = loadDock(localStorage, f);
+  const { card } = dockDialog(dockEditHtml({ draft, features: f }), 'dock-edit-t', (e, done, c) => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    if (b.hasAttribute('data-dock-cancel')) return done();
+    if (b.hasAttribute('data-dock-reset')) { draft = loadDock({ getItem: () => null }, f); return paint(c, b); }
+    if (b.hasAttribute('data-dock-save')) { saveDock(draft, localStorage, Date.now(), f); done(); render(); return toast('아래 칸 배치를 저장했어요.'); }
+    if (b.dataset.move !== undefined) { draft = moveDock(draft, Number(b.dataset.move), Number(b.dataset.dir), f); return paint(c, b); }
+  }, { onChange: (e, done, c) => { const sel = e.target.closest('[data-slot]'); if (sel) { draft = pickDock(draft, Number(sel.dataset.slot), sel.value, f); paint(c, sel); } } });
+  // 다시 그려도 누르던 칸에 초점을 둠(키보드로 ‹ › 를 연달아 누를 수 있게)
+  function paint(c, from) {
+    const sel = from?.dataset?.slot ?? from?.dataset?.move;
+    const which = from?.dataset?.slot !== undefined ? `[data-slot="${sel}"]` : from?.dataset?.move !== undefined ? `[data-move="${Number(sel) + Number(from.dataset.dir)}"][data-dir="${from.dataset.dir}"]` : from?.hasAttribute?.('data-dock-reset') ? '[data-dock-reset]' : null;
+    c.innerHTML = dockEditHtml({ draft, features: f });
+    const target = which && c.querySelector(which);
+    (target && !target.disabled ? target : c.querySelector(`[data-slot="${from?.dataset?.move ?? 0}"]`) ?? c)?.focus({ preventScroll: true });
+  }
+  return card;
+}
+
+// 계산기: 독·'더' 메뉴에서 열면 결과를 복사하거나 바로 기록(금액 넣은 기록 시트)
+function openCalculator() {
+  haptic();
+  openCalc({ mode: 'free', onRecord: (won) => afterModalPop(() => openSheet(null, { digits: String(won) })) });
+}
+
+// 독 칸 길게 누르기(0.52초) → 칸 배치 바꾸기. 손가락이 10px 넘게 움직이면 취소, 길게 누른 뒤 따라오는 click 은 버림
+let dockHold = null, dockHeldAt = 0;
+document.addEventListener('pointerdown', (e) => {
+  const k = e.target.closest?.('.dock-key');
+  if (!k || e.button) return;
+  k.classList.add('is-squish');
+  clearTimeout(dockHold?.timer);
+  dockHold = { k, x: e.clientX, y: e.clientY, timer: setTimeout(() => { dockHeldAt = Date.now(); k.classList.remove('is-squish'); dockHold = null; openDockEdit(); }, HOLD_MS) };
+});
+document.addEventListener('pointermove', (e) => {
+  if (dockHold && Math.hypot(e.clientX - dockHold.x, e.clientY - dockHold.y) > MOVE_PX) { clearTimeout(dockHold.timer); dockHold.k.classList.remove('is-squish'); dockHold = null; }
+});
+['pointerup', 'pointercancel'].forEach((ev) => document.addEventListener(ev, () => {
+  if (dockHold) { clearTimeout(dockHold.timer); dockHold = null; }
+  document.querySelectorAll('.dock-key.is-squish').forEach((k) => k.classList.remove('is-squish'));
+}));
+document.addEventListener('contextmenu', (e) => {
+  const k = e.target.closest?.('.dock-key');
+  if (!k) return;
+  e.preventDefault(); // 휴대폰 길게 누르기 기본 메뉴 대신. 키보드 메뉴 키(Shift+F10)로도 배치 바꾸기
+  if (Date.now() - dockHeldAt < 600) return; // 길게 누르기 타이머가 이미 열었음
+  if (dockHold) { clearTimeout(dockHold.timer); dockHold = null; }
+  k.classList.remove('is-squish');
+  dockHeldAt = Date.now();
+  openDockEdit();
+});
+// 길게 누른 뒤 손을 떼면 오는 click 은 이동하지 않음(캡처 단계에서 먼저 끊음)
+document.addEventListener('click', (e) => {
+  if (Date.now() - dockHeldAt < 700 && e.target.closest?.('.dock-key')) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 
 // ── 구석 팁 ─────────────────────────────────────────
 const tipState = () => { try { return JSON.parse(localStorage.getItem('tips')) ?? emptyTipState(); } catch { return emptyTipState(); } };
@@ -731,6 +838,8 @@ app.addEventListener('click', async (e) => {
   switch (d.action) {
     case 'add': if (t.matches('.fab')) return addPop(t); haptic(); return openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번), 진동·소리는 누를 때(feel.js)
     case 'add-rec': return editRecurring(null);
+    case 'calc': return openCalculator();
+    case 'dock-more': return openDockMenu();
     case 'install-app': {
       if (installer.busy()) return; // 설치 창이 떠 있는 동안 또 누르면 무시
       haptic();
