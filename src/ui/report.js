@@ -37,9 +37,9 @@ export async function drawReport(d, { dark = false } = {}) {
   try { await Promise.all(['800', '700', '500'].map((w) => document.fonts.load(`${w} 40px "Pretendard Variable"`, '쨈가계부월리포트0123456789원'))); } catch {}
   const c = document.createElement('canvas'); c.width = W; c.height = H;
   const ctx = c.getContext('2d');
-  const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#1C1A2E' : '#FFFFFF';
+  const ink = dark ? '#F2EEFF' : '#1E1B3A', sub = dark ? '#B8B3D6' : '#5B5675', card = dark ? '#161C38' : '#FFFFFF';
   // 배경: 오로라 파스텔
-  ctx.fillStyle = dark ? '#0F0E1A' : '#F6F4FF'; ctx.fillRect(0, 0, W, H);
+  ctx.fillStyle = dark ? '#0C1228' : '#F2F5FA'; ctx.fillRect(0, 0, W, H);
   // 'transparent'는 검은 투명으로 섞여 회색 띠가 생기므로 같은 색의 알파 0으로 끝냄
   const glow = (x, y, r, rgb, a) => { const g = ctx.createRadialGradient(x, y, 0, x, y, r); g.addColorStop(0, `rgba(${rgb},${a})`); g.addColorStop(1, `rgba(${rgb},0)`); ctx.fillStyle = g; ctx.fillRect(0, 0, W, H); };
   glow(120, 60, 620, dark ? '109,74,255' : '176,156,255', dark ? 0.35 : 0.55);

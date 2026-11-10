@@ -17,7 +17,7 @@ describe('대화상자 대비', () => {
   test('바탕은 어둡게, 카드는 테두리로 라이트·다크를 가른다', () => {
     expect(css).toMatch(/\.dlg-wrap \{\s*background: rgba\(15, 14, 26, 0\.62\)/);
     expect(css).toContain('html.dark .dlg-wrap { background: rgba(0, 0, 0, 0.78); }');
-    expect(css).toContain('--dlg-surface: #3A3460');
+    expect(css).toContain('--dlg-surface: #2A3568');
     expect(css).toContain('border-color: #C8C2E4');
     expect(css).toMatch(/@media \(max-height: 700px\) \{\s*\.dlg-wrap\.dlg-wrap \{ padding-top: 8px; padding-bottom: 8px; \}/);
   });

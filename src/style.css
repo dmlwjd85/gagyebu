@@ -203,11 +203,11 @@
     align-items: end; justify-items: center; column-gap: 0; min-height: 70px; width: auto; max-width: 460px;
     margin: 0 max(8px, env(safe-area-inset-right)) max(8px, env(safe-area-inset-bottom)) max(8px, env(safe-area-inset-left));
     padding: 6px 4px 8px; border-radius: 999px; border: 2.5px solid var(--dock-ink);
-    background: linear-gradient(180deg, rgba(255, 255, 255, .72), transparent 42%), linear-gradient(180deg, #FAF9FD, #DAD6E6);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .72), transparent 42%), linear-gradient(180deg, var(--dock-face-1, #FAF9FD), var(--dock-face-2, #DAD6E6));
     box-shadow: inset 0 2.5px 4px #fff, inset 0 -5px 10px rgba(30, 27, 58, .1), 0 7px 0 var(--dock-side), 0 16px 28px rgba(30, 27, 58, .22); }
   @media (min-width: 476px) { .tabbar { width: 460px; margin-left: auto; margin-right: auto; } }
   .dark .tabbar { --dock-ink: #0B0A16; --dock-side: #0B0A16; --dock-label: #D9D5EE; --dock-on: #FFFFFF;
-    background: linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 40%), linear-gradient(180deg, #3A3460, #2A2548);
+    background: linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 40%), linear-gradient(180deg, var(--dock-face-1, #3A3460), var(--dock-face-2, #2A2548));
     box-shadow: inset 0 2px 0 rgba(255, 255, 255, .1), 0 6px 0 var(--dock-side), 0 12px 24px rgba(0, 0, 0, .5); }
   .tabbar .tab { display: flex; flex-direction: column; align-items: center; justify-content: flex-end; gap: 3px; width: 100%; min-width: 0; min-height: 52px;
     padding: 2px 0 1px; border-radius: 16px; background: transparent; color: var(--dock-label); touch-action: manipulation;
@@ -215,8 +215,8 @@
   .tabbar .tab:focus-visible { outline: 2.5px solid var(--primary); outline-offset: 1px; }
   /* 키 자리 오목 홈 */
   .dock-well { display: grid; place-items: center; width: 38px; max-width: 100%; height: 34px; border-radius: 11px;
-    background: linear-gradient(180deg, #CBC6DA, #E6E3EF); box-shadow: inset 0 4px 7px rgba(30, 27, 58, .22), inset 0 -1px 0 rgba(255, 255, 255, .45), 0 1px 0 rgba(255, 255, 255, .55); }
-  .dark .dock-well { background: linear-gradient(180deg, #1D1934, #2B2649); box-shadow: inset 0 4px 7px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .06); }
+    background: linear-gradient(180deg, var(--dock-well-1, #CBC6DA), var(--dock-well-2, #E6E3EF)); box-shadow: inset 0 4px 7px rgba(30, 27, 58, .22), inset 0 -1px 0 rgba(255, 255, 255, .45), 0 1px 0 rgba(255, 255, 255, .55); }
+  .dark .dock-well { background: linear-gradient(180deg, var(--dock-well-1, #1D1934), var(--dock-well-2, #2B2649)); box-shadow: inset 0 4px 7px rgba(0, 0, 0, .45), 0 1px 0 rgba(255, 255, 255, .06); }
   /* 키캡(측면 단 네 겹) */
   .dock-cap { position: relative; display: grid; place-items: center; width: 30px; height: 26px; border-radius: 9px 9px 8px 8px; color: #2B2745;
     transform: translateY(-3px); transform-origin: 50% 90%; transition: transform .46s cubic-bezier(.28, 1.9, .42, .9);
@@ -292,9 +292,9 @@
     .fab.desk-fab { display: flex; position: fixed; z-index: 35; bottom: max(20px, env(safe-area-inset-bottom)); left: calc(50% + (var(--rail-space) - 8px) / 2); transform: translateX(-50%);
       flex-direction: row; align-items: center; gap: 10px; min-width: 0; margin: 0; min-height: 64px; padding: 4px 22px 4px 4px; border-radius: 24px;
       color: var(--cup-label); font-size: 16px; line-height: 1.25; font-weight: 700; white-space: nowrap; border: 2.5px solid #1E1B3A;
-      background: linear-gradient(180deg, rgba(255, 255, 255, .72), transparent 42%), linear-gradient(180deg, #FAF9FD, #DAD6E6);
+      background: linear-gradient(180deg, rgba(255, 255, 255, .72), transparent 42%), linear-gradient(180deg, var(--dock-face-1, #FAF9FD), var(--dock-face-2, #DAD6E6));
       box-shadow: inset 0 2.5px 4px #fff, 0 6px 0 #A7A2BC, 0 16px 28px rgba(30, 27, 58, .22); transition: transform 90ms; }
-    .dark .fab.desk-fab { border-color: #0B0A16; background: linear-gradient(180deg, #3A3460, #2A2548); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .1), 0 6px 0 #0B0A16, 0 12px 24px rgba(0, 0, 0, .5); }
+    .dark .fab.desk-fab { border-color: #0B0A16; background: linear-gradient(180deg, var(--dock-face-1, #3A3460), var(--dock-face-2, #2A2548)); box-shadow: inset 0 2px 0 rgba(255, 255, 255, .1), 0 6px 0 #0B0A16, 0 12px 24px rgba(0, 0, 0, .5); }
     .fab.desk-fab:active { transform: translateX(-50%) translateY(3px); }
     .desk-fab .fab-disc { width: 52px; height: 52px; margin: 0; border-radius: 16px; border: 2.5px solid #1E1B3A; /* 폭을 정해 둬야 @container(inline-size)가 0으로 접히지 않음 */
       background: radial-gradient(circle at 50% 28%, rgba(255, 255, 255, .7), transparent 58%), linear-gradient(180deg, #FFFFFF, var(--cup-plate) 55%, #DCE0E8);
@@ -309,7 +309,7 @@
     container: cupd / inline-size; } /* 접시 폭으로 컵 세부 묘사 단계를 고름(@container) */
   .fab-disc .cup-svg { width: min(52px, 100cqi); height: min(52px, 100cqi); }
   /* 쨈 맛(테마별) + 접시·테두리. 은박 컵 윤곽선(--cup-edge)은 접시 대비 3:1 이상, '기록' 글자(--cup-label)는 7:1 이상 */
-  :root { --cup-j1: #2E43A8; --cup-j2: #18246A; --cup-j3: #5272D6; --cup-seed: #0E1748; --cup-pulp: #7F97E8; --cup-ink: #2B3FA0; /* 블루베리 */
+  :root { --cup-j1: #2E43A8; --cup-j2: #18246A; --cup-j3: #5272D6; --cup-seed: #0E1748; --cup-pulp: #7F97E8; --cup-ink: #1F3280; /* 블루베리·독 기록 글자 4.8:1 이상(옛 #2B3FA0 실측 4.55) */
     --cup-plate: #F2F3F6; --cup-rim: #8C95A3; --cup-edge: #6B7482; --cup-rimtop: #E9ECF0; --cup-rimside1: #C9CED6; --cup-rimside2: #98A1AE; --cup-label: #1E2230; }
   .dark { --cup-plate: #262833; --cup-rim: #5A6070; --cup-edge: #A3ABB8; --cup-rimtop: #DDE1E7; --cup-rimside1: #B5BCC6; --cup-rimside2: #7E8794; --cup-label: #F2F3F7; }
   html[data-theme="sakura"] { --cup-j1: #7A1F34; --cup-j2: #480C1C; --cup-j3: #8C2A40; --cup-seed: #F2C14E; --cup-pulp: #B98894; --cup-ink: #6B1427; } /* 딸기 루비(진한 버건디): 흰 반사와 섞인 색까지 금지 코랄·핑크·보라와 ΔE2000 13.7 이상 */
@@ -656,8 +656,8 @@ html.dark .dlg-wrap { background: rgba(0, 0, 0, 0.78); }
   line-height: 1.45;
 }
 html.dark .dlg-card {
-  --dlg-surface: #3A3460;
-  background: #3A3460;
+  --dlg-surface: #2A3568; /* 사파이어 밤: 옛 #3A3460 보라 → 남색 */
+  background: var(--dlg-surface);
   color: #F3F1FF;
   border-color: #C8C2E4;
   box-shadow: 0 0 0 1px rgba(243, 241, 255, 0.2), 0 22px 56px rgba(0, 0, 0, 0.72);
@@ -740,10 +740,10 @@ html.dark .dlg-card .btn-ghost {
 .dock-card h2.text-head { font-size: calc(20px * var(--content-scale, 1)); }
 .dock-menu { list-style: none; margin: 12px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fill, minmax(calc(8.25rem * min(var(--content-scale, 1), 1.3)), 1fr)); gap: 8px; }
 .dock-menu-item { display: flex; align-items: center; gap: 10px; width: 100%; min-height: 48px; padding: 6px 10px; border-radius: 14px; text-align: left; font-weight: 600; line-height: 1.3;
-  border: 1.5px solid rgba(30, 27, 58, .25); background: #F6F4FB; color: #1E1B3A; }
+  border: 1.5px solid rgba(30, 27, 58, .25); background: var(--dock-menu-face, #F6F4FB); color: #1E1B3A; }
 .dock-menu-item:hover { border-color: var(--primary); }
 .dock-menu-item.on { border-color: var(--cup-j1); box-shadow: inset 0 0 0 1.5px var(--cup-j1); }
-html.dark .dock-menu-item { background: #2A2548; color: #F3F1FF; border-color: rgba(243, 241, 255, .3); }
+html.dark .dock-menu-item { background: var(--dock-menu-face, #2A2548); color: #F3F1FF; border-color: rgba(243, 241, 255, .3); }
 .dock-menu-cap { flex: none; display: grid; place-items: center; width: 34px; height: 30px; border-radius: 10px; color: #2B2745;
   background: linear-gradient(180deg, rgba(255, 255, 255, .75) 0%, transparent 38%), linear-gradient(180deg, #FFFEFF, #E6E3EF 60%, #CDC8DB);
   box-shadow: inset 0 2px 2px #fff, 0 1px 0 #ADA8BF, 0 2px 0 #9C97B0, 0 3px 5px rgba(30, 27, 58, .2); }

@@ -324,3 +324,14 @@ extend:{ colors:{ bg:'var(--bg)', surface:'var(--surface)', ink:'var(--ink)', 'i
 - 도메인: 오케이포스가 todaysales.co.kr·todaysales.kr 사용 중. 오늘얼마.com(퓨니코드 xn--wh1b99kjwk3la.com)·todayeolma.com은 미등록(RDAP 404). oneuleolma.com은 2026-09-14 등록됨(제3자). .kr 도메인은 확인 도구가 없어 미확인.
 - 참고(콘셉트 경쟁): **「오늘쓸돈」**(moteystudio.com)이 "오늘 쓸 수 있는 돈" 하루 예산·무지출 데이·월 시작일·엑셀 가져오기·PC판까지 갖춘 가계부로 이미 출시됨(광고 있음). 우리 차별점은 광고 0·연동 0·돈 날씨 연출·10초 입력.
 - 대안 이름 후보(웹 검색으로 같은 이름 앱 미발견, 상표 미확인): ① **돈날씨**(콘셉트와 일치, 돈날씨.com 미등록) ② **맑음가계부**(맑음가계부.com 미등록) ③ **돈맑음**(돈맑음.com 미등록).
+
+
+## 16. 쨈 가계부 새 색 — B「사파이어 밤」 확정 (2026-11-10)
+
+> **확정: 선생님이 B 사파이어 밤을 골랐어요(2026-11-10).**
+>
+> design/ 에 새 파일을 넣지 않는 규칙 때문에 확정 토큰은 `src/tokens-jjaem-final.css`, Tailwind용은 `src/tailwind-tokens-jjaem.js` 에 둡니다. `src/style.css` 다음에 불러야 맨 아래 적용 규칙이 먹습니다. Tailwind는 `tailwind.config.js` 에서 `src/tailwind-tokens-jjaem.js` 를 가져옵니다.
+>
+> 홈 카드·기록 버튼·강조색·열지도·오로라·차트 7색·스위치·세그·토스트 되돌리기·바탕·면·독·대화상자를 남색 계열로 바꿉니다. 지출 빨강·수입 초록은 그대로입니다. 독 「기록」 글자(--cup-ink)는 #2B3FA0(실측 4.55)에서 #1F3280(실측 7.8 근처)으로 진하게 했습니다.
+>
+> 상세 시안 비교·전 화면 실측표는 기획디자인 작업 자료(`design/jjaem-color/`, 이 PR에는 넣지 않음)와 검증 기록 `/workspace/gagyebu-color-검증.md` 를 보세요.

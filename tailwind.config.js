@@ -1,4 +1,4 @@
-import { colors, backgroundImage, boxShadow } from './design/tailwind-tokens-a.js';
+import { colors, backgroundImage, boxShadow } from './src/tailwind-tokens-jjaem.js';
 
 /** @type {import('tailwindcss').Config} */
 export default {
