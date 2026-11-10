@@ -44,7 +44,7 @@ export function searchView(m, ui) {
     ${m.searchLoading ? '<p class="text-body text-ink-sub" role="status">기록을 불러오는 중…</p>' : ''}
     <section class="card-solid p-4" aria-live="polite" aria-labelledby="sr-h">
       ${has ? `<div class="flex flex-wrap items-baseline justify-between gap-2"><h2 id="sr-h" class="text-head">${list.length}건</h2>
-          <p class="text-caption tabular-nums"><span class="text-expense font-semibold">지출 ${spendText(exp)}</span> · <span class="text-income font-semibold">수입 ${formatWon(inc)}</span></p></div>
+          <p class="text-caption tabular-nums"><span class="text-expense font-bold">지출 ${spendText(exp)}</span> · <span class="text-income font-bold">수입 ${formatWon(inc)}</span></p></div>
         ${list.length ? `<ul class="mt-2 flex flex-col gap-1">${list.slice(0, 200).map((t) => `<li class="flex items-center gap-2"><span class="text-caption text-ink-sub tabular-nums num min-w-[3rem]">${Number(t.date.slice(5, 7))}.${t.date.slice(8)}</span><ul class="flex-1 min-w-0">${txRow(m, t)}</ul></li>`).join('')}</ul>
           ${list.length > 200 ? '<p class="mt-2 text-caption text-ink-sub">앞의 200건만 보여 줘요. 조건을 더 좁혀 보세요.</p>' : ''}`
         : '<div class="py-8 text-center"><p class="text-4xl" aria-hidden="true">🔎</p><p class="mt-2 text-body text-ink-sub">맞는 기록이 없어요.</p></div>'}`
@@ -68,8 +68,8 @@ export function recurringView(m) {
         return `<li class="flex flex-wrap items-center gap-2 min-h-[64px] py-1 border-b last:border-0" style="border-color:var(--line)">
           <span class="tx-emoji shrink-0" aria-hidden="true">${esc(c.emoji)}</span>
           <button class="flex-1 min-w-[min(100%,7em)] text-left min-h-[44px]" data-rec-edit="${esc(r.id)}">
-            <span class="block text-body font-semibold break-words">${esc(r.name)}</span>
-            <span class="block text-body font-semibold tabular-nums ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span>
+            <span class="block text-body t-quiet break-words">${esc(r.name)}</span>
+            <span class="block text-body font-bold tabular-nums ${r.kind === 'income' ? 'text-income' : 'text-expense'}">${signedWon(r.amount, r.kind)}</span>
             <span class="block text-caption text-ink-sub break-words">매달 ${r.dayOfMonth}일 · ${nd && r.active ? `다음 ${md(nd)}` : '꺼짐'} · ${esc(c.name)}${r.owner === '배우자' || r.owner === '공동' ? ` · ${esc(r.owner === '배우자' ? spouseLabel(m.settings) : '공동')}` : ''}</span><span class="sr-only">, 고치기</span></button>
           <label class="switch"><input type="checkbox" data-rec-active="${esc(r.id)}" ${r.active ? 'checked' : ''} aria-label="${esc(r.name)} 자동 기록" /><span></span></label>
           <button class="icon-btn" data-rec-del="${esc(r.id)}" aria-label="${esc(r.name)} 삭제">🗑️</button></li>`;
@@ -97,7 +97,7 @@ export function goalsCard(m, { piggy = false } = {}) {
         <div class="relative w-[72px] h-[72px] shrink-0">${ring(p.pct / 100, { size: 72, stroke: 8, color: p.done ? 'var(--income)' : 'var(--primary)' })}
           <span class="absolute inset-0 grid place-items-center text-2xl" aria-hidden="true">${esc(g.emoji || '🎯')}</span></div>
         <div class="min-w-0 flex-1">
-          <button class="relative block w-full text-left min-h-[44px] text-body font-semibold break-words" data-goal-edit="${esc(g.id)}" aria-label="${esc(g.name)} 목표 고치기">${esc(g.name)}</button>
+          <button class="relative block w-full text-left min-h-[44px] text-body font-bold break-words" data-goal-edit="${esc(g.id)}" aria-label="${esc(g.name)} 목표 고치기">${esc(g.name)}</button>
           <p class="tabular-nums" role="progressbar" aria-label="${esc(g.name)} 진행률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${p.pct}" aria-valuetext="${p.pct}%, ${formatWon(g.saved || 0)} / ${formatWon(g.target)}"><b class="text-head">${p.pct}%</b> <span class="text-caption">${shortWon(g.saved || 0)} / ${shortWon(g.target)}원</span></p>
           <p class="text-caption text-ink-sub">${p.done ? '🎉 목표를 이뤘어요!' : p.perMonth ? (p.overdue ? `목표일이 지났어요 · ${numSpan(formatWon(p.left))} 남음` : `한 달에 ${numSpan(formatWon(p.perMonth))}씩 · ${p.months}달 남음`) : `${numSpan(formatWon(p.left))} 남았어요`}</p>
           <button class="chip mt-1" data-goal-add="${esc(g.id)}">＋ 모으기</button></div></li>`;
