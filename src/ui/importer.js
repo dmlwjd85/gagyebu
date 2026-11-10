@@ -151,7 +151,7 @@ function step1(m, imp) {
   const list = (m.imports || []).slice(0, 5);
   return `<label class="drop" data-drop>
       <span class="text-4xl" aria-hidden="true">📥</span>
-      <span class="text-body font-semibold text-center">카드사·은행에서 받은 파일을<br />여기에 끌어다 놓으세요</span>
+      <span class="text-body t-quiet text-center">카드사·은행에서 받은 파일을<br />여기에 끌어다 놓으세요</span>
       <span class="text-caption text-ink-sub">엑셀(.xls, .xlsx)과 CSV를 읽을 수 있어요</span>
       <span class="btn-ghost mt-1 pointer-events-none" aria-hidden="true">파일 고르기</span>
       <input type="file" class="sr-only" data-imp-file accept=".xls,.xlsx,.csv,.txt,text/csv,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" aria-label="가져올 파일 고르기" />
@@ -179,7 +179,7 @@ function step2(m, imp) {
   return `<div class="flex flex-wrap gap-2">
       <span class="chip ${imp.preset.verified ? 'chip-ok' : ''}">${imp.preset.id === 'generic' ? '📄 일반 형식' : imp.preset.verified ? `✓ ${esc(imp.preset.label)} 형식` : `${imp.preset.emoji} ${esc(imp.preset.label)} 형식 같아요(추정) · 열을 확인해 주세요`}</span>
       ${t.encoding && imp.bytes ? `<button class="chip" data-imp-enc aria-label="글자 인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'}, 눌러서 바꾸기">인코딩 ${t.encoding === 'euc-kr' ? 'EUC-KR' : 'UTF-8'} ▾</button>` : ''}
-      <span class="inline-flex items-center gap-1"><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="-1" aria-label="머리글 줄 위로" ${imp.headerRow === 0 ? 'disabled' : ''}>−</button><span class="text-caption font-semibold">머리글 ${imp.headerRow + 1}번째 줄</span><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="1" aria-label="머리글 줄 아래로">＋</button></span>
+      <span class="inline-flex items-center gap-1"><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="-1" aria-label="머리글 줄 위로" ${imp.headerRow === 0 ? 'disabled' : ''}>−</button><span class="text-caption t-quiet">머리글 ${imp.headerRow + 1}번째 줄</span><button class="chip !px-3 min-w-[44px] justify-center" data-imp-hdr="1" aria-label="머리글 줄 아래로">＋</button></span>
       ${t.sheets.length > 1 ? t.sheets.map((sh, i) => `<button class="chip" data-imp-sheet="${i}" aria-pressed="${i === imp.sheet}">${esc(sh.name)}</button>`).join('') : ''}
       ${imp.remembered ? '<span class="chip chip-ok">기억한 맞춤 적용</span>' : ''}
     </div>
@@ -191,7 +191,7 @@ function step2(m, imp) {
           <select class="map-sel" data-imp-col="${i}" aria-label="'${esc(h || `${i + 1}번째 열`)}' 열의 용도">${ROLES.map((r) => `<option value="${r}" ${imp.cols[i] === r ? 'selected' : ''}>${ROLE_LABEL[r]}</option>`).join('')}</select>
           <span class="block mt-1 text-caption text-ink-sub font-normal truncate" title="${esc(h)}">원본: ${esc(h || '(이름 없음)')}</span></th>`).join('')}</tr></thead>
         <tbody>${preview.map((r) => `<tr>${header.map((_, i) => `<td>${cell(r[i], imp.cols[i])}</td>`).join('')}</tr>`).join('')}</tbody></table></div>
-      ${miss.length ? `<p class="mt-3 text-caption text-expense font-semibold" role="alert">● ${miss.join(' ')}</p>` : '<p class="mt-3 text-caption text-ink-sub">보라색 칸은 자동으로 맞춘 것이에요. 눌러서 바꿀 수 있어요.</p>'}
+      ${miss.length ? `<p class="mt-3 text-caption text-expense font-bold" role="alert">● ${miss.join(' ')}</p>` : '<p class="mt-3 text-caption text-ink-sub">보라색 칸은 자동으로 맞춘 것이에요. 눌러서 바꿀 수 있어요.</p>'}
     </section>
     <section class="card-solid p-4 flex flex-col gap-1" aria-label="가져오기 옵션">
       ${split ? '<p class="text-caption text-ink-sub min-h-[44px] flex items-center">입금·출금 열이 따로 있어요: 출금은 지출, 입금은 수입으로 넣어요.</p>'
@@ -209,7 +209,7 @@ function step2(m, imp) {
           <span class="text-caption text-ink-sub tabular-nums num min-w-[2.75rem]">${dot(x.date)}</span>
           <span class="tx-emoji !w-9 !h-9 ${x.by === 'fallback' ? 'opacity-60' : ''}" aria-hidden="true">${esc(c.emoji)}</span>
           <span class="flex-1 min-w-0"><span class="block text-body truncate">${esc(x.desc || c.name)}</span><span class="block text-caption text-ink-sub truncate">${esc(c.name)}${x.by === 'rule' ? ' · 내 규칙' : x.by === 'keyword' ? ' · 자동 추정' : ''}${x.card4 ? ` · 카드 끝 ${esc(x.card4)}` : ''}</span></span>
-          <span class="text-body font-semibold tabular-nums ${isPlus(x) ? 'text-income' : 'text-expense'}">${signedWon(x.amount, x.kind)}</span></li>`;
+          <span class="text-body font-bold tabular-nums ${isPlus(x) ? 'text-income' : 'text-expense'}">${signedWon(x.amount, x.kind)}</span></li>`;
       }).join('')}</ul>`}
     </section>`;
 }
@@ -225,7 +225,7 @@ function step3(m, imp) {
     ${d.suspect.length ? `<div class="flex items-center justify-between"><h2 class="text-head">중복 의심 ${d.suspect.length}건</h2><button class="chip" data-imp-skipall>모두 건너뛰기</button></div>
     <ul class="flex flex-col gap-2">${d.suspect.map((s, i) => `<li class="card-solid p-3">
       <div class="grid grid-cols-2 gap-3"><div class="min-w-0">${s.reason === 'file' ? `<span class="block text-caption text-ink-sub">파일 안 같은 줄</span><span class="block text-body truncate">${esc(s.match.desc)}</span><span class="block text-caption tabular-nums">${dot(s.match.date)} · ${formatWon(s.match.amount)}</span>` : exist(s.match)}</div>
-        <div class="min-w-0"><span class="block text-caption ${s.strength === 'weak' ? 'text-ink-sub' : 'text-ink font-semibold'}">${s.strength === 'weak' ? '약한 의심 · 기본 추가' : '같은 거래 같아요'}</span><span class="block text-caption text-ink-sub">가져올 줄</span><span class="block text-body truncate">${esc(s.item.desc)}</span><span class="block text-caption tabular-nums">${dot(s.item.date)} · ${formatWon(s.item.amount)}</span></div></div>
+        <div class="min-w-0"><span class="block text-caption ${s.strength === 'weak' ? 'text-ink-sub' : 'text-ink font-bold'}">${s.strength === 'weak' ? '약한 의심 · 기본 추가' : '같은 거래 같아요'}</span><span class="block text-caption text-ink-sub">가져올 줄</span><span class="block text-body truncate">${esc(s.item.desc)}</span><span class="block text-caption tabular-nums">${dot(s.item.date)} · ${formatWon(s.item.amount)}</span></div></div>
       <div class="seg mt-2 w-full grid grid-cols-2" role="radiogroup" aria-label="${esc(s.item.desc)} ${formatWon(s.item.amount)} 처리">
         <button role="radio" aria-checked="${imp.choice[i] !== 'add'}" data-imp-choice="${i}" data-v="skip">건너뛰기</button>
         <button role="radio" aria-checked="${imp.choice[i] === 'add'}" data-imp-choice="${i}" data-v="add">그래도 추가</button></div></li>`).join('')}</ul>`
@@ -248,7 +248,7 @@ function step4(m, imp) {
     <h2 class="mt-2 text-head">새로 가져올 거래가 없어요</h2><p class="mt-2 text-body text-ink-sub">${esc(emptyReason(d))}</p>
     ${d.suspect.length ? '<p class="mt-2 text-caption text-ink-sub">중복 의심 중 넣고 싶은 것이 있으면 이전 단계에서 \'그래도 추가\'를 골라 주세요.</p>' : ''}</section>`;
   const skipped = d.suspect.length - (items.length - d.fresh.length); // 건너뛴 의심 건
-  const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-semibold tabular-nums text-right">${v}</dd></div>`;
+  const row = (k, v) => `<div class="flex justify-between gap-3 min-h-[40px] items-center border-b last:border-0" style="border-color:var(--line)"><dt class="text-body text-ink-sub">${k}</dt><dd class="text-body font-bold tabular-nums text-right">${v}</dd></div>`;
   return `<section class="card-solid p-4" aria-labelledby="cf-h"><h2 id="cf-h" class="text-head">가져오기 전에 확인해요</h2>
       <dl class="mt-2">${row('파일', esc(imp.fileName))}${s.count ? row('기간', `${dot(s.from)} ~ ${dot(s.to)}`) : ''}${row('가져올 거래', `${s.count}건`)}
         ${row('지출 합계', s.expense < 0 ? `0원 <span class="block text-caption text-income">환불이 ${formatWon(-s.expense)} 더 많아요</span>` : `<span class="text-expense tabular-nums">${s.expense ? '−' : ''}${formatWon(s.expense)}</span>`)}
@@ -262,7 +262,7 @@ function step5(m, imp) {
   return `<div class="card-solid p-6 text-center" role="status">
     <div class="done-check mx-auto" aria-hidden="true"><svg viewBox="0 0 56 56" width="56" height="56"><path d="M14 29l9 9 19-20"/></svg></div>
     <h2 class="mt-3 text-title tabular-nums">${imp.result.count}건 가져왔어요</h2>
-    ${imp.result.pending ? '<p class="mt-2 text-body font-semibold" role="alert">📴 지금은 오프라인이라 이 기기에 먼저 저장했어요. 연결되면 자동으로 올릴게요.</p>' : ''}
+    ${imp.result.pending ? '<p class="mt-2 text-body font-bold" role="alert">📴 지금은 오프라인이라 이 기기에 먼저 저장했어요. 연결되면 자동으로 올릴게요.</p>' : ''}
     <p class="mt-2 text-body text-ink-sub">분류를 한 번 고치면<br />다음부터는 알아서 맞춰 둘게요.</p>
     <div class="mt-5 flex gap-2 justify-center"><button class="btn-primary" data-nav="calendar" data-mode="list" ${imp.result.to ? `data-date="${esc(imp.result.to)}"` : ''}>목록에서 보기</button><button class="btn-ghost" data-imp-undo="${esc(imp.result.id)}">되돌리기</button></div></div>`;
 }

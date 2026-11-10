@@ -64,10 +64,10 @@ function settleCard(m) {
     <p class="mt-1 text-caption text-ink-sub break-words">${esc(who)} 입금과 공동 수입은 정산에 넣지 않아요.</p>
     <p class="mt-1 text-body break-words">공동 지출 ${formatWon(s.joint)} · 나 ${s.splitMe}% · ${esc(who)} ${s.splitSpouse}%</p>
     <div class="who-list mt-2">
-      <p class="who-row"><span class="who-name">나 부담</span><span class="who-amt tabular-nums font-semibold">${formatWon(s.me)}</span></p>
-      <p class="who-row"><span class="who-name break-words">${esc(who)} 부담</span><span class="who-amt tabular-nums font-semibold">${formatWon(s.spouse)}</span></p>
+      <p class="who-row"><span class="who-name">나 부담</span><span class="who-amt tabular-nums font-bold">${formatWon(s.me)}</span></p>
+      <p class="who-row"><span class="who-name break-words">${esc(who)} 부담</span><span class="who-amt tabular-nums font-bold">${formatWon(s.spouse)}</span></p>
     </div>
-    <p class="mt-2 text-body font-semibold break-words">${owe}</p>
+    <p class="mt-2 text-body font-bold break-words">${owe}</p>
     <p class="mt-2 text-caption text-ink-sub break-words">공동으로 적은 지출은 이 장부를 쓰는 내가 먼저 낸 돈으로 봐요. 나의 부담은 공동 순지출 × 나의 비율 ÷ 100 을 반올림한 원이고, 0.5원은 0에서 먼 정수로 올립니다. ${esc(who)} 부담은 공동 순지출에서 나의 부담을 뺀 값이라 둘을 더하면 공동 순지출과 같습니다.</p></section>`;
 }
 function scopeOwner(m, ui) {
@@ -96,7 +96,7 @@ export function txRow(m, t) {
     <span class="min-w-0 flex-1 text-left"><span class="block text-body truncate">${esc(c.name)}</span>
       ${ownerBadge(m, t)}
       ${sub ? `<span class="block text-caption text-ink-sub truncate">${esc(sub)}</span>` : ''}</span>
-    <span data-fit class="num ml-auto text-body font-semibold tabular-nums ${isPlus(t) ? 'text-income' : 'text-expense'}">${signedWon(t.amount, t.kind)}</span>
+    <span data-fit class="num ml-auto text-body font-bold tabular-nums ${isPlus(t) ? 'text-income' : 'text-expense'}">${signedWon(t.amount, t.kind)}</span>
   </button></li>`;
 }
 
@@ -107,7 +107,7 @@ export function topBar(m, { month = true, back = null, payday = null } = {}) {
   const monthName = `${Number(String(m.viewYm || '').slice(5, 7))}월`;
   const range = month && m.sd > 1 ? periodRangeLabel(m.viewYm, m.sd) : '';
   const monthText = range ? `${monthName} (${range})` : monthName;
-  return `<header class="flex flex-wrap items-center justify-between gap-x-2 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
+  return `<header class="flex flex-wrap items-center justify-between gap-x-2 max-[299px]:gap-x-1 pt-3 ${m.offline ? 'is-offline' : ''} ${month && m.viewYm !== m.curYm ? 'is-past' : ''}">
     <div class="flex flex-wrap items-center gap-1 max-[419px]:gap-0 min-w-0">
       ${back ? `<button type="button" class="nav-home" data-nav="${esc(back.to)}" aria-label="${esc(back.label)}"><span aria-hidden="true">‹</span>${esc(back.text || '홈')}</button>` : ''}
       ${symbol('S', { cls: 'hsym mr-0.5', label: '쨈 가계부' })}
@@ -147,7 +147,7 @@ export function homeView(m) {
   let hero;
   const ml = m.monthLeft ?? monthBudgetLeft({ budget: m.budget, periodTxs: m.periodTxs ?? [], categories: m.categories ?? [] });
   if (isCur && w.hasBudget && ml.hasBudget) {
-    hero = `<p class="text-caption font-semibold flex items-center gap-1.5"><span class="wx-icon wx-${w.weather.key}" aria-hidden="true">${w.weather.icon}</span>${w.weather.label} · ${w.weather.text}</p>
+    hero = `<p class="text-caption t-label flex items-center gap-1.5"><span class="wx-icon wx-${w.weather.key}" aria-hidden="true">${w.weather.icon}</span>${w.weather.label} · ${w.weather.text}</p>
       <p class="text-body mt-2">이번 달 남은 예산</p>
       <p data-fit class="text-display tabular-nums mt-1" id="hero-num" aria-live="polite" data-target="${ml.left}">${formatWon(ml.left)}</p>
       <div class="mt-3 h-2 rounded-full bg-white/25" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.min(100, ml.usedPct)}" aria-label="예산 사용률">
@@ -155,13 +155,13 @@ export function homeView(m) {
       <div class="mt-2 flex flex-wrap justify-between gap-x-3 text-caption tabular-nums"><span>예산 ${formatWon(ml.total)} 중 ${ml.usedPct}% 사용</span><span>${w.daysLeft}일 남음</span></div>
       ${ml.items.length ? budgetItemsHtml(m, ml) : ''}`;
   } else if (isCur) {
-    hero = `<p class="text-caption font-semibold">🌈 한 달 예산을 정하면 돈 날씨가 떠요</p>
+    hero = `<p class="text-caption t-label">🌈 한 달 예산을 정하면 돈 날씨가 떠요</p>
       <p class="text-body mt-2">이번 달 남긴 돈</p>
       <p data-fit class="text-display tabular-nums mt-1">${formatWon(m.tot.saved)}</p>
       <button class="hero-btn mt-3" data-action="budget">예산 정하기</button>`;
   } else {
     const used = m.budget?.total ? Math.round((spendParts(m.tot.expense).spent / m.budget.total) * 100) : null;
-    hero = `<p class="text-caption font-semibold">📅 ${esc(monthLabel(m.viewYm, m.sd))} 돌아보기</p>
+    hero = `<p class="text-caption t-label">📅 ${esc(monthLabel(m.viewYm, m.sd))} 돌아보기</p>
       <p class="text-body mt-2">이 달 남긴 돈</p>
       <p data-fit class="text-display tabular-nums mt-1">${formatWon(m.tot.saved)}</p>
       ${used != null ? `<p class="mt-3 text-caption">예산 ${numSpan(formatWon(m.budget.total))} 중 ${used}% 사용</p>` : ''}`;
@@ -192,7 +192,7 @@ export function homeView(m) {
       <div id="install-slot" class="empty:hidden"></div>
   </div>${firstRun ? '' : `<div class="home-col home-recent">${recentSec}</div>`}
   ${(() => { const side = m.wide && top3.length ? `<section class="card-solid p-4" aria-labelledby="top-h"><h2 id="top-h" class="text-head">많이 쓴 곳 TOP 3</h2>
-        <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-semibold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''; return side ? `<div class="home-col home-side">${side}</div>` : ''; })()}</div>`;
+        <ol class="mt-2 -mx-2">${top3.map((c, i) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}"><span class="min-w-[1.5rem] shrink-0 text-caption text-ink-sub">${i + 1}</span><span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left">${esc(catOf(m, c.categoryId).name)}</span><span class="tabular-nums font-bold">${formatWon(c.amount)}</span></button></li>`).join('')}</ol></section>` : ''; return side ? `<div class="home-col home-side">${side}</div>` : ''; })()}</div>`;
 }
 // 지출 칸: 환불이 더 많은 달은 '0원' + 아랫줄 '환불 +49,000원'(빼기 기호 겹침·말줄임 없음, QA N10)
 // 환불이 더 많은 달: 짧은 '환불 4.9만'으로 한 줄 유지 → 세 칸 높이 68px(360px, QA R4·R7)
@@ -202,7 +202,7 @@ const spendStat = (net) => {
   // '+4.9만'만 있으면 수입으로 오해할 수 있어 '환불' 글자를 붙임(QA R7)
   const short = shortWon(refund);
   return `<div class="glass p-3" role="group" aria-label="지출 0원, 환불 ${esc(formatWon(refund))}이 더 많아요"><p class="text-caption text-ink-sub" aria-hidden="true">지출</p>
-    <p data-fit class="stat-v tabular-nums whitespace-nowrap" aria-hidden="true" title="환불 ${esc(formatWon(refund))}">0원 <span class="text-micro font-semibold text-income">환불 ${esc(short)}</span></p></div>`;
+    <p data-fit class="stat-v tabular-nums whitespace-nowrap" aria-hidden="true" title="환불 ${esc(formatWon(refund))}">0원 <span class="text-micro font-bold text-income">환불 ${esc(short)}</span></p></div>`;
 };
 const stat = (k, v, full, cls) => `<div class="glass p-3" role="group" aria-label="${k} ${esc(full)}"><p class="text-caption text-ink-sub" aria-hidden="true">${k}</p><p data-fit class="stat-v tabular-nums ${cls}" title="${esc(full)}" aria-hidden="true">${esc(v)}</p></div>`;
 const skeleton = (n) => `<ul class="mt-2 space-y-2" aria-busy="true" aria-label="불러오는 중">${'<li class="skeleton h-12 rounded-md"></li>'.repeat(n)}</ul>`;
@@ -253,7 +253,7 @@ function limitCard(m) {
 const assetHomeLink = (m) => {
   const roll = summarizeAll(m.assetAccounts, m.holdings);
   const sub = roll.rows.length ? `평가 ${formatWon(roll.valuation)}` : '계좌·납입·세액공제';
-  return `<button class="glass w-full px-4 py-3 text-left flex items-center gap-2 min-h-[44px] min-w-0" data-nav="assets"><span class="shrink-0" aria-hidden="true">📈</span><span class="min-w-0 flex-1"><span class="block text-body">주식·연금</span><span class="block text-caption text-ink-sub break-words">${esc(sub)}</span></span><span class="shrink-0" aria-hidden="true">›</span></button>`;
+  return `<button class="glass w-full px-4 py-3 text-left flex items-center gap-2 min-h-[44px] min-w-0" style="border-color:var(--ctl-line)" data-nav="assets"><span class="shrink-0" aria-hidden="true">📈</span><span class="min-w-0 flex-1"><span class="block text-body">주식·연금</span><span class="block text-caption text-ink-sub break-words">${esc(sub)}</span></span><span class="shrink-0" aria-hidden="true">›</span></button>`;
 };
 
 export function calendarView(m, ui) {
@@ -272,7 +272,7 @@ export function calendarView(m, ui) {
     const ex = info?.expense ?? 0;
     const label = `${prettyDate(d, m.today)}${ex > 0 ? `, 지출 ${formatWon(ex)}` : ex < 0 ? `, 환불 ${formatWon(-ex)}` : ''}${info?.income ? `, 수입 ${formatWon(info.income)}` : ''}${noSpend ? ', 무지출' : ''}`;
     cells += `<button class="cal-cell heat-${lv} ${d === m.today ? 'is-today' : ''} ${d === ui.selDate ? 'is-sel' : ''} ${future ? 'is-future' : ''}" data-date="${d}" aria-pressed="${d === ui.selDate}"><span class="sr-only">${esc(label)}</span>
-      <span class="text-caption font-semibold" aria-hidden="true">${Number(d.slice(8))}</span>
+      <span class="text-caption t-quiet" aria-hidden="true">${Number(d.slice(8))}</span>
       <span aria-hidden="true" class="text-micro tabular-nums ${ex > 0 ? '' : ex < 0 ? 'text-income' : 'text-ink-sub'}">${ex > 0 ? shortWon(ex) : ex < 0 ? `+${shortWon(-ex)}` : noSpend ? '🌱' : info?.income ? '<span class="text-income">+</span>' : ''}</span></button>`;
   }
   const filterCat = ui.catFilter ? catOf(m, ui.catFilter) : null;
@@ -318,8 +318,8 @@ export function chartView(m0, ui) {
   const shareOn = feat(m, 'monthShare');
   const head = `<div class="flex flex-col gap-2 min-w-0"><div class="flex flex-wrap items-center justify-between gap-2"><h1 class="text-title">차트</h1>${pills}</div>
     ${ownerFilterBar(m0, ui)}${personStrip(m0)}</div>
-    ${shareOn && m.periodTxs.length ? `<button class="report-btn" data-action="report"><span class="text-2xl" aria-hidden="true">📤</span><span class="flex-1 text-left min-w-0"><span class="block text-body font-semibold break-words">${Number(m.viewYm.slice(5))}월 리포트 카드 만들기</span><span class="block text-caption text-ink-sub break-words">남긴 돈·TOP 3를 이미지 한 장으로 공유해요</span></span><span aria-hidden="true">›</span></button>` : ''}
-    ${shareOn && m.mode && m.periodTxs.length ? `<button class="report-btn" data-action="share-text"><span class="text-2xl shrink-0" aria-hidden="true">📝</span><span class="flex-1 text-left min-w-0"><span class="block text-body font-semibold break-words">이 달 요약을 글로 공유</span><span class="block text-caption text-ink-sub break-words">글과 이미지. 공유가 안 되면 복사하고 저장해요</span></span></button>` : ''}`;
+    ${shareOn && m.periodTxs.length ? `<button class="report-btn" data-action="report"><span class="text-2xl" aria-hidden="true" data-report-icon>📤</span><span class="flex-1 text-left min-w-0"><span class="block text-body font-bold break-words" data-report-label>${Number(m.viewYm.slice(5))}월 리포트 카드 만들기</span><span class="block text-caption text-ink-sub break-words">남긴 돈·TOP 3를 이미지 한 장으로 공유해요</span></span><span aria-hidden="true">›</span></button>` : ''}
+    ${shareOn && m.mode && m.periodTxs.length ? `<button class="report-btn" data-action="share-text"><span class="text-2xl shrink-0" aria-hidden="true">📝</span><span class="flex-1 text-left min-w-0"><span class="block text-body font-bold break-words">이 달 요약을 글로 공유</span><span class="block text-caption text-ink-sub break-words">글과 이미지. 공유가 안 되면 복사하고 저장해요</span></span></button>` : ''}`;
   if (m.txLoaded && m.periodTxs.length < 3) return `<div class="flex flex-col gap-3">${head}<section class="card-solid p-4">${empty('📊', '기록이 3개 이상 모이면 그래프를 그려 줄게요.')}</section>${trendCard(m, ui)}</div>`;
   if (kind === 'saved') return `<div class="flex flex-col gap-3">${head}<div class="view-grid">${savedCard(m)}${trendCard(m, ui)}</div></div>`;
   const sel = m.periodTxs.filter((t) => t.kind === kind);
@@ -334,12 +334,12 @@ export function chartView(m0, ui) {
   const ins = kind === 'expense' ? m.insight : null;
   const net = kind === 'expense' ? m.tot.expense : m.tot.income;
   const total = Math.max(0, net), refundOver = kind === 'expense' ? spendParts(net).refund : 0;
-  const overList = overs.length ? `<h3 class="mt-4 text-caption font-semibold text-ink-sub">환불이 더 많은 카테고리(비율에서 뺐어요)</h3>
+  const overList = overs.length ? `<h3 class="mt-4 text-caption t-label text-ink-sub">환불이 더 많은 카테고리(비율에서 뺐어요)</h3>
       <ul class="mt-1 -mx-2">${overs.map((c) => `<li><button class="legend-row" data-filter-cat="${esc(c.categoryId)}">
         <span class="w-3 h-3 rounded-full shrink-0 border-2" style="border-color:var(--income)" aria-hidden="true"></span>
         <span aria-hidden="true">${esc(catOf(m, c.categoryId).emoji)}</span><span class="flex-1 text-left truncate">${esc(catOf(m, c.categoryId).name)}</span>
-        <span class="text-caption text-income font-semibold whitespace-nowrap">${c.amount < 0 ? '환불 초과' : '환불로 상쇄'}</span>
-        <span data-fit class="num tabular-nums font-semibold min-w-[5.5rem] text-right text-income">${c.amount < 0 ? '+' : ''}${formatWon(Math.abs(c.amount))}</span></button></li>`).join('')}</ul>` : '';
+        <span class="text-caption text-income t-quiet whitespace-nowrap">${c.amount < 0 ? '환불 초과' : '환불로 상쇄'}</span>
+        <span data-fit class="num tabular-nums font-bold min-w-[5.5rem] text-right text-income">${c.amount < 0 ? '+' : ''}${formatWon(Math.abs(c.amount))}</span></button></li>`).join('')}</ul>` : '';
   // 순지출이 남은 카테고리가 없는 달(환불만·전부 상쇄): 빈 도넛 대신 안내 문구 하나(QA N12)
   const onlyRefund = sel.length && !items.length;
   return `<div class="flex flex-col gap-3">${head}
@@ -348,7 +348,7 @@ export function chartView(m0, ui) {
     <section class="card-solid p-4" aria-labelledby="donut-h">
       <h2 id="donut-h" class="text-head">카테고리별 ${kind === 'expense' ? '지출' : '수입'}</h2>
       ${onlyRefund ? `<div class="py-6 text-center" role="status"><p class="text-4xl" aria-hidden="true">↩️</p>
-        <p class="mt-2 text-body font-semibold">${refundOver ? `이 달에는 환불만 있어요 <span class="text-income tabular-nums whitespace-nowrap">(+${formatWon(refundOver)})</span>` : '이 달 지출은 환불로 모두 상쇄됐어요'}</p>
+        <p class="mt-2 text-body font-bold">${refundOver ? `이 달에는 환불만 있어요 <span class="text-income tabular-nums whitespace-nowrap">(+${formatWon(refundOver)})</span>` : '이 달 지출은 환불로 모두 상쇄됐어요'}</p>
         <p class="mt-1 text-caption text-ink-sub">돌려받은 돈은 지출에서 빼서 봐요. 그래서 그릴 비율이 없어요.</p></div>${overList}`
       : sel.length ? `<div class="relative mt-3">${donut(items, { total, center: kind === 'expense' ? '총지출' : '총수입' })}</div>
       ${refundOver ? `<p class="mt-3 text-caption text-ink-sub">환불이 지출보다 ${numSpan(formatWon(refundOver))} 많아서 이 달 총지출은 0원으로 봐요. 비율은 지출이 남은 카테고리 합 ${numSpan(formatWon(posSum))} 기준이에요.</p>`
@@ -357,7 +357,7 @@ export function chartView(m0, ui) {
         <span class="w-3 h-3 rounded-full shrink-0" style="background:${it.color}" aria-hidden="true"></span>
         <span aria-hidden="true">${esc(it.emoji)}</span><span class="flex-1 text-left truncate">${esc(it.label)}</span>
         <span class="num text-caption text-ink-sub tabular-nums min-w-[2.5rem] text-right">${it.pct}%</span>
-        <span data-fit class="num tabular-nums font-semibold min-w-[5.5rem] text-right">${formatWon(it.amount)}</span></button></li>`).join('')}</ol>
+        <span data-fit class="num tabular-nums font-bold min-w-[5.5rem] text-right">${formatWon(it.amount)}</span></button></li>`).join('')}</ol>
       ${overList}`
         : empty('🌱', `이 기간에는 ${kind === 'expense' ? '지출' : '수입'}이 없어요.`)}
     </section>
@@ -375,10 +375,10 @@ const savedCard = (m) => {
     <h2 id="saved-h" class="text-head">이 달 남긴 돈</h2>
     <p data-fit class="mt-2 text-display tabular-nums ${saved < 0 ? 'text-expense' : 'text-income'}">${formatWon(saved)}</p>
     <dl class="mt-4 grid grid-cols-2 gap-3 text-body">
-      <div><dt class="text-caption text-ink-sub">수입</dt><dd class="tabular-nums font-semibold">${formatWon(income)}</dd></div>
-      <div><dt class="text-caption text-ink-sub">지출</dt><dd class="tabular-nums font-semibold">${formatWon(spendParts(expense).spent)}${spendParts(expense).refund ? `<span class="block text-caption text-income">환불 +${formatWon(spendParts(expense).refund)}</span>` : ''}</dd></div>
+      <div><dt class="text-caption text-ink-sub">수입</dt><dd class="tabular-nums font-bold">${formatWon(income)}</dd></div>
+      <div><dt class="text-caption text-ink-sub">지출</dt><dd class="tabular-nums font-bold">${formatWon(spendParts(expense).spent)}${spendParts(expense).refund ? `<span class="block text-caption text-income">환불 +${formatWon(spendParts(expense).refund)}</span>` : ''}</dd></div>
     </dl>
-    ${rate != null ? `<div class="mt-4"><div class="flex justify-between text-caption text-ink-sub"><span>저축률</span><span class="tabular-nums font-semibold text-ink">${rate}%</span></div>
+    ${rate != null ? `<div class="mt-4"><div class="flex justify-between text-caption text-ink-sub"><span>저축률</span><span class="tabular-nums font-bold text-ink">${rate}%</span></div>
       <div class="mt-1.5 h-3 rounded-full bg-line" role="progressbar" aria-label="저축률" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${Math.max(0, Math.min(100, rate))}"><div class="h-3 rounded-full ${saved < 0 ? 'bg-expense' : 'bg-income'}" style="width:${Math.max(0, Math.min(100, rate))}%"></div></div>
       ${rateNote(m.tot) ? `<p class="mt-2 text-caption text-ink-sub">💡 ${esc(rateNote(m.tot))}</p>` : ''}</div>` : `<p class="mt-4 text-caption text-ink-sub">수입을 기록하면 저축률을 계산해 줘요.</p>`}
     ${avgSaved != null ? `<p class="mt-4 glass px-4 py-3 text-body">지난 ${avg.length}개월 평균보다 <b class="tabular-nums ${saved - avgSaved < 0 ? 'text-expense' : 'text-income'}">${saved - avgSaved < 0 ? '' : '+'}${formatWon(saved - avgSaved)}</b> ${saved - avgSaved < 0 ? '덜 남겼어요' : '더 남겼어요'}.</p>` : ''}
@@ -435,7 +435,7 @@ export function budgetView(m, ui) {
             <p class="bud-fact"><span class="bud-fact-k">${esc(monthLabel(m.viewYm, m.sd))} 예산</span> <span class="bud-fact-num tabular-nums">${formatWon(total)}</span></p>
           </div>
         </div>
-        ${budRefund ? `<p class="bud-meta text-income font-semibold">환불 +${numSpan(formatWon(budRefund))}이 지출보다 많아 사용 0원으로 봐요</p>` : ''}
+        ${budRefund ? `<p class="bud-meta text-income t-quiet">환불 +${numSpan(formatWon(budRefund))}이 지출보다 많아 사용 0원으로 봐요</p>` : ''}
         <button class="btn-ghost self-center" data-action="budget">예산 바꾸기</button></div>`
       : `${empty('🌈', '한 달 예산을 정하면 돈 날씨가 떠요.')}<button class="btn-primary self-center" data-action="budget">예산 정하기</button>`}
     </section>
@@ -447,10 +447,10 @@ export function budgetView(m, ui) {
         const lim = byCat[c.id] ?? 0, sp = spentBy.get(c.id) ?? 0, e = envelope(sp, lim);
         return `<li><button class="w-full min-h-[44px] py-1 text-left" data-env="${esc(c.id)}">
           <div class="bud-env-row text-body"><span aria-hidden="true">${esc(c.emoji)}</span><span class="bud-env-name">${esc(c.name)}</span>
-          <span class="bud-env-amt tabular-nums text-caption ${e.over ? 'text-expense font-semibold' : 'text-ink-sub'}">${formatWon(e.used)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
+          <span class="bud-env-amt tabular-nums text-caption ${e.over ? 'text-expense font-bold' : 'text-ink-sub'}">${formatWon(e.used)} / ${lim ? formatWon(lim) : '한도 없음'}</span></div>
           <div class="mt-1.5 h-2 rounded-full bg-line overflow-hidden"><div class="h-2 rounded-full ${e.over ? 'bg-expense' : e.near ? 'bg-chart-3' : 'bg-primary'}" style="width:${e.width}%"></div></div>
-          ${e.over ? `<p class="mt-1 text-caption text-expense font-semibold">${numSpan(formatWon(e.used - lim))} 넘쳤어요</p>` : e.near ? `<p class="mt-1 text-caption text-chart-3 font-semibold">한도의 ${e.pct}%예요</p>` : ''}
-          ${e.refund ? `<p class="mt-1 text-caption text-income font-semibold">환불 +${numSpan(formatWon(e.refund))}이 더 많아 사용 0원으로 봐요</p>` : ''}</button></li>`;
+          ${e.over ? `<p class="mt-1 text-caption text-expense font-bold">${numSpan(formatWon(e.used - lim))} 넘쳤어요</p>` : e.near ? `<p class="mt-1 text-caption text-chart-3 font-bold">한도의 ${e.pct}%예요</p>` : ''}
+          ${e.refund ? `<p class="mt-1 text-caption text-income t-quiet">환불 +${numSpan(formatWon(e.refund))}이 더 많아 사용 0원으로 봐요</p>` : ''}</button></li>`;
       }).join('')}</ul>` : ''}
     </section>` : ''}
     ${feat(m, 'piggy') ? goalsCard(m, { piggy: !!m.mode }) : ''}</div></div>`;
@@ -460,7 +460,7 @@ export function budgetView(m, ui) {
 const scaleControl = (v) => {
   const pct = Math.round(v * 100);
   return `<div class="flex flex-col gap-1" role="group" aria-labelledby="s-scale">
-      <div class="flex items-center justify-between gap-2 text-body"><label id="s-scale" for="content-scale">본문 글자 크기</label><output for="content-scale" class="text-caption font-semibold text-primary tabular-nums" data-scale-out>${pct}%</output></div>
+      <div class="flex items-center justify-between gap-2 text-body"><label id="s-scale" for="content-scale">본문 글자 크기</label><output for="content-scale" class="text-caption font-bold text-primary tabular-nums" data-scale-out>${pct}%</output></div>
       <div class="flex items-center gap-2">
         <button class="scale-btn text-caption" data-scale-step="-1" aria-label="본문 글자 작게" aria-disabled="${v <= 0.85}">가−</button>
         <input id="content-scale" class="range flex-1" type="range" min="85" max="160" step="5" value="${pct}" aria-valuetext="${pct}%" data-content-scale />
@@ -482,7 +482,7 @@ function lookControls(m) {
       <div class="look-grid" role="group" aria-labelledby="s-tone">${TONE_OPTIONS.map((o) => `<label class="look-pick"><input class="sr-only" type="checkbox" data-tone-part="${o.id}" ${look.tone[o.id] ? 'checked' : ''}><span class="look-name">${o.label}</span></label>`).join('')}</div>
       <p id="s-font" class="text-body">글꼴</p>
       <div class="look-grid" role="radiogroup" aria-labelledby="s-font">${FONT_OPTIONS.map((o) => `<button type="button" class="look-pick" role="radio" aria-checked="${look.font === o.id}" data-font-pick="${o.id}"><span class="look-name">${o.label}</span></button>`).join('')}</div>
-      <p class="text-caption text-ink-sub">시스템 기본은 이 기기 글꼴이에요. Pretendard와 나눔스퀘어라운드(나눔라운드)는 SIL OFL 1.1이라 앱에 실어 배포해요. 예전에 손글씨로 저장한 설정도 이 글꼴로 보여요.</p>
+      <p class="text-caption text-ink-sub">시스템 기본은 이 기기 글꼴이에요. 쨈 본문과 나눔스퀘어라운드(나눔라운드)는 SIL OFL 1.1이라 앱에 실어 배포해요. 예전에 손글씨로 저장한 설정도 이 글꼴로 보여요.</p>
     </div>`;
 }
 
@@ -582,7 +582,7 @@ function couplePrefs(m) {
       <input class="name-input" maxlength="20" data-spouse-name value="${esc(name)}" placeholder="배우자" aria-label="배우자 이름" /></label>
     <div class="min-w-0">
       <p id="s-split" class="text-body">공동 지출 비율</p>
-      <p class="text-caption font-semibold break-words tabular-nums" data-split-out>나 ${split}% · ${esc(who)} ${100 - split}%</p>
+      <p class="text-caption font-bold break-words tabular-nums" data-split-out>나 ${split}% · ${esc(who)} ${100 - split}%</p>
       <input class="range" type="range" min="0" max="100" step="1" value="${split}" data-split-me aria-labelledby="s-split" aria-valuetext="나 ${split}퍼센트" />
       <p class="text-caption text-ink-sub break-words">공동으로 적은 지출만 나눕니다. 나의 부담은 공동 순지출 × 이 비율 ÷ 100 을 반올림한 원이고, 0.5원은 0에서 먼 정수로 올립니다. 나머지 원은 ${esc(who)} 부담이에요.</p>
     </div>
@@ -596,7 +596,7 @@ function modeSettings(m) {
     <p class="text-caption text-ink-sub break-words">${cur ? `${cur.label}에 필요한 메뉴만 보여요. 기능은 아래에서 하나씩 켜고 끌 수 있어요.` : '아직 고르지 않았어요. 고르기 전에는 지금 메뉴가 그대로예요.'}</p>
     <div class="mode-grid" role="radiogroup" aria-label="쓰는 방식">${MODES.map((md) => `<button type="button" class="mode-pick ${mode === md.id ? 'on' : ''}" role="radio" aria-checked="${mode === md.id}" data-set-mode="${md.id}">
       <span class="text-2xl shrink-0" aria-hidden="true">${md.emoji}</span>
-      <span class="mode-copy"><span class="text-body font-semibold">${md.label}</span><span class="text-caption text-ink-sub">${md.blurb}</span></span>
+      <span class="mode-copy"><span class="text-body font-bold">${md.label}</span><span class="text-caption text-ink-sub">${md.blurb}</span></span>
     </button>`).join('')}</div>
     ${couplePrefs(m)}
     <ul class="flex flex-col">${FEATURES.map((f) => `<li class="feat-row"><span class="feat-copy"><span class="block text-body">${f.label}</span><span class="block text-caption text-ink-sub">${f.hint}</span></span>
@@ -609,7 +609,7 @@ export function onboardingView() {
     <p class="text-body text-ink-sub break-words">쓰는 방식에 맞춰 메뉴를 줄여 줘요. 설정에서 언제든 바꿀 수 있고, 기능은 하나씩 섞을 수 있어요.</p>
     <div class="mode-grid">${MODES.map((md) => `<button type="button" class="mode-pick" data-pick-mode="${md.id}">
       <span class="text-2xl shrink-0" aria-hidden="true">${md.emoji}</span>
-      <span class="mode-copy"><span class="text-body font-semibold">${md.label}</span><span class="text-caption text-ink-sub">${md.blurb}</span></span>
+      <span class="mode-copy"><span class="text-body font-bold">${md.label}</span><span class="text-caption text-ink-sub">${md.blurb}</span></span>
     </button>`).join('')}</div>
     <button type="button" class="btn-ghost mode-later" data-mode-later>나중에 고를게요. 지금 메뉴는 그대로 둘게요.</button></div>`;
 }
