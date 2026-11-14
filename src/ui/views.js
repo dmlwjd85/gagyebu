@@ -536,7 +536,7 @@ export function settingsView(m, ui) {
       <p class="text-caption text-ink-sub">엑셀에서 바로 열 수 있어요. 파일은 이 기기에서만 만들어져요.</p>
       ${m.kept?.length ? `<div class="glass p-3 flex flex-col gap-2" role="group" aria-labelledby="s-kept"><p id="s-kept" class="text-body">📦 이 기기에만 보관된 기록 ${m.kept.length}건<span class="block text-caption text-ink-sub">되돌린 기록을 서버에 저장하지 못해 이 기기에 담아 뒀어요. 지우지 않았으니 안심해도 돼요.</span></p>
         <div class="flex flex-wrap gap-2"><button class="btn-ghost" data-action="kept-retry"${m.keptBusy ? ' disabled aria-busy="true"' : ''}>${m.keptBusy ? '저장하는 중…' : '다시 저장하기'}</button><button class="btn-ghost" data-action="kept-csv">CSV로 받기</button></div></div>` : ''}
-      <a class="set-link" href="privacy.html" data-legal="privacy"><span aria-hidden="true">🔏</span><span class="flex-1 text-left min-w-0">개인정보 처리방침<span class="block text-caption text-ink-sub break-words">무엇을 저장하고 언제 지우는지</span></span><span aria-hidden="true">›</span></a>
+      <a class="set-link" href="privacy.html" data-legal="privacy"><span aria-hidden="true">🔏</span><span class="flex-1 text-left min-w-0">개인정보 처리방침<span class="block text-caption text-ink-sub break-words">저장하는 정보와 지우는 방법</span></span><span aria-hidden="true">›</span></a>
       <button class="btn-danger self-start" data-action="delete-all">모든 기록과 계정 삭제</button>
       <p class="text-caption text-ink-sub">앱을 지운 뒤에도 <a class="link-btn inline-flex items-center" href="delete-account.html" data-legal="delete">계정·기록 삭제 안내</a>에서 지울 수 있어요.</p></section>
     </div>
