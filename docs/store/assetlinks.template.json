@@ -1,0 +1,13 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "io.github.dmlwjd85.gagyebu",
+      "sha256_cert_fingerprints": [
+        "여기에_플레이_앱_서명_SHA-256_지문",
+        "여기에_업로드_키_SHA-256_지문"
+      ]
+    }
+  }
+]

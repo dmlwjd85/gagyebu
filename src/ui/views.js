@@ -536,7 +536,9 @@ export function settingsView(m, ui) {
       <p class="text-caption text-ink-sub">엑셀에서 바로 열 수 있어요. 파일은 이 기기에서만 만들어져요.</p>
       ${m.kept?.length ? `<div class="glass p-3 flex flex-col gap-2" role="group" aria-labelledby="s-kept"><p id="s-kept" class="text-body">📦 이 기기에만 보관된 기록 ${m.kept.length}건<span class="block text-caption text-ink-sub">되돌린 기록을 서버에 저장하지 못해 이 기기에 담아 뒀어요. 지우지 않았으니 안심해도 돼요.</span></p>
         <div class="flex flex-wrap gap-2"><button class="btn-ghost" data-action="kept-retry"${m.keptBusy ? ' disabled aria-busy="true"' : ''}>${m.keptBusy ? '저장하는 중…' : '다시 저장하기'}</button><button class="btn-ghost" data-action="kept-csv">CSV로 받기</button></div></div>` : ''}
-      <button class="btn-danger self-start" data-action="delete-all">모든 기록과 계정 삭제</button></section>
+      <a class="set-link" href="privacy.html" data-legal="privacy"><span aria-hidden="true">🔏</span><span class="flex-1 text-left min-w-0">개인정보 처리방침<span class="block text-caption text-ink-sub break-words">무엇을 저장하고 언제 지우는지</span></span><span aria-hidden="true">›</span></a>
+      <button class="btn-danger self-start" data-action="delete-all">모든 기록과 계정 삭제</button>
+      <p class="text-caption text-ink-sub">앱을 지운 뒤에도 <a class="link-btn inline-flex items-center" href="delete-account.html" data-legal="delete">계정·기록 삭제 안내</a>에서 지울 수 있어요.</p></section>
     </div>
     <div class="flex flex-col gap-3">
     <section class="card-solid p-4" aria-labelledby="s-pay">
@@ -619,7 +621,8 @@ export function loginView({ emulator, error }) {
       <button class="btn-google" data-action="login"><svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true"><path fill="#FFC107" d="M43.6 20.5H42V20H24v8h11.3C33.7 32.7 29.2 36 24 36c-6.6 0-12-5.4-12-12s5.4-12 12-12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 12.9 4 4 12.9 4 24s8.9 20 20 20 20-8.9 20-20c0-1.3-.1-2.4-.4-3.5z"/><path fill="#FF3D00" d="m6.3 14.7 6.6 4.8C14.7 15.1 19 12 24 12c3.1 0 5.8 1.2 7.9 3.1l5.7-5.7C34 6.1 29.3 4 24 4 16.3 4 9.7 8.3 6.3 14.7z"/><path fill="#4CAF50" d="M24 44c5.2 0 9.9-2 13.4-5.2l-6.2-5.2C29.2 35.1 26.7 36 24 36c-5.2 0-9.6-3.3-11.3-8l-6.5 5C9.5 39.6 16.2 44 24 44z"/><path fill="#1976D2" d="M43.6 20.5H42V20H24v8h11.3c-.8 2.2-2.2 4.2-4.1 5.6l6.2 5.2C37 39.2 44 34 44 24c0-1.3-.1-2.4-.4-3.5z"/></svg>Google로 시작하기</button>
       ${emulator ? '<button class="btn-ghost" data-action="login-test">테스트 계정으로 로그인 (에뮬레이터)</button>' : ''}
       ${error ? `<p class="text-caption text-expense" role="alert">${esc(error)}</p>` : ''}
-      <ul class="text-caption text-ink-sub flex flex-col gap-1"><li>🔒 기록은 내 계정에만 저장돼요. 광고·연동 없음.</li><li>📴 인터넷이 끊겨도 기록할 수 있어요.</li><li>📤 언제든 CSV로 내보낼 수 있어요.</li></ul>` };
+      <ul class="text-caption text-ink-sub flex flex-col gap-1"><li>🔒 기록은 내 계정에만 저장돼요. 광고·연동 없음.</li><li>📴 인터넷이 끊겨도 기록할 수 있어요.</li><li>📤 언제든 CSV로 내보낼 수 있어요.</li></ul>
+      <p class="text-caption text-ink-sub">만 14세 이상만 쓸 수 있어요. 시작하기 전에 <a class="link-btn inline-flex items-center" href="privacy.html" data-legal="privacy">개인정보 처리방침</a>을 확인해 주세요.</p>` };
 }
 
 export function setupView() {

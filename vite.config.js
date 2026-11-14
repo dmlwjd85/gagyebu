@@ -86,6 +86,8 @@ export default defineConfig({
         runtimeCaching: [FONT_RUNTIME_CACHE],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
+        // 처리방침·계정 삭제 안내는 따로 있는 문서라 앱 화면(index.html)으로 바꿔 주지 않는다(스토어 심사에서 여는 주소).
+        navigateFallbackDenylist: [/\/(privacy|delete-account)\.html$/],
         // start_url에 ?source= 같은 쿼리가 붙어도 오프라인에서 index.html을 내준다.
         ignoreURLParametersMatching: [/.*/],
       },
