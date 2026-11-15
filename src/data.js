@@ -10,6 +10,8 @@ export const state = {
   ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [],
   assetAccounts: [], holdings: [], contributions: [], assetPrefs: null,
   txWindow: null, txLoaded: false, pendingWrites: false,
+  // 불러오기 상태(화면 안내용): storeFailed 앱 조각을 못 받음 · syncError 서버 읽기 거부·실패 · slow 오래 기다림 · accountEmpty 이 계정엔 기록이 하나도 없음
+  storeFailed: false, syncError: null, slow: false, accountEmpty: false,
   ...freshMode(),
 };
 const emit = () => listeners.forEach((fn) => fn(state));
@@ -32,10 +34,20 @@ export function loginErrorText(e) {
 // Firestore 묶음은 한 번만 불러옴. 전에 로그인했던 기기면 인증 확인과 동시에 미리 받기 시작.
 let store = null, storeP = null;
 const SIGNED_IN = 'signedIn';
+// 배포 직후 예전 화면이 새 조각을 못 받는 경우 등: 실패하면 다음에 다시 시도할 수 있게 비워 둠(조용히 빈 화면이 되지 않게 storeFailed 표시)
 const loadStore = () => (storeP ??= import('./store.js').then((m) => {
   m.bind({ state, emit, onError: (e, retry) => writeErrorHandler?.(e, retry) });
+  state.storeFailed = false;
   return (store = m);
-}));
+}).catch((e) => { storeP = null; throw e; }));
+// 첫 데이터가 이만큼 지나도 안 오면 '오래 걸려요' 안내(오프라인이면 바로 오프라인 안내)
+export const SLOW_MS = 8000;
+let slowTimer = null;
+function armSlow() {
+  clearTimeout(slowTimer);
+  state.slow = false;
+  slowTimer = setTimeout(() => { if (state.user && !(state.profileKnown && state.txLoaded)) { state.slow = true; emit(); } }, SLOW_MS);
+}
 
 export function initAuth() {
   if (!auth) { state.ready = true; emit(); return; }
@@ -50,15 +62,40 @@ export function initAuth() {
   }
   onAuthStateChanged(auth, async (user) => {
     store?.stopAll();
+    let failed = false;
     if (user) {
       localStorage.setItem(SIGNED_IN, '1');
-      try { await loadStore(); } catch (e) { console.error(e); }
+      try { await loadStore(); } catch (e) { console.error(e); failed = true; }
       if (auth.currentUser?.uid !== user.uid) return; // 기다리는 사이 로그아웃·계정 전환됨
     } else localStorage.removeItem(SIGNED_IN);
-    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true, ...freshMode() });
-    if (user && store) store.startUser();
+    Object.assign(state, { user, ...emptyData(), ready: true, storeFailed: failed, ...freshMode() });
+    if (user && store) { store.startUser(); armSlow(); } else clearTimeout(slowTimer);
     emit();
   });
+}
+
+const emptyData = () => ({ profile: null, profileLoaded: false, profileKnown: false, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, syncError: null, slow: false, accountEmpty: false });
+
+// '다시 불러오기': 서버 구독을 처음부터 다시(쓰기 없음). 앱 조각을 못 받았으면 다시 받아 보고, 그래도 안 되면 화면을 새로 엶.
+export async function reloadData() {
+  const user = auth?.currentUser;
+  if (!user) return 'signed-out';
+  if (!store) {
+    try { await loadStore(); } catch (e) { console.error(e); location.reload(); return 'reload'; }
+  }
+  if (auth.currentUser?.uid !== user.uid) return 'changed';
+  store.stopAll();
+  Object.assign(state, { user, ...emptyData(), storeFailed: false, ...freshMode() });
+  store.startUser(); armSlow();
+  emit();
+  return 'restarted';
+}
+// '다른 구글 계정으로 연결': 구글 계정 고르는 창(select_account)을 바로 띄움. 고르면 그 계정으로 바뀌고, 창을 닫으면 지금 계정 그대로.
+// 같은 계정을 다시 고르면 계정 변경 알림이 오지 않으니 구독을 다시 시작.
+export async function switchAccount() {
+  const before = auth.currentUser?.uid;
+  await login();
+  if (before && auth.currentUser?.uid === before) await reloadData();
 }
 
 // 아래 함수들은 로그인한 화면에서만 불리므로 store가 이미 준비돼 있음
