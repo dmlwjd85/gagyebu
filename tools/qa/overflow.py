@@ -7,7 +7,7 @@
  - 본문(#main)은 세로 스크롤 상자(overflow-x: hidden)라서, 그 안에서 넘친 요소는 '잘린 것'으로 보고 넘침으로 셈
  - 환경변수 QA_SCALE=1.6 → 설정의 '본문 글자 크기'를 바꿔서 검사, QA_WIDTHS=320,360,1280 → 검사할 폭
 """
-import sys, os, json, urllib.request as U
+import os, sys, json, urllib.request as U
 from playwright.sync_api import sync_playwright
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # 에뮬레이터 주소·프로젝트(emu.py 참고)
 URL = emu.app_url(sys.argv[1] if len(sys.argv) > 1 else 'http://127.0.0.1:4174/gagyebu/')

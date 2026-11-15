@@ -47,7 +47,7 @@ export function trendBars(rows, { currentYm, selectedYm } = {}) {
   const y = (v) => T + (H - T - B) * (1 - Math.max(0, v) / top);
   const col = (W - L - R) / rows.length;
   let grid = '';
-  for (let v = 0; v <= top + 1; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${v ? 'stroke-dasharray="3 3"' : ''}/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end" fill="currentColor" class="text-ink-sub" style="font-size:10px">${v ? shortWon(v) : 0}</text>`;
+  for (let v = 0; v <= top + 1; v += step) grid += `<line x1="${L}" x2="${W - R}" y1="${y(v)}" y2="${y(v)}" stroke="var(--line)" ${v ? 'stroke-dasharray="3 3"' : ''}/><text x="${L - 4}" y="${y(v) + 4}" text-anchor="end" fill="currentColor" class="text-ink-sub tabular-nums" style="font-size:10px">${v ? shortWon(v) : 0}</text>`;
   const bars = rows.map((r, i) => {
     const x = L + i * col + col / 2, cur = r.ym === currentYm, sel = r.ym === selectedYm;
     return `<g class="bar-g" data-bar="${r.ym}" role="button" tabindex="0" aria-pressed="${sel}" aria-label="${Number(r.ym.slice(5))}월 지출 ${spendText(r.expense)}, 남긴 돈 ${formatWon(r.saved)}">
