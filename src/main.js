@@ -56,7 +56,7 @@ document.addEventListener('pointerdown', (e) => { const f = e.target.closest?.('
 document.addEventListener('pointerout', (e) => { if (e.target.closest?.('.fab') && !e.relatedTarget?.closest?.('.fab')) releaseFab(); });
 document.addEventListener('keydown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.repeat && (e.key === 'Enter' || e.key === ' ')) pressFab(f); });
 document.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') releaseFab(); });
-import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
+import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView, syncIssue } from './ui/views.js';
 import { assetsView, taxView } from './ui/assetsView.js';
 import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
 
@@ -82,6 +82,9 @@ const headerBack = (view) => (view === 'settings' ? { to: 'home', label: '홈으
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
 const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, ownerFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, assetOpen: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
 const today = () => ymd(new Date());
+// '이 계정엔 기록이 없어요' 안내를 이 계정에서 그만 보기(이 기기에만, 계정마다 따로)
+const EMPTY_OK = (uid) => `emptyAccountOk:${uid}`;
+const emptyOk = (user) => { try { return !!user && localStorage.getItem(EMPTY_OK(user.uid)) === '1'; } catch { return false; } };
 
 function model() {
   const storedStart = state.profile?.monthStartDay ?? 1;
@@ -108,6 +111,7 @@ function model() {
     insight: topIncrease(periodTxs, prevTxs),
     wide: window.matchMedia('(min-width: 768px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale, install: curInstall(),
     mode: state.mode ?? null, legacyMode: state.legacyMode !== false && !state.mode, features: state.features, settings: state.settings ?? null,
+    sync: syncIssue(state, { online: navigator.onLine, emptyOk: emptyOk(state.user) }),
   };
 }
 
@@ -156,7 +160,7 @@ function render() {
   if (ui.view === 'import' && !IMP) loadImp().then(render);
   if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
   const ask = !!(state.askMode && state.settingsLoaded && ui.view === 'home');
-  const body = ask ? onboardingView() : ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
+  const body = ask ? onboardingView(m) : ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
     : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView, assets: assetsView, tax: taxView }[ui.view](m, ui);
   // 어느 화면에서든(연금·설정·검색 포함) 아래 메뉴로 쨈 버튼·홈에 갈 수 있게 항상 보임
   const nav = !ask;
@@ -882,6 +886,18 @@ app.addEventListener('click', async (e) => {
       try { await data.login(); } catch (err) { ui.loginError = data.loginErrorText(err); console.error(err); render(); }
       return;
     case 'login-test': return data.loginTestUser();
+    case 'reload-data': {
+      const r = await data.reloadData();
+      if (r === 'restarted') toast('기록을 다시 불러오고 있어요.');
+      return;
+    }
+    case 'switch-account':
+      try { await data.switchAccount(); render(); }
+      catch (err) { console.error(err); toast(data.loginErrorText(err)); }
+      return;
+    case 'empty-ok':
+      try { localStorage.setItem(EMPTY_OK(state.user.uid), '1'); } catch { /* 저장 못 하면 이번만 */ }
+      return render();
     case 'logout': if (await confirmDialog({ title: '로그아웃할까요?', body: '기록은 그대로 있어요.', ok: '로그아웃' })) { await data.logout(); ui.view = 'home'; } return;
     case 'tips-reset': localStorage.removeItem('tips'); pickTip(); return toast('팁을 처음부터 다시 보여 줄게요.');
     case 'kept-retry': {

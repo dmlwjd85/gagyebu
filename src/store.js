@@ -1,6 +1,6 @@
 // Firestore 데이터 계층(로그인한 뒤에만 불러옴). 모든 경로는 users/{uid} 아래.
 // 로그인 화면에서는 이 파일과 Firestore SDK(약 150kB, 압축 기준)를 받지 않아 첫 화면이 빠름.
-import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, getDocFromCache, getDocFromServer, getDocs, getDocsFromCache, Timestamp } from 'firebase/firestore';
+import { initializeFirestore, persistentLocalCache, persistentMultipleTabManager, connectFirestoreEmulator, doc, collection, onSnapshot, query, where, orderBy, limit, setDoc, deleteDoc, writeBatch, serverTimestamp, updateDoc, arrayUnion, arrayRemove, deleteField, getDoc, getDocFromCache, getDocFromServer, getDocs, getDocsFromCache, getDocsFromServer, Timestamp } from 'firebase/firestore';
 import { signOut, deleteUser } from 'firebase/auth';
 import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
@@ -21,6 +21,24 @@ let state, emit, writeErrorHandler;
 export function bind(ctx) { state = ctx.state; emit = ctx.emit; writeErrorHandler = (e, retry) => ctx.onError?.(e, retry); }
 
 let unsubs = [], txUnsub = null, budgetUnsub = null;
+// 구독 실패(권한 거부·서버 오류 등)를 화면에 알림. 이전에는 오류 처리기가 없어 실패해도 0원 화면이 조용히 남았음.
+// 같은 계정의 구독일 때만(계정을 바꾼 뒤 예전 구독 오류는 무시). 읽기만 하고 아무것도 쓰지 않음.
+function onFail(where) {
+  const uid = state.user?.uid;
+  return (e) => {
+    console.error(`[쨈 가계부] ${where} 불러오기 실패`, e);
+    if (!state.user || state.user.uid !== uid) return;
+    state.syncError = { code: e?.code || 'unknown', where };
+    emit();
+  };
+}
+// onSnapshot + 실패 알림. 서버에서 정상 응답이 오면 오류 표시를 지움
+function watch(ref, opts, fn, where = ref.path || '목록') {
+  return onSnapshot(ref, opts, (snap) => {
+    if (state.syncError && !snap.metadata.fromCache) state.syncError = null;
+    fn(snap);
+  }, onFail(where));
+}
 export function stopAll() {
   unsubs.forEach((f) => f()); unsubs = []; txUnsub?.(); txUnsub = null; budgetUnsub?.(); budgetUnsub = null;
 }
@@ -42,35 +60,39 @@ globalThis.addEventListener?.('storage', (e) => {
 });
 export function startUser() {
   state.kept = keptList(state.user.uid);
-  unsubs.push(onSnapshot(u(), { includeMetadataChanges: true }, (snap) => {
+  let checked = false;
+  unsubs.push(watch(u(), { includeMetadataChanges: true }, (snap) => {
     state.profile = snap.exists() ? snap.data() : { monthStartDay: 1 };
     state.profileLoaded = true;
+    // 캐시에서 '없음'으로 온 것(서버 응답 전·오프라인)은 아직 모르는 것: 안내 띠가 0원 화면을 '불러옴'으로 착각하지 않게
+    state.profileKnown = snap.exists() || !snap.metadata.fromCache;
     if (!snap.exists() && !snap.metadata.fromCache) seedDefaults();
+    if (!checked && !snap.metadata.fromCache) { checked = true; checkEmpty(); }
     emit();
   }));
-  unsubs.push(onSnapshot(col('categories'), (s) => {
+  unsubs.push(watch(col('categories'), {}, (s) => {
     state.categories = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     emit();
   }));
-  unsubs.push(onSnapshot(col('accounts'), (s) => {
+  unsubs.push(watch(col('accounts'), {}, (s) => {
     state.accounts = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     emit();
   }));
   // M2: 자동 분류 규칙·반복 거래·저축 목표 (모두 개수가 적어 전체 구독)
   // 가져오기 묶음 기록(되돌리기용): 묶음 id·건수·기간·형식 이름만(파일 이름·원본 없음)
-  unsubs.push(onSnapshot(col('imports'), (s) => {
+  unsubs.push(watch(col('imports'), {}, (s) => {
     // at(서버 시각) → 이 기기 시간 기준 'YYYY-MM-DDTHH:mm' 글자
     const local = (t) => { const x = t?.toDate?.(); return x ? `${ymd(x)}T${String(x.getHours()).padStart(2, '0')}:${String(x.getMinutes()).padStart(2, '0')}` : ''; };
     state.imports = s.docs.map((d) => { const v = d.data({ serverTimestamps: 'estimate' }); return { id: d.id, ...v, at: local(v.at) }; })
       .sort((a, b) => b.at.localeCompare(a.at) || b.id.localeCompare(a.id));
     emit();
   }));
-  unsubs.push(onSnapshot(col('rules'), (s) => { state.rules = s.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }));
-  unsubs.push(onSnapshot(col('goals'), (s) => {
+  unsubs.push(watch(col('rules'), {}, (s) => { state.rules = s.docs.map((d) => ({ id: d.id, ...d.data() })); emit(); }));
+  unsubs.push(watch(col('goals'), {}, (s) => {
     state.goals = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     emit();
   }));
-  unsubs.push(onSnapshot(u('settings', 'prefs'), (s) => {
+  unsubs.push(watch(u('settings', 'prefs'), {}, (s) => {
     state.settings = s.exists() ? { id: s.id, ...s.data() } : null;
     state.settingsLoaded = true;
     applyMode(state.settings);
@@ -78,22 +100,34 @@ export function startUser() {
   }));
   let posted = false;
   const byOrder = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
-  unsubs.push(onSnapshot(col('assetAccounts'), (s) => { state.assetAccounts = byOrder(s); emit(); }));
-  unsubs.push(onSnapshot(col('holdings'), (s) => {
+  unsubs.push(watch(col('assetAccounts'), {}, (s) => { state.assetAccounts = byOrder(s); emit(); }));
+  unsubs.push(watch(col('holdings'), {}, (s) => {
     state.holdings = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
     emit();
   }));
-  unsubs.push(onSnapshot(col('contributions'), (s) => {
+  unsubs.push(watch(col('contributions'), {}, (s) => {
     state.contributions = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
     emit();
   }));
-  unsubs.push(onSnapshot(u('assetPrefs', 'tax'), (s) => { state.assetPrefs = s.exists() ? { id: s.id, ...s.data() } : null; emit(); }));
-  unsubs.push(onSnapshot(col('recurring'), { includeMetadataChanges: true }, (s) => {
+  unsubs.push(watch(u('assetPrefs', 'tax'), {}, (s) => { state.assetPrefs = s.exists() ? { id: s.id, ...s.data() } : null; emit(); }));
+  unsubs.push(watch(col('recurring'), { includeMetadataChanges: true }, (s) => {
     state.recurring = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.dayOfMonth - b.dayOfMonth);
     // 서버 기준 목록을 받은 뒤 한 번만 밀린 회차 기록(캐시만 보고 쓰면 다른 기기 기록을 모름)
     if (!posted && !s.metadata.fromCache) { posted = true; postRecurring(ymd(new Date())); retryKept().catch((e) => console.error(e)); }
     emit();
   }));
+}
+
+// 로그인 직후 한 번: 이 계정에 기록이 하나라도 있는지 서버에서 1건만 읽어 봄(쓰기 없음).
+// 하나도 없으면 '다른 구글 계정으로 연결할까요?' 안내(다른 계정으로 잘못 들어온 경우를 쉽게 알아채게)
+async function checkEmpty() {
+  const uid = state.user?.uid;
+  try {
+    const s = await getDocsFromServer(query(col('transactions'), limit(1)));
+    if (state.user?.uid !== uid) return;
+    state.accountEmpty = s.empty;
+    emit();
+  } catch (e) { console.error(e); }
 }
 
 // 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
@@ -190,17 +224,18 @@ export function watchMonth(ym) {
     txUnsub?.();
     state.txWindow = key; state.txLoaded = false;
     const q = query(col('transactions'), where('date', '>=', start), where('date', '<', end), orderBy('date', 'desc'));
-    txUnsub = onSnapshot(q, { includeMetadataChanges: true }, (s) => {
+    txUnsub = watch(q, { includeMetadataChanges: true }, (s) => {
       state.txs = s.docs.map((d) => ({ id: d.id, ...d.data({ serverTimestamps: 'estimate' }) }));
       state.txLoaded = true;
       state.pendingWrites = s.metadata.hasPendingWrites;
+      if (s.docs.length) state.accountEmpty = false;
       emit();
-    });
+    }, 'transactions');
   }
   if (state.budgetYm !== ym) {
     budgetUnsub?.();
     state.budgetYm = ym; state.budget = null;
-    budgetUnsub = onSnapshot(u('budgets', ym), (s) => { state.budget = s.exists() ? s.data() : { total: 0 }; emit(); });
+    budgetUnsub = watch(u('budgets', ym), {}, (s) => { state.budget = s.exists() ? s.data() : { total: 0 }; emit(); }, 'budgets');
   }
 }
 

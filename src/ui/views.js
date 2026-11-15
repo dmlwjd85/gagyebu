@@ -141,6 +141,56 @@ export function budgetItemsHtml(m, ml) {
     ${open ? `<ul id="cat-left" class="hero-cats">${ml.items.map((i) => { const c = catOf(m, i.categoryId); return `<li class="hero-cat text-body${i.over ? ' is-over' : ''}"><span aria-hidden="true">${esc(c.emoji)}</span><span class="hero-cat-name">${esc(c.name)}</span><span class="hero-cat-amt tabular-nums">${i.over ? '⚠️ ' : ''}${formatWon(i.left)}<span class="sr-only">${i.over ? ' 넘쳤어요' : ' 남았어요'}</span></span></li>`; }).join('')}</ul>` : ''}`;
 }
 
+// ── 연결된 구글 계정·불러오기 안내 ──
+// 프로필 사진은 구글 주소(googleusercontent)에서 받음. 못 받으면 뒤에 깔린 첫 글자가 보임
+export function avatarHtml(user, cls = 'acct-ava') {
+  const name = user?.displayName || user?.email || '?';
+  const initial = esc(Array.from(name.trim())[0]?.toUpperCase() || '?');
+  const photo = /^https:\/\//.test(user?.photoURL || '') ? `<img src="${esc(user.photoURL)}" alt="" referrerpolicy="no-referrer" loading="lazy" decoding="async">` : '';
+  return `<span class="${cls}" aria-hidden="true"><span>${initial}</span>${photo}</span>`;
+}
+const acctLine = (user) => `<span class="acct-line">${avatarHtml(user, 'acct-ava acct-ava-sm')}<span class="acct-mail">${esc(user?.email || user?.displayName || '이름 없는 계정')}</span></span>`;
+// 홈 안내 띠 종류(없으면 null). 순서: 앱 조각 실패 → 서버 읽기 실패 → 오프라인·오래 걸림 → 빈 계정
+export function syncIssue(s, { online = true, emptyOk = false } = {}) {
+  if (!s?.user) return null;
+  if (s.storeFailed) return 'store';
+  if (s.syncError) return ['permission-denied', 'unauthenticated'].includes(s.syncError.code) ? 'denied' : 'error';
+  const loaded = !!(s.profileKnown && s.txLoaded);
+  if (!loaded && !online) return 'offline';
+  if (!loaded && s.slow) return 'slow';
+  if (loaded && s.accountEmpty && !emptyOk) return 'empty';
+  return null;
+}
+const ISSUE = {
+  store: ['⚠️', '기록을 불러오지 못했어요', '앱 일부를 받지 못했어요. 기록은 지워지지 않고 그대로 있어요. ‘다시 불러오기’를 눌러 주세요.'],
+  denied: ['⚠️', '이 계정으로 기록을 읽지 못했어요', '기록은 지워지지 않았어요. 다시 불러오거나, 평소 쓰던 구글 계정으로 다시 연결해 주세요.'],
+  error: ['⚠️', '기록을 불러오지 못했어요', '기록은 지워지지 않았어요. 잠시 뒤 ‘다시 불러오기’를 눌러 주세요.'],
+  offline: ['📴', '인터넷이 연결되지 않았어요', '그래서 기록을 아직 못 불러왔어요. 0원으로 보여도 기록이 지워진 게 아니에요. 연결되면 바로 불러와요.'],
+  slow: ['⏳', '기록을 불러오는 데 오래 걸려요', '0원으로 보여도 기록이 지워진 게 아니에요. 다시 불러오거나, 평소 쓰던 구글 계정이 맞는지 확인해 주세요.'],
+  empty: ['🔎', '이 계정엔 기록이 없어요', '다른 구글 계정으로 연결할까요? 평소 쓰던 계정으로 연결하면 기록이 다시 보여요.'],
+};
+export function syncBanner(m) {
+  const kind = m.sync;
+  if (!kind || !ISSUE[kind]) return '';
+  const [icon, title, body] = ISSUE[kind];
+  const btns = kind === 'empty'
+    ? '<button class="btn-primary" data-action="switch-account">다른 구글 계정으로 연결</button><button class="btn-ghost" data-action="empty-ok">이 계정으로 쓸게요</button>'
+    : `<button class="btn-primary" data-action="reload-data">다시 불러오기</button>${kind === 'offline' ? '' : '<button class="btn-ghost" data-action="switch-account">구글 계정 다시 연결</button>'}`;
+  return `<section class="sync-banner${kind === 'empty' ? ' is-info' : ''}" role="${kind === 'empty' ? 'status' : 'alert'}" aria-labelledby="sync-h" data-sync="${kind}">
+    <h2 id="sync-h" class="text-head"><span aria-hidden="true">${icon}</span> ${title}</h2>
+    <p class="text-body">${body}</p>
+    <p class="text-caption text-ink-sub">지금 연결된 계정 ${acctLine(m.user)}</p>
+    <div class="sync-btns">${btns}</div></section>`;
+}
+// 설정 맨 위: 지금 연결된 구글 계정(사진·이름·이메일)과 다른 계정으로 연결
+export function accountCard(m) {
+  const u = m.user || {};
+  return `<section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-acc"><h2 id="s-acc" class="text-head">연결된 구글 계정</h2>
+      <div class="acct-row">${avatarHtml(u)}<p class="text-body min-w-0 break-words">${esc(u.displayName || '이름 없음')}<span class="block text-caption text-ink-sub break-all">${esc(u.email || '')}</span></p></div>
+      <p class="text-caption text-ink-sub break-words">기록은 이 구글 계정에 저장돼요. 기록이 안 보이면 평소 쓰던 계정으로 다시 연결해 보세요.</p>
+      <div class="flex flex-wrap gap-2"><button class="btn-primary" data-action="switch-account">다른 구글 계정으로 연결</button><button class="btn-ghost" data-action="logout">로그아웃</button></div></section>`;
+}
+
 export function homeView(m) {
   const w = m.weather;
   const isCur = m.viewYm === m.curYm;
@@ -169,15 +219,18 @@ export function homeView(m) {
   const recent = m.periodTxs.slice().sort((a, b) => b.date.localeCompare(a.date) || (b.createdAt?.seconds ?? 0) - (a.createdAt?.seconds ?? 0)).slice(0, m.wide ? 6 : 3);
   const top3 = byCategory(m.periodTxs).filter((c) => c.amount > 0).slice(0, 3);
   // 첫 실행(이번 달 기록 0, 모바일): 안내가 아래 메뉴·추가 버튼에 가리지 않게 요약 카드 바로 아래로 올림(QA L4, 360×780)
-  const firstRun = isCur && m.txLoaded && !m.periodTxs.length && !m.wide;
+  // 불러오지 못한 상태(안내 띠가 있음)면 '아직 기록이 없어요'·무지출 같은 말을 하지 않음
+  const unsure = !!m.sync && m.sync !== 'empty';
+  const firstRun = isCur && m.txLoaded && !unsure && !m.periodTxs.length && !m.wide;
   const recentSec = `<section class="card-solid p-4" aria-labelledby="recent-h">
       <div class="flex items-center justify-between"><h2 id="recent-h" class="text-head">최근 기록</h2>
         ${m.periodTxs.length ? '<button class="link-btn" data-nav="calendar" data-mode="list">전체 보기 ›</button>' : ''}</div>
-      ${!m.txLoaded ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
+      ${!m.txLoaded || (unsure && !recent.length) ? skeleton(3) : recent.length ? `<ul class="mt-2 -mx-2">${recent.map((t) => txRow(m, t)).join('')}</ul>`
         : empty('🐣', isCur ? '아직 기록이 없어요. 쨈 컵 모양 버튼을 눌러 첫 기록을 10초 만에 남겨 보세요.' : '이 달에는 기록이 없어요.')}
     </section>`;
   return `<h1 class="sr-only">홈</h1><div class="view-grid home-grid">
     <div class="home-col home-main">
+      ${syncBanner(m)}
       <section class="hero-card px-5 pt-[18px] pb-4" aria-label="요약">${hero}</section>
       ${firstRun ? recentSec : ''}
       <section class="stat-grid" aria-label="이번 달 통계">
@@ -186,7 +239,7 @@ export function homeView(m) {
         ${stat('남긴 돈', compactWon(m.tot.saved), formatWon(m.tot.saved), m.tot.saved < 0 ? 'text-expense' : '')}
       </section>
       ${modeHomeCards(m)}
-      ${m.streak || m.noSpend ? `<div class="glass px-4 py-3 text-body flex items-center gap-2"><span aria-hidden="true">🔥</span><span>${m.streak ? `${m.streak}일째 기록 중` : '오늘 기록하면 연속 기록 시작'}${m.noSpend ? ` · 이번 달 무지출 🌱 ${m.noSpend}일` : ''}</span></div>` : ''}
+      ${!unsure && (m.streak || m.noSpend) ? `<div class="glass px-4 py-3 text-body flex items-center gap-2"><span aria-hidden="true">🔥</span><span>${m.streak ? `${m.streak}일째 기록 중` : '오늘 기록하면 연속 기록 시작'}${m.noSpend ? ` · 이번 달 무지출 🌱 ${m.noSpend}일` : ''}</span></div>` : ''}
       ${assetHomeLink(m)}
       <div id="tip-slot"></div>
       <div id="install-slot" class="empty:hidden"></div>
@@ -512,14 +565,13 @@ export function settingsView(m, ui) {
   const list = m.categories.filter((c) => c.kind === kind);
   return `<div class="flex flex-col gap-3">
     <h1 class="text-title">설정</h1>
+    ${syncBanner(m)}
+    ${accountCard(m)}
     <p class="glass px-4 py-3 text-caption">🔒 광고 0 · 알림 스팸 0 · 내 데이터는 내 것. 기록은 내 계정에만 저장돼요.</p>
     ${installCard(m.install)}
     <div class="view-grid">
     <div class="flex flex-col gap-3">
     ${modeSettings(m)}
-    <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-acc"><h2 id="s-acc" class="text-head">계정</h2>
-      <p class="text-body">${esc(m.user?.displayName || '이름 없음')}<span class="block text-caption text-ink-sub">${esc(m.user?.email || '')}</span></p>
-      <button class="btn-ghost self-start" data-action="logout">로그아웃</button></section>
     <section class="card-solid p-4 flex flex-col gap-3" aria-labelledby="s-view"><h2 id="s-view" class="text-head">화면</h2>
       <div class="seg self-start" role="radiogroup" aria-label="테마">${[['system', '시스템'], ['light', '라이트'], ['dark', '다크']].map(([v, l]) => `<button role="radio" aria-checked="${m.themeMode === v}" data-theme="${v}">${l}</button>`).join('')}</div>
       ${lookControls(m)}
@@ -606,8 +658,8 @@ function modeSettings(m) {
   </section>`;
 }
 
-export function onboardingView() {
-  return `<div class="max-w-[420px] mx-auto flex flex-col gap-3"><h1 class="text-title">어떻게 쓰시나요?</h1>
+export function onboardingView(m) {
+  return `<div class="max-w-[420px] mx-auto flex flex-col gap-3">${m ? syncBanner(m) : ''}<h1 class="text-title">어떻게 쓰시나요?</h1>
     <p class="text-body text-ink-sub break-words">쓰는 방식에 맞춰 메뉴를 줄여 줘요. 설정에서 언제든 바꿀 수 있고, 기능은 하나씩 섞을 수 있어요.</p>
     <div class="mode-grid">${MODES.map((md) => `<button type="button" class="mode-pick" data-pick-mode="${md.id}">
       <span class="text-2xl shrink-0" aria-hidden="true">${md.emoji}</span>

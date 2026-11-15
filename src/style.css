@@ -872,3 +872,18 @@ html.dark .calc-chip { color: #E4E9FF; background: linear-gradient(180deg, var(-
 .calc-in { flex: none; display: grid; place-items: center; width: 44px; height: 44px; border-radius: 12px; color: var(--cup-ink); }
 .calc-in:hover { background: var(--line); }
 html.dark .calc-in { color: #E4E9FF; }
+
+/* 연결된 구글 계정·불러오기 안내 띠(홈·설정 맨 위). 글자 160%에서도 줄바꿈되고 단추는 아래로 내려감 */
+.sync-banner { display: flex; flex-direction: column; gap: 8px; padding: 14px 16px; border-radius: 24px; border: 2px solid #B45309; background: #FFF7ED; color: #431407; min-width: 0; overflow-wrap: anywhere; }
+.sync-banner.is-info { border-color: var(--primary); background: var(--surface-solid); color: inherit; }
+html.dark .sync-banner { background: #2A1A0C; color: #FFEDD5; border-color: #F59E0B; }
+html.dark .sync-banner.is-info { background: var(--surface-solid); color: inherit; border-color: var(--primary); }
+.sync-banner .text-ink-sub { color: inherit; opacity: .85; }
+.sync-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.sync-btns > * { flex: 1 1 auto; min-width: 0; white-space: normal; text-align: center; }
+.acct-row { display: flex; align-items: center; gap: 12px; min-width: 0; }
+.acct-line { display: inline-flex; align-items: center; gap: 6px; vertical-align: middle; min-width: 0; max-width: 100%; font-weight: 700; }
+.acct-mail { min-width: 0; overflow-wrap: anywhere; }
+.acct-ava { position: relative; flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; overflow: hidden; background: var(--primary); color: var(--on-primary, #fff); font-weight: 800; }
+.acct-ava-sm { width: 22px; height: 22px; font-size: 12px; }
+.acct-ava > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
