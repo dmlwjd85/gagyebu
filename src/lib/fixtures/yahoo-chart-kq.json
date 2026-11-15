@@ -1,0 +1,49 @@
+{
+ "chart": {
+  "result": [
+   {
+    "meta": {
+     "currency": "KRW",
+     "symbol": "247540.KQ",
+     "exchangeName": "KOE",
+     "instrumentType": "EQUITY",
+     "regularMarketTime": 1794551413,
+     "regularMarketPrice": 90800.0,
+     "shortName": "ECOPROBM",
+     "timezone": "KST"
+    },
+    "timestamp": [
+     1793577600,
+     1793664000,
+     1793750400,
+     1793836800,
+     1793923200,
+     1794182400,
+     1794268800,
+     1794355200,
+     1794441600,
+     1794528000
+    ],
+    "indicators": {
+     "quote": [
+      {
+       "close": [
+        92100.0,
+        87600.0,
+        97200.0,
+        89700.0,
+        83100.0,
+        75900.0,
+        82500.0,
+        91900.0,
+        89900.0,
+        90800.0
+       ]
+      }
+     ]
+    }
+   }
+  ],
+  "error": null
+ }
+}

@@ -1,0 +1,37 @@
+[
+ {
+  "localDate": "20261109",
+  "closePrice": 187000.0,
+  "openPrice": 187200.0,
+  "highPrice": 195400.0,
+  "lowPrice": 183800.0
+ },
+ {
+  "localDate": "20261110",
+  "closePrice": 197300.0,
+  "openPrice": 199400.0,
+  "highPrice": 201500.0,
+  "lowPrice": 196400.0
+ },
+ {
+  "localDate": "20261111",
+  "closePrice": 208000.0,
+  "openPrice": 197100.0,
+  "highPrice": 208500.0,
+  "lowPrice": 196300.0
+ },
+ {
+  "localDate": "20261112",
+  "closePrice": 206500.0,
+  "openPrice": 208500.0,
+  "highPrice": 214000.0,
+  "lowPrice": 206000.0
+ },
+ {
+  "localDate": "20261113",
+  "closePrice": 209000.0,
+  "openPrice": 214000.0,
+  "highPrice": 216000.0,
+  "lowPrice": 205000.0
+ }
+]

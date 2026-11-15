@@ -14,7 +14,7 @@ function priceBanner(holdings) {
   const line = s.has
     ? `시세 기준일 ${s.newest}${s.mixed ? ` · 가장 오래된 종목 ${s.oldest}` : ''}`
     : '시세 기준일 없음. 종목을 입력하면 여기에 날짜가 보여요.';
-  return `<p class="glass px-4 py-3 text-body" role="status">${esc(line)}<span class="block text-caption text-ink-sub mt-1">시세는 금융위원회 주식시세정보·증권상품시세정보(한국거래소, 공공누리 4유형)예요. 이 계정 안에만 두고 바깥에 다시 올리지 않아요. 펀드 기준가는 직접 입력해요.</span></p>`;
+  return `<p class="glass px-4 py-3 text-body" role="status">${esc(line)}<span class="block text-caption text-ink-sub mt-1">시세: 네이버 증권·Yahoo Finance, 평일 장 마감 뒤 종가라 실시간이 아니에요. 이 계정 안에만 두고, 펀드 기준가는 직접 입력해요.</span></p>`;
 }
 
 function metric(label, value, cls = '') {

@@ -1,15 +1,19 @@
-# 평일 14:30 KST(05:30 UTC) 이후. 금요일 종가는 다음 영업일 13시 이후에 열리므로 그 다음 실행이 가져간다.
-# 공개 JSON을 만들지 않는다. 시크릿이 없으면 스크립트가 쓰기를 하지 않고 성공으로 끝난다.
+# 시세는 키 없이 받는다(네이버 증권 → 실패 시 Yahoo Finance). 공개 JSON을 만들지 않는다.
+# 평일 16:40 KST(07:40 UTC): 장 마감(15:30)·종가 확정(16:30) 뒤. 실행이 늦어지거나 빠질 때를 대비해 다음 날 07:30 KST(22:30 UTC, 전날 기준)에 한 번 더.
+# 같은 종가·날짜면 다시 쓰지 않으므로 두 번 돌아도 결과가 같다. 끄려면 저장소 변수 PRICE_SYNC=off.
+# 시세 조회가 모두 실패하거나 쓰기가 실패하면 이 작업이 실패로 표시된다.
 name: Sync prices
 on:
   schedule:
-    - cron: '30 5 * * 1-5'
+    - cron: '40 7 * * 1-5'
+    - cron: '30 22 * * 0-4'
   workflow_dispatch: {}
 permissions: { contents: read }
 concurrency: { group: sync-prices, cancel-in-progress: false }
 jobs:
   sync:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -18,5 +22,5 @@ jobs:
       - run: npm install --no-save firebase-admin@13
       - run: node tools/prices/sync-prices.mjs
         env:
-          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
           FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          PRICE_SYNC: ${{ vars.PRICE_SYNC }}
