@@ -1,0 +1,16 @@
+{
+ "stockEndType": "etf",
+ "itemCode": "069500",
+ "reutersCode": "069500",
+ "stockName": "KODEX 200",
+ "sosok": "0",
+ "closePrice": "83,115",
+ "compareToPreviousClosePrice": "-1,125",
+ "fluctuationsRatio": "-1.34",
+ "marketStatus": "CLOSE",
+ "localTradedAt": "2026-11-13T20:20:19+09:00",
+ "stockExchangeName": "KOSPI",
+ "delayTime": 0,
+ "delayTimeName": "실시간",
+ "nationType": "KOR"
+}

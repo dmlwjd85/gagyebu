@@ -120,7 +120,8 @@ describe('화면 문구', () => {
     expect(html).toContain('시세 기준일 2026-10-16');
     expect(html).toContain('시세 기준일 2026-10-01');
     expect(html).toContain('만기까지 31일');
-    expect(html).toContain('공공누리');
+    expect(html).toContain('네이버 증권·Yahoo Finance');
+    expect(html).not.toContain('공공누리');
     expect(html).not.toContain('undefined');
   });
   test('세액공제 화면에 한도·환급·세율이 있다', () => {

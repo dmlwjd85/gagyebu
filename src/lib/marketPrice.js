@@ -1,23 +1,11 @@
-// 금융위원회 주식시세·증권상품시세(ETF) 응답을 종가·기준일로만 읽는다.
-// 순자산가치(nav)는 쓰지 않는다. 펀드 기준가는 직접 입력.
-// 시세는 사용자 보유 문서에만 기록하고, 공개 파일로 다시 올리지 않는다.
+// 자동 시세 갱신 계획(어느 문서에 어떤 종가를 쓸지). 시세는 quoteSources.js(네이버 증권 → Yahoo Finance)에서 받는다.
+// 펀드 기준가는 직접 입력. 시세는 사용자 보유 문서에만 기록하고, 공개 파일로 다시 올리지 않는다.
+// priceSource 값 'dataGoKr' 는 규칙·저장 형식을 바꾸지 않으려고 그대로 두며, 이제 '자동 시세'라는 뜻으로만 쓴다.
 import { normalizeCode } from './assets.js';
 import { isYmd } from './dates.js';
+import { PRICE_MAX } from './quoteSources.js';
 
 export { normalizeCode };
-
-export const QUOTE_ENDPOINTS = {
-  stock: [
-    'https://apis.data.go.kr/1160100/GetStockSecuritiesInfoService_V2/getStockPriceInfo_V2',
-    'https://apis.data.go.kr/1160100/service/GetStockSecuritiesInfoService/getStockPriceInfo',
-  ],
-  etf: [
-    'https://apis.data.go.kr/1160100/GetSecuritiesProductInfoService_V2/getETFPriceInfo_V2',
-    'https://apis.data.go.kr/1160100/service/GetSecuritiesProductInfoService/getETFPriceInfo',
-  ],
-};
-
-const PRICE_MAX = 10_000_000_000;
 
 export function kstYmd(now = new Date()) {
   const t = new Date(now.getTime() + 9 * 60 * 60 * 1000);
@@ -25,13 +13,12 @@ export function kstYmd(now = new Date()) {
   return `${t.getUTCFullYear()}-${p(t.getUTCMonth() + 1)}-${p(t.getUTCDate())}`;
 }
 
+/** 시세 동기화 설정. 시세에는 키가 필요 없고, 쓰기에 서비스 계정만 필요하다. PRICE_SYNC=off 면 끈다. */
 export function syncConfig(env = {}) {
-  const key = typeof env.DATA_GO_KR_KEY === 'string' ? env.DATA_GO_KR_KEY.trim() : '';
+  const off = String(env.PRICE_SYNC ?? '').trim().toLowerCase() === 'off';
+  if (off) return { ok: false, off: true, missing: [] };
   const serviceAccount = typeof env.FIREBASE_SERVICE_ACCOUNT === 'string' ? env.FIREBASE_SERVICE_ACCOUNT.trim() : '';
-  const missing = [];
-  if (!key) missing.push('DATA_GO_KR_KEY');
-  if (!serviceAccount) missing.push('FIREBASE_SERVICE_ACCOUNT');
-  return missing.length ? { ok: false, missing } : { ok: true, missing: [], key, serviceAccount };
+  return serviceAccount ? { ok: true, off: false, missing: [], serviceAccount } : { ok: false, off: false, missing: ['FIREBASE_SERVICE_ACCOUNT'] };
 }
 
 export function parseServiceAccount(raw) {
@@ -51,73 +38,6 @@ export function parseServiceAccount(raw) {
   return obj;
 }
 
-function serviceKeyParam(key) {
-  return key.includes('%') ? key : encodeURIComponent(key);
-}
-
-export function buildQuoteUrl({ kind, index = 0, serviceKey, code, begin, end }) {
-  const list = QUOTE_ENDPOINTS[kind];
-  const base = list?.[index];
-  if (!base) throw new Error('시세 종류를 알 수 없어요.');
-  const norm = normalizeCode(code);
-  if (!norm) throw new Error('종목 코드가 없어요.');
-  const q = new URLSearchParams({
-    numOfRows: '30',
-    pageNo: '1',
-    resultType: 'json',
-    likeSrtnCd: norm,
-    beginBasDt: String(begin).replace(/-/g, ''),
-    endBasDt: String(end).replace(/-/g, ''),
-  });
-  return `${base}?serviceKey=${serviceKeyParam(serviceKey)}&${q.toString()}`;
-}
-
-function ymdFromBas(bas) {
-  const s = String(bas ?? '').trim();
-  if (!/^\d{8}$/.test(s)) return null;
-  const ymd = `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6, 8)}`;
-  return isYmd(ymd) ? ymd : null;
-}
-
-function parseClose(v) {
-  if (typeof v === 'number') return Number.isInteger(v) ? v : null;
-  if (typeof v !== 'string') return null;
-  const s = v.trim().replace(/,/g, '');
-  if (!/^\d+$/.test(s)) return null;
-  const n = Number(s);
-  return Number.isSafeInteger(n) ? n : null;
-}
-
-function parseItem(item) {
-  if (!item || typeof item !== 'object') return null;
-  const code = normalizeCode(item.srtnCd);
-  const date = ymdFromBas(item.basDt);
-  const close = parseClose(item.clpr);
-  if (!code || !date || close == null || close <= 0 || close > PRICE_MAX) return null;
-  return { code, date, close, name: typeof item.itmsNm === 'string' ? item.itmsNm : '' };
-}
-
-export function parseQuotePayload(payload) {
-  if (payload == null || typeof payload !== 'object' || Array.isArray(payload)) {
-    return { ok: false, error: 'bad-payload', quotes: [] };
-  }
-  const header = payload.response?.header ?? payload.header ?? {};
-  const resultCode = String(header.resultCode ?? payload.resultCode ?? '');
-  if (resultCode && resultCode !== '00' && resultCode !== '0') {
-    return { ok: false, error: resultCode, message: String(header.resultMsg ?? ''), quotes: [] };
-  }
-  const raw = payload.response?.body?.items?.item;
-  if (raw == null || raw === '') return { ok: true, quotes: [] };
-  const list = Array.isArray(raw) ? raw : [raw];
-  return { ok: true, quotes: list.map(parseItem).filter(Boolean) };
-}
-
-export function shouldFallback({ httpStatus, parsed }) {
-  if (httpStatus === 404 || httpStatus === 301 || httpStatus === 302) return true;
-  const c = String(parsed?.error ?? '');
-  return c === '12' || c === '04';
-}
-
 export function latestQuotes(quotes) {
   const map = new Map();
   for (const q of quotes ?? []) {
@@ -135,13 +55,20 @@ export function isUserHoldingPath(path) {
 }
 
 /**
- * 주식·ETF만, 같은 종류·같은 코드의 최신 종가만.
+ * 주식·ETF만, 같은 코드의 최신 종가만.
  * 저장된 기준일보다 오래된 시세는 건너뛴다(직접 입력한 더 새 날짜를 유지).
  * 종가·기준일이 같으면 쓰지 않는다(다시 돌려도 결과가 같음).
  * 삭제·다른 필드는 만들지 않는다.
  */
 export function planPriceUpdates(holdings, quotes) {
-  const qmap = new Map((quotes ?? []).map((q) => [`${q.kind}:${q.code}`, q]));
+  // 종목 코드만으로 찾는다: ETF를 '주식'으로 등록해도 같은 종가가 들어간다(시세 출처가 종류를 가리지 않음).
+  const qmap = new Map();
+  for (const q of quotes ?? []) {
+    const c = normalizeCode(q?.code);
+    if (!c) continue;
+    const prev = qmap.get(c);
+    if (!prev || String(q.date) > String(prev.date)) qmap.set(c, q);
+  }
   const updates = [];
   const skipped = [];
   for (const h of holdings ?? []) {
@@ -149,7 +76,7 @@ export function planPriceUpdates(holdings, quotes) {
     if (h.kind !== 'stock' && h.kind !== 'etf') { skipped.push({ path, reason: 'manual-kind' }); continue; }
     const code = normalizeCode(h.code);
     if (!code) { skipped.push({ path, reason: 'no-code' }); continue; }
-    const q = qmap.get(`${h.kind}:${code}`);
+    const q = qmap.get(code);
     if (!q) { skipped.push({ path, reason: 'no-quote' }); continue; }
     if (!Number.isInteger(q.close) || q.close <= 0 || q.close > PRICE_MAX || !isYmd(q.date)) {
       skipped.push({ path, reason: 'bad-quote' }); continue;
