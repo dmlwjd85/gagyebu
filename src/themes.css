@@ -1,0 +1,146 @@
+/* 분위기 톤은 화면 전체 바탕·본문색을 바꾸지 않는다.
+   바탕·본문·오로라는 design/tokens-a.css 라이트/다크 그대로.
+   --mood 는 고른 부분에만 쓴다.
+   data-tone-menu=on: 활성 탭, 위 막대.
+   data-tone-accent=on: 제목, 버튼 바탕(--primary). 버튼 글자는 --on-primary.
+   data-tone-card=on: 카드 바탕을 --mood 8%만 섞음. 12%는 금액·수입·다크 버튼이 4.5:1 아래로 떨어진다.
+   기본(data-theme=default)은 톤을 칠하지 않는다.
+   글자 대비는 중립 바탕·흰/어두운 면 기준 4.5:1. 하단 추가 버튼(흰 채움)도 그라데이션 양 끝 4.5:1. */
+
+html[data-theme="sakura"] {
+  --mood: #A81850;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #9A1850;
+  --mood-fab-2: #BE3260;
+}
+html.dark[data-theme="sakura"] {
+  --mood: #FFA3C0;
+  --mood-on: #3A1020;
+  --mood-fab-1: #C43A68;
+  --mood-fab-2: #B75776;
+}
+
+html[data-theme="ocean"] {
+  --mood: #0B5E78;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #0C5270;
+  --mood-fab-2: #1A6A88;
+}
+html.dark[data-theme="ocean"] {
+  --mood: #8AD4F0;
+  --mood-on: #06202C;
+  --mood-fab-1: #147898;
+  --mood-fab-2: #257F9C;
+}
+
+html[data-theme="maple"] {
+  --mood: #A33B12;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #9A3410;
+  --mood-fab-2: #C45218;
+}
+html.dark[data-theme="maple"] {
+  --mood: #FFB07A;
+  --mood-on: #2A1408;
+  --mood-fab-1: #A84818;
+  --mood-fab-2: #BF581F;
+}
+
+html[data-theme="snow"] {
+  --mood: #1E4E86;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #1A4478;
+  --mood-fab-2: #2E5C90;
+}
+html.dark[data-theme="snow"] {
+  --mood: #A9CFFF;
+  --mood-on: #0E1C30;
+  --mood-fab-1: #2A5A90;
+  --mood-fab-2: #3A74B0;
+}
+
+html[data-theme="retro"] {
+  --mood: #8C2E3A;
+  --mood-on: #FFFFFF;
+  --mood-fab-1: #7A2834;
+  --mood-fab-2: #A34420;
+}
+html.dark[data-theme="retro"] {
+  --mood: #FFB4A8;
+  --mood-on: #2A1214;
+  --mood-fab-1: #C44A40;
+  --mood-fab-2: #B36029;
+}
+
+/* 메뉴를 꺼도 강조 글씨가 --primary 를 바꿔도 활성 탭은 기본 색을 유지한다. */
+html[data-tone-menu="on"]:not([data-theme="default"]) {
+  --nav-accent: var(--mood);
+}
+html[data-tone-menu="on"]:not([data-theme="default"]) .app-top {
+  background: color-mix(in srgb, var(--mood) 14%, var(--bg));
+}
+html[data-tone-menu="on"]:not([data-theme="default"]) .app-top header {
+  color: var(--mood);
+}
+html[data-tone-menu="on"]:not([data-theme="default"]) .tabbar {
+  background: color-mix(in srgb, var(--mood) 14%, var(--surface-solid));
+}
+
+html[data-tone-accent="on"]:not([data-theme="default"]) {
+  --primary: var(--mood);
+  --on-primary: var(--mood-on);
+  --fab-1: var(--mood-fab-1);
+  --fab-2: var(--mood-fab-2);
+}
+/* text-head 는 글자 크기라 저장 버튼에도 붙는다. 그 버튼 바탕은 이미 --primary(=--mood)라
+   글자까지 --mood 로 칠하면 바탕과 같은 색이 된다. 채운 버튼과 그 안 글자는 --on-primary. */
+html[data-tone-accent="on"]:not([data-theme="default"]) :is(.text-title, .text-head):not(.tabular-nums):not(.text-expense):not(.text-income):not(.btn-primary, .btn-primary *) {
+  color: var(--mood);
+}
+html[data-tone-accent="on"]:not([data-theme="default"]) .btn-primary {
+  color: var(--on-primary);
+}
+/* 히어로 카드 글자는 흰 색을 유지한다. 제목 색이 그라데이션 위를 덮지 않게. */
+html[data-tone-accent="on"]:not([data-theme="default"]) .hero-card :is(.text-title, .text-head, .text-display, .text-body, .text-caption) {
+  color: var(--hero-ink);
+}
+
+html[data-tone-card="on"]:not([data-theme="default"]) :is(.card-solid, .glass):not(.hero-card) {
+  background: color-mix(in srgb, var(--mood) 8%, var(--surface-solid));
+}
+
+html[data-font="system"] body {
+  font-family: -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", "Malgun Gothic", "Segoe UI", sans-serif;
+}
+/* 저장값 gaegu. 보이는 글꼴은 나눔스퀘어라운드 서브셋. */
+html[data-font="gaegu"] body {
+  font-family: "Gagyebu Round", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+}
+/* 금액·합계·목록 숫자는 Pretendard 고정폭. */
+html[data-font="gaegu"] :is(.tabular-nums, [data-fit], .num) {
+  font-family: "Pretendard Variable", Pretendard, -apple-system, BlinkMacSystemFont, "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.look-grid {
+  display: grid;
+  font-size: calc(13px * var(--fs, 1));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 6.6em), 1fr));
+  gap: 8px;
+}
+.look-pick {
+  display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 4px;
+  min-width: 0; min-height: 44px; height: auto; padding: 8px 4px;
+  border-radius: 16px; border: 1px solid var(--ctl-line); background: var(--surface-solid); color: var(--ink);
+  cursor: pointer;
+}
+.look-pick[aria-checked="true"],
+.look-pick:has(:checked) { border-color: var(--primary); box-shadow: inset 0 0 0 1px var(--primary); }
+.look-swatch {
+  display: block; width: 100%; max-width: 72px; height: 22px; border-radius: 999px;
+  background: linear-gradient(90deg, var(--sw1), var(--sw2) 52%, var(--sw3));
+}
+.look-name {
+  max-width: 100%; font-size: 1em; line-height: 1.25; font-weight: 700;
+  text-align: center; word-break: keep-all; overflow-wrap: normal; white-space: normal;
+}

@@ -1,3 +1,5 @@
+import { openCalc } from './calcDialog.js';
+import { normalizeOp } from '../lib/calc.js';
 export const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
 export const $ = (sel, root = document) => root.querySelector(sel);
 export const $$ = (sel, root = document) => [...root.querySelectorAll(sel)];
@@ -35,7 +37,18 @@ export function fitNum(el) {
   el.style.fontSize = `${size}px`;
   if (lab && parseFloat(getComputedStyle(lab).fontSize) > size) lab.style.fontSize = `${size}px`;
 }
-export const fitNums = (root = document) => $$('[data-fit]', root).forEach(fitNum);
+// 월급날 칩: 한 줄에 다 안 들어가면 짧은 문구(D-n)로. 줄바꿈하지 않아 본문 위치가 그대로
+export function fitPayday(root = document) {
+  $$('.payday-chip', root).forEach((c) => {
+    const row = c.parentElement;
+    c.classList.remove('is-short');
+    c.style.flex = 'none'; // 줄이지 않은 원래 너비로 재 봄
+    const over = row && row.scrollWidth > row.clientWidth + 0.5;
+    c.style.flex = '';
+    if (over) c.classList.add('is-short');
+  });
+}
+export const fitNums = (root = document) => { $$('[data-fit]', root).forEach(fitNum); fitPayday(root); };
 
 // 숫자 롤링(카운트업) — 420ms, reduced-motion 이면 즉시
 export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0)) {
@@ -51,18 +64,69 @@ export function rollNumber(el, to, format, from = Number(el.dataset.value ?? 0))
   requestAnimationFrame(step);
 }
 
+// 확인 창은 휴대폰 뒤로 가기로도 닫힌다. history: false 는 종료 확인(이미 히스토리를 쓴 뒤)용.
+let modalCtl = { open() {}, close() {} };
+const modalClosers = [];
+export function bindModalHistory(ctl) { modalCtl = { ...modalCtl, ...ctl }; }
+export function hasModal() { return modalClosers.length > 0; }
+export function dismissTopModal() {
+  const fn = modalClosers.at(-1);
+  if (!fn) return false;
+  fn();
+  return true;
+}
+// 뒤 화면(#app) 잠금을 센다: 시트·대화상자·리포트 창이 겹쳐도 마지막 것이 닫혀야 풀린다(QA 4차 정식 R1).
+// 창이 열릴 때마다 알림을 돌려, 만드는 중인 리포트가 다른 창 위에 뜨지 않게 취소한다(reportRun.js)
+const appLocks = new WeakMap();
+const openWatchers = new Set();
+/** 다른 창(시트·대화상자)이 열릴 때 who('sheet'·'dialog'·'report')를 받는다. 끄는 함수를 돌려줌 */
+export function onModalOpen(fn) { openWatchers.add(fn); return () => openWatchers.delete(fn); }
+const noteOpen = (who) => { for (const fn of [...openWatchers]) fn(who); };
+/** #app 을 잠그고 푸는 함수를 돌려준다. 푸는 함수는 여러 번 불러도 한 번만 셈 */
+export function lockApp(who) {
+  noteOpen(who);
+  const app = document.getElementById('app');
+  if (!app) return () => {};
+  appLocks.set(app, (appLocks.get(app) ?? 0) + 1);
+  app.inert = true;
+  let held = true;
+  return () => {
+    if (!held) return;
+    held = false;
+    const n = Math.max(0, (appLocks.get(app) ?? 1) - 1);
+    appLocks.set(app, n);
+    if (!n) app.inert = false;
+  };
+}
+export function attachModal(settle, { history = true, cancelValue = null } = {}) {
+  let done = false;
+  noteOpen('dialog');
+  if (history) modalCtl.open();
+  const finish = (value, fromPop = false) => {
+    if (done) return;
+    done = true;
+    const i = modalClosers.indexOf(popClose);
+    if (i >= 0) modalClosers.splice(i, 1);
+    if (history && !fromPop) modalCtl.close();
+    settle(value);
+  };
+  const popClose = () => finish(cancelValue, true);
+  modalClosers.push(popClose);
+  return finish;
+}
+
 // 가벼운 확인 대화상자 (alert/confirm 대체)
-export function confirmDialog({ title, body = '', ok = '확인', cancel = '닫기', danger = false, typeToConfirm = '' }) {
+export function confirmDialog({ title, body = '', ok = '확인', cancel = '취소', danger = false, typeToConfirm = '', history = true }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
-    wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass">
-      <h2 id="cd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-2 text-body text-ink-sub">${esc(body)}</p>` : ''}
-      ${typeToConfirm ? `<label class="mt-4 block text-caption text-ink-sub">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>라고 적어 주세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body" style="border-color:var(--line)" autocomplete="off" /></label>` : ''}
-      <div class="mt-5 flex gap-2 justify-end">
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
+    wrap.innerHTML = `<div role="alertdialog" aria-modal="true" aria-labelledby="cd-t" class="dlg-card">
+      <h2 id="cd-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
+      ${typeToConfirm ? `<label class="mt-4 block">계속하려면 <b class="text-ink">${esc(typeToConfirm)}</b>를 입력하세요<input data-type class="mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent" style="border-color:var(--ctl-line)" autocomplete="off" /></label>` : ''}
+      <div class="dlg-actions">
         ${cancel ? `<button class="btn-ghost" data-v="0">${esc(cancel)}</button>` : ''}
         <button class="${danger ? 'btn-danger' : 'btn-primary'}" data-v="1" ${typeToConfirm ? 'disabled' : ''}>${esc(ok)}</button></div></div>`;
-    const done = (v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); };
+    const done = attachModal((v) => { wrap.remove(); document.removeEventListener('keydown', onKey); resolve(v); }, { history, cancelValue: false });
     const onKey = (e) => e.key === 'Escape' && done(false);
     wrap.addEventListener('click', (e) => { const b = e.target.closest('[data-v]'); if (b && !b.disabled) done(b.dataset.v === '1'); else if (e.target === wrap) done(false); });
     document.addEventListener('keydown', onKey);
@@ -74,56 +138,63 @@ export function confirmDialog({ title, body = '', ok = '확인', cancel = '닫�
 }
 
 let toastTimer;
-// 토스트 자리(QA 6차 1): 기본은 아래 메뉴 바로 위. 새 버전 안내 줄의 [지금 적용] 버튼과 겹치면 버튼 아래(자리가 없으면 위)로 비켜요.
-const overlap = (a, b) => a.left < b.right && b.left < a.right && a.top < b.bottom && b.top < a.bottom;
-export function placeToast(el = $('#toast')) {
-  if (!el?.classList.contains('show')) return;
-  const H = window.innerHeight, gap = 8;
-  const tab = $('.tabbar')?.getBoundingClientRect();
-  const floor = tab && tab.height && tab.top < H && tab.bottom > 0 ? tab.top - gap : H - gap; // 아래 메뉴가 보이면 그 위, 아니면 화면 아래
-  el.style.top = ''; el.style.bottom = `${Math.max(gap, H - floor)}px`;
-  const [bar, btn] = ['.update-bar', '.update-bar .update-btn'].map((q) => $(q)?.getBoundingClientRect());
-  const r = el.getBoundingClientRect();
-  if (!bar || !bar.height || !overlap(r, bar)) return;
-  // 자리 후보: 안내 줄 아래 → 위 → 버튼만 피해 아래 → 위 → (그래도 없으면) 아래 메뉴 위까지 덮고 버튼 아래
-  const h = r.height, put = (top) => { el.style.bottom = 'auto'; el.style.top = `${top}px`; };
-  for (const [box, lim] of [[bar, floor], [btn || bar, floor], [btn || bar, H - gap]]) {
-    if (box.bottom + gap + h <= lim) return put(box.bottom + gap);
-    if (box.top - gap - h >= gap) return put(box.top - gap - h);
-  }
-}
-let toastWatch = false;
 export function toast(msg, { action, onAction, duration = 3500 } = {}) {
   let el = $('#toast');
   if (!el) { el = document.createElement('div'); el.id = 'toast'; el.setAttribute('role', 'status'); el.setAttribute('aria-live', 'polite'); document.body.append(el); }
   el.className = 'toast show';
-  el.innerHTML = `<span class="tabular-nums">${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
+  el.innerHTML = `<span>${esc(msg)}</span>${action ? `<button class="toast-btn">${esc(action)}</button>` : ''}`;
   if (action) el.querySelector('button').onclick = () => { el.classList.remove('show'); onAction?.(); };
-  placeToast(el);
-  if (!toastWatch) { // 본문을 스크롤하거나 화면 크기가 바뀌면 다시 비켜요
-    toastWatch = true;
-    const again = () => placeToast();
-    document.addEventListener('scroll', again, { capture: true, passive: true });
-    window.addEventListener('resize', again);
-  }
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('show'), action ? Math.max(duration, 5000) : duration);
+}
+
+// 금액 칸 옆 계산기 단추: 누르거나 칸에서 + − × ÷ 를 치면 계산기가 열리고, '=' 결과(0원 이상)를 칸에 넣음
+const CALC_SVG = '<svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false"><rect x="5" y="3.5" width="14" height="17" rx="2.5"/><path d="M8 7.5h8M8.5 12h.01M12 12h.01M15.5 12h.01M8.5 16h.01M12 16h.01M15.5 16h.01"/></svg>';
+export const calcBtn = (label = '계산기로 금액 계산') => `<button type="button" class="calc-in" data-calc-in aria-label="${esc(label)}" title="계산기 (+ − × ÷ 키로도 열려요)">${CALC_SVG}</button>`;
+export function bindAmountCalc(root, { max = 100_000_000_000, title = '금액 계산' } = {}) {
+  const digitsOf = (input) => Number(input.value.replace(/[^0-9]/g, '') || 0);
+  const open = (input, start = '') => openCalc({
+    mode: 'amount', value: digitsOf(input), start, title,
+    onApply: (won) => {
+      if (won < 0) return '0원 이상만 넣을 수 있어요.';
+      if (won > max) return `${max.toLocaleString('ko-KR')}원까지 넣을 수 있어요.`;
+      if (!input.isConnected) return '입력 칸이 닫혀 넣지 못했어요.';
+      input.value = won ? won.toLocaleString('ko-KR') : '';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return null;
+    },
+  });
+  root.addEventListener('click', (e) => {
+    const b = e.target.closest('[data-calc-in]');
+    if (!b) return;
+    const input = b.parentElement.querySelector('input');
+    if (input) open(input);
+  });
+  root.addEventListener('beforeinput', (e) => {
+    const input = e.target;
+    if (!input.matches?.('[data-amount], [data-amount-calc]') || !e.data || e.data.length !== 1) return;
+    const op = /[xX]/.test(e.data) ? null : normalizeOp(e.data);
+    if (!op) return;
+    e.preventDefault();
+    open(input, op);
+  });
 }
 
 // 금액 입력 대화상자 (예산 등). 숫자만 남김. 취소 시 null
 export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-6 fade-in';
-    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass"><form>
-      <h2 id="pa-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
-      <label class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg px-4 h-14 focus-within:ring-2 focus-within:ring-primary">
-        <input inputmode="numeric" autocomplete="off" aria-label="금액" class="w-full bg-transparent text-title tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
-        <span class="text-head">원</span></label>
-      <p class="mt-1 h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>닫기</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-6 fade-in';
+    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="pa-t" class="dlg-card"><form>
+      <h2 id="pa-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
+      <div class="mt-4 flex items-center gap-2 rounded-md border border-line bg-bg pl-4 pr-1 h-14 focus-within:ring-2 focus-within:ring-primary">
+        <input inputmode="numeric" autocomplete="off" aria-label="금액" data-amount-calc class="w-full bg-transparent tabular-nums text-right outline-none" value="${value ? value.toLocaleString('ko-KR') : ''}" placeholder="0" />
+        <span>원</span>${calcBtn()}</div>
+      <p class="mt-1 h-5 text-expense" role="alert"></p>
+      <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const input = wrap.querySelector('input'), err = wrap.querySelector('[role=alert]');
-    const done = (v) => { wrap.remove(); resolve(v); };
+    const done = attachModal((v) => { wrap.remove(); resolve(v); }, { cancelValue: null });
+    bindAmountCalc(wrap);
     input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
       input.value = d ? Number(d).toLocaleString('ko-KR') : '';
@@ -131,7 +202,7 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
     wrap.querySelector('form').addEventListener('submit', (e) => {
       e.preventDefault();
       const n = Number(input.value.replace(/[^0-9]/g, '') || 0);
-      if (n > 100_000_000_000) { err.textContent = '1,000억 원까지 적을 수 있어요.'; return; }
+      if (n > 100_000_000_000) { err.textContent = '1,000억 원까지 입력할 수 있어요.'; return; }
       done(n);
     });
     wrap.addEventListener('click', (e) => { if (e.target === wrap || e.target.closest('[data-cancel]')) done(null); });
@@ -149,26 +220,27 @@ export function promptAmount({ title, body = '', value = 0, ok = '저장' }) {
 export function formDialog({ title, body = '', fields, ok = '저장', validate = () => null }) {
   return new Promise((resolve) => {
     const wrap = document.createElement('div');
-    wrap.className = 'fixed inset-0 z-[70] dlg-wrap bg-black/40 p-4 fade-in';
+    wrap.className = 'fixed inset-0 z-[70] dlg-wrap p-4 fade-in';
     const inputCls = 'mt-1 w-full min-h-[44px] px-3 rounded-xl border bg-transparent text-body';
     const field = (f) => {
       const id = `fd-${f.name}`;
       let ctrl;
       if (f.type === 'select') ctrl = `<select id="${id}" name="${f.name}" class="select w-full mt-1">${f.options.map(([v, l]) => `<option value="${esc(v)}" ${String(f.value) === String(v) ? 'selected' : ''}>${esc(l)}</option>`).join('')}</select>`;
-      else if (f.type === 'amount') ctrl = `<div class="mt-1 flex items-center gap-2 rounded-xl border px-3 min-h-[44px]" style="border-color:var(--line)"><input id="${id}" name="${f.name}" data-amount inputmode="numeric" autocomplete="off" class="w-full bg-transparent text-body tabular-nums text-right outline-none min-h-[44px]" value="${f.value ? Number(f.value).toLocaleString('ko-KR') : ''}" placeholder="0" /><span>원</span></div>`;
+      else if (f.type === 'amount') ctrl = `<div class="mt-1 flex items-center gap-2 rounded-xl border px-3 min-h-[44px]" style="border-color:var(--ctl-line)"><input id="${id}" name="${f.name}" data-amount inputmode="numeric" autocomplete="off" class="w-full bg-transparent text-body tabular-nums text-right outline-none min-h-[44px]" value="${f.value ? Number(f.value).toLocaleString('ko-KR') : ''}" placeholder="0" /><span>원</span>${calcBtn(`${f.label} 계산기로 계산`)}</div>`;
       else if (f.type === 'checkbox') return `<label class="flex items-center justify-between gap-2 text-body min-h-[44px]">${esc(f.label)}<span class="switch"><input type="checkbox" id="${id}" name="${f.name}" ${f.value ? 'checked' : ''} /><span></span></span></label>`;
-      else ctrl = `<input id="${id}" name="${f.name}" type="${f.type === 'date' ? 'date' : 'text'}" class="${inputCls}" style="border-color:var(--line)" value="${esc(f.value ?? '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} autocomplete="off" />`;
+      else ctrl = `<input id="${id}" name="${f.name}" type="${f.type === 'date' ? 'date' : 'text'}" ${f.inputmode ? `inputmode="${esc(f.inputmode)}"` : ''} class="${inputCls}" style="border-color:var(--ctl-line)" value="${esc(f.value ?? '')}" ${f.maxlength ? `maxlength="${f.maxlength}"` : ''} autocomplete="off" />`;
       return `<div><label for="${id}" class="text-caption text-ink-sub">${esc(f.label)}</label>${ctrl}${f.hint ? `<p class="mt-1 text-caption text-ink-sub">${esc(f.hint)}</p>` : ''}</div>`;
     };
-    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="fd-t" class="w-full max-w-sm rounded-lg bg-surface-solid p-5 shadow-glass my-auto"><form>
-      <h2 id="fd-t" class="text-head">${esc(title)}</h2>${body ? `<p class="mt-1 text-caption text-ink-sub">${esc(body)}</p>` : ''}
+    wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="fd-t" class="dlg-card"><form>
+      <h2 id="fd-t">${esc(title)}</h2>${body ? `<p class="dlg-copy">${esc(body)}</p>` : ''}
       <div class="mt-4 flex flex-col gap-3">${fields.map(field).join('')}</div>
-      <p class="mt-2 min-h-5 text-caption text-expense" role="alert"></p>
-      <div class="mt-3 flex gap-2 justify-end"><button type="button" class="btn-ghost" data-cancel>닫기</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
+      <p class="mt-2 min-h-5 text-expense" role="alert"></p>
+      <div class="dlg-actions"><button type="button" class="btn-ghost" data-cancel>취소</button><button class="btn-primary">${esc(ok)}</button></div></form></div>`;
     const form = wrap.querySelector('form'), err = wrap.querySelector('[role=alert]');
-    const app = document.getElementById('app'), back = document.activeElement;
-    const done = (v) => { wrap.remove(); if (app) app.inert = false; back?.focus?.(); resolve(v); };
-    if (app) app.inert = true; // 대화상자 뒤 화면은 잠금(포커스·스크린리더가 뒤로 새지 않게)
+    const back = document.activeElement;
+    const done = attachModal((v) => { wrap.remove(); unlock(); back?.focus?.(); resolve(v); }, { cancelValue: null });
+    const unlock = lockApp('dialog'); // 대화상자 뒤 화면은 잠금(포커스·스크린리더가 뒤로 새지 않게), 겹친 창이 있으면 그것이 닫힐 때까지 유지
+    bindAmountCalc(wrap);
     form.querySelectorAll('[data-amount]').forEach((input) => input.addEventListener('input', () => {
       const d = input.value.replace(/[^0-9]/g, '').replace(/^0+(?=\d)/, '');
       input.value = d ? Number(d).toLocaleString('ko-KR') : '';
@@ -189,4 +261,12 @@ export function formDialog({ title, body = '', fields, ok = '저장', validate =
     document.body.append(wrap);
     form.querySelector('input,select')?.focus();
   });
+}
+
+/** 도는 동안 또 부르면 새로 시작하지 않고 같은 약속을 돌려준다(연타로 같은 일이 겹치지 않게). 끝나면 다시 부를 수 있음 */
+export function singleRun(fn) {
+  let job = null;
+  const run = (...args) => job ?? (job = Promise.resolve().then(() => fn(...args)).finally(() => { job = null; }));
+  run.busy = () => !!job;
+  return run;
 }

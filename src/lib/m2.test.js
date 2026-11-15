@@ -16,7 +16,7 @@ describe('자동 분류 규칙', () => {
     expect(classify({ desc: 'GS25 역삼점', kind: 'expense' }).categoryId).toBe('living');
     expect(classify({ desc: '넷플릭스', kind: 'expense' }).categoryId).toBe('telecom');
     expect(classify({ desc: '메가박스 코엑스', kind: 'expense' }).categoryId).toBe('culture');
-    expect(classify({ desc: '(주)쓱컴퍼니 급여', kind: 'income' }).categoryId).toBe('salary');
+    expect(classify({ desc: '(주)쨈컴퍼니 급여', kind: 'income' }).categoryId).toBe('salary');
     expect(classify({ desc: '알 수 없는 곳', kind: 'expense' })).toEqual({ categoryId: 'etc', by: 'fallback' });
     expect(classify({ desc: '모름', kind: 'income' }).categoryId).toBe('etc-in');
   });
@@ -31,7 +31,7 @@ describe('자동 분류 규칙', () => {
   test('규칙 글자 만들기(지점 떼기)', () => {
     expect(merchantKey('스타벅스 강남R점')).toBe('스타벅스');
     expect(merchantKey('GS25 역삼점 · 메모')).toBe('GS25');
-    expect(merchantKey('(주)쓱컴퍼니 급여')).toBe('쓱컴퍼니');
+    expect(merchantKey('(주)쨈컴퍼니 급여')).toBe('쨈컴퍼니');
     expect(merchantKey('쿠팡')).toBe('쿠팡');
   });
 });

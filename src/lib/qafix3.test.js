@@ -93,7 +93,7 @@ describe('N10 환불이 지출보다 많은 달의 지출 표기', () => {
   test('예산: 환불이 더 많아도 사용 0%, 남은 예산이 예산보다 커지지 않음', () => {
     const m = model('2026-10', { budget: { total: 300000 } });
     const t = text(budgetView(m, {}));
-    expect(t).toMatch(/0% 썼어요/);
+    expect(t).toMatch(/0% 사용/);
     expect(t).toContain('300,000원 남았어요');
     expect(t).toContain('환불 +49,000원이 지출보다 많아 사용 0원으로 봐요');
     expect(m.weather.usedPct).toBe(0);
@@ -178,14 +178,16 @@ describe('N13 긴 이름(공백 없는 20자) 넘침 방지 구조', () => {
     // 이름표는 줄지 않고(shrink-0), 줄 전체 폭보다 길 때만(160px 같은 아주 좁은 폭) 이름표 안에서 줄바꿈(PR #9 QA)
     expect(css).toMatch(/\.opt-row > \.opt-k \{[^}]*shrink-0[^}]*max-w-full/);
   });
-  test('라벨+select 줄은 모두 opt-row(가져오기 결제수단·금액 부호, 설정 시작일)', () => {
+  test('라벨+select 줄은 모두 opt-row(가져오기 결제수단·금액 부호). 월급날은 타일', () => {
     const src = ['src/ui/importer.js', 'src/ui/views.js'].map((f) => readFileSync(f, 'utf8')).join('\n');
     expect(src).not.toMatch(/<label class="flex items-center justify-between[^"]*">[^<]+<select/);
     expect(src.match(/<label class="opt-row"><span class="opt-k">/g).length).toBe(3);
+    expect(src).toContain('class="day-grid"');
+    expect(src).not.toContain('data-start-day aria-label');
   });
   test('반복 목록: 금액을 이름 아랫줄로(이름 칸이 금액에 눌리지 않음)', () => {
     const html = recurringView(model('2026-10', { extra: { recurring: [{ id: 'r', name: '가'.repeat(30), amount: 17000, kind: 'expense', categoryId: 'food', dayOfMonth: 5, active: true, startYm: '2026-10' }] } }));
-    expect(html).toMatch(/block text-body font-semibold break-words">가{30}<\/span>\s*<span class="block text-body font-semibold tabular-nums/);
+    expect(html).toMatch(/block text-body t-quiet break-words">가{30}<\/span>\s*<span class="block text-body font-bold tabular-nums/);
   });
 });
 

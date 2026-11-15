@@ -1,3 +1,5 @@
-/* 본문 글꼴(Pretendard Variable, 92개 조각). 첫 화면을 막지 않도록 main.js에서 비동기로 붙임.
+/* 본문 글꼴(Pretendard Variable, 92개 조각). 설정에서 Pretendard를 쓸 때만 비동기로 붙임.
+   Pretendard는 SIL Open Font License 1.1 (npm 패키지 pretendard, Copyright Kil Hyung-jin).
+   글꼴만 따로 판매하는 것을 빼고 상업적 이용·수정·재배포가 된다.
    조각 CSS는 font-display: swap → 시스템 글꼴로 먼저 그리고, 글꼴이 오면 바꿔 그림. */
 @import 'pretendard/dist/web/variable/pretendardvariable-dynamic-subset.css';

@@ -1,0 +1,27 @@
+{
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE." },
+    "body": {
+      "numOfRows": 1,
+      "pageNo": 1,
+      "totalCount": 1,
+      "items": {
+        "item": {
+          "basDt": "20261016",
+          "srtnCd": "069500",
+          "isinCd": "KR7069500007",
+          "itmsNm": "KODEX 200",
+          "clpr": "45210",
+          "nav": "1",
+          "vs": "120",
+          "fltRt": "0.27",
+          "mkp": "45100",
+          "hipr": "45300",
+          "lopr": "45050",
+          "trqu": "8234512",
+          "trPrc": "372000000000"
+        }
+      }
+    }
+  }
+}

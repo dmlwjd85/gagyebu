@@ -1,48 +1,91 @@
 import './style.css';
-// 글꼴 CSS(@font-face 92개, 약 49kB)는 화면 그리기를 막지 않게 따로 불러옴
-import('./fonts.css');
+import './tokens-jjaem-final.css'; // 사파이어 밤 확정 토큰(style 뒤)
 import { isFirebaseConfigured, useEmulator } from './config.js';
 import { initTheme, toggleTheme, currentTheme, themeMode, setThemeMode } from './lib/theme.js';
+import { initLook, readLook, writeLook, applyLook, ensureFont, adoptCloudLook, toneList, prefetchJjaemKs } from './lib/look.js';
 import { readScale, saveScale, applyScale, stepScale, scalePct, clampScale, SCALE_KEY, SCALE_MIN, SCALE_MAX } from './lib/contentScale.js';
 import { installScaleShortcuts } from './lib/scaleShortcuts.js';
 // Firebase SDK는 설정이 있을 때만 나눠서 불러옴
 let data = null;
-let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [] };
-import { ymd, period, periodOf, shiftYm, monthLabel } from './lib/dates.js';
-import { filterPeriod, totals, trend, moneyWeather, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
+let state = { ready: false, user: null, txs: [], categories: [], accounts: [], rules: [], recurring: [], goals: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null };
+import { ymd, period, periodOf, shiftYm, monthLabel, isYmd } from './lib/dates.js';
+import { filterPeriod, totals, trend, moneyWeather, monthBudgetLeft, recordStreak, noSpendDays, topIncrease } from './lib/stats.js';
 import { formatWon } from './lib/money.js';
 import { toCSV } from './lib/csv.js';
 import { editTarget } from './lib/restore.js';
+import { paydayChip } from './lib/payday.js';
 import { nextTip, dismissTip, emptyTipState } from './lib/tips.js';
 import { validateCategory } from './lib/validate.js';
-import { $, esc, toast, placeToast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums } from './ui/util.js';
+import { $, esc, toast, confirmDialog, promptAmount, formDialog, rollNumber, haptic, fitNums, bindModalHistory, dismissTopModal, hasModal, attachModal, lockApp } from './ui/util.js';
+import { loadDock, saveDock, pickDock, moveDock, dockItem } from './lib/dockSlots.js';
+import { dockHtml, dockMenuHtml, dockEditHtml, HOLD_MS, MOVE_PX } from './ui/dock.js';
+import { openCalc } from './ui/calcDialog.js';
+import { reportRunner, reportScreenKey, prefetchAfterData, openAfterLoad } from './ui/reportRun.js';
+import { createExitGuard, EXIT_CONFIRM_TITLE, isExitDismissGesture } from './lib/exitGuard.js';
+import { createNavHistory } from './lib/navBack.js';
 // 가져오기(표 읽기·열 맞춤·중복)와 리포트 이미지는 쓸 때만 불러옴 → 첫 화면 JS를 가볍게
 let IMP = null;
 const loadImp = () => import('./ui/importer.js').then((mod) => (IMP = mod));
 import { searchView, recurringView } from './ui/m2views.js';
 import { ruleSuggestion, josa, classify } from './lib/classify.js';
-import { buildBackup } from './lib/backup.js';
+import { buildBackup, parseBackup } from './lib/backup.js';
+import { settingsForMode, MODES, LEGACY_FEATURES, allowanceFrom, activeStartDay, monthStartDayOf, featureOn } from './lib/modes.js';
+import { ownerToWrite, spouseLabel } from './lib/couple.js';
+import { installUpdatePrompt } from './lib/pwaUpdate.js';
+import { createInstaller, installState, shouldShowHint, hintDismissed, dismissHint, bumpVisits } from './lib/install.js';
+import { installHint } from './ui/installView.js';
+import { restoreMessage } from './lib/restoreWait.js';
 import { pruneLimits } from './lib/budget.js';
 import { validateGoal } from './lib/goals.js';
-import { initSheet, openSheet, isSheetOpen } from './ui/sheet.js';
-import { logo, symbol } from './ui/brand.js';
-import { createUpdater } from './lib/pwa.js';
-import { isBusyNow } from './lib/busy.js';
-import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView } from './ui/views.js';
+import { initSheet, openSheet, closeSheet, isSheetOpen } from './ui/sheet.js';
+import { logo, symbol, FAB_INNER } from './ui/brand.js';
+import { createAddPop, afterFrame } from './ui/fabPop.js';
+import { createFeel } from './ui/feel.js';
+const feel = createFeel();
+const addPop = createAddPop({ open: () => openSheet(), isOpen: () => isSheetOpen(), reduced: () => matchMedia('(prefers-reduced-motion: reduce)').matches, onBurst: () => feel.play('tok') });
+// 쨈 컵 손맛: 누르는 동안 말랑하게 눌린 채(.is-pressed) + '뽁'·짧은 진동 → 놓으면 되튐(style.css). 키보드 Enter·Space 도 같음
+// 누르는 순간에는 클래스만, '뽁'·진동은 다음 프레임 뒤(QA 6차 D2: pointerdown 에서 소리를 만들면 시트가 누름을 받는 첫 프레임이 늦어짐)
+const pressFab = (fab) => { if (fab.classList.contains('is-pressed')) return; fab.classList.add('is-pressed'); afterFrame(() => { feel.play('bbok'); feel.buzz(); }); };
+// 소리 준비: 앱 어디든 첫 누름·키 뒤 프레임 다음에 AudioContext 를 미리 만듦(첫 컵 누름에서 만들지 않게)
+let feelPrimed = false;
+const primeFeel = () => { if (feelPrimed) return; feelPrimed = true; afterFrame(() => feel.prime()); };
+['pointerdown', 'keydown'].forEach((ev) => document.addEventListener(ev, primeFeel, true));
+const releaseFab = () => document.querySelectorAll('.fab.is-pressed').forEach((f) => f.classList.remove('is-pressed'));
+document.addEventListener('pointerdown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.button) pressFab(f); });
+['pointerup', 'pointercancel', 'blur'].forEach((ev) => window.addEventListener(ev, releaseFab));
+document.addEventListener('pointerout', (e) => { if (e.target.closest?.('.fab') && !e.relatedTarget?.closest?.('.fab')) releaseFab(); });
+document.addEventListener('keydown', (e) => { const f = e.target.closest?.('.fab'); if (f && !e.repeat && (e.key === 'Enter' || e.key === ' ')) pressFab(f); });
+document.addEventListener('keyup', (e) => { if (e.key === 'Enter' || e.key === ' ') releaseFab(); });
+import { topBar, homeView, calendarView, chartView, budgetView, settingsView, loginView, setupView, onboardingView } from './ui/views.js';
+import { assetsView, taxView } from './ui/assetsView.js';
+import { validateAssetAccount, validateHolding, validateContribution, validateTaxPrefs, parseQtyE4, normalizeCode, taxPrefs, formatQty, formatRateBp, parseRateBp } from './lib/assets.js';
 
 initTheme();
+initLook();
+installUpdatePrompt();
+// 앱으로 설치: 설치 창 이벤트는 일찍 오므로 첫 화면 전에 붙잡아 둠.
+// 쓴 날 수는 '처음 며칠' 작은 안내용(이 기기에만): 로그인 뒤 홈을 처음 그릴 때 하루 한 번만 셈(새로 고침·로그인 화면·앱 실행은 안 셈)
+const installer = createInstaller({ onChange: onInstallChange });
+let visits = null;
+const curInstall = () => installState({ win: window, nav: navigator, hasPrompt: installer.hasPrompt(), installed: installer.installed(), promptUsed: installer.promptUsed() });
+function onInstallChange(kind) {
+  if (kind === 'installed') { feel.play('tok'); toast('설치해 주셔서 고마워요! 이제 홈 화면에서 바로 열 수 있어요.'); }
+  if (state.user) render();
+}
 // 본문 글자 배율: 저장값을 그리기 전에 적용(깜빡임 없음)
 let contentScale = applyScale(readScale());
 const app = $('#app');
-const TABS = [['home', '🏠', '홈'], ['calendar', '📅', '달력'], ['chart', '📊', '차트'], ['budget', '💰', '예산']];
-const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring'];
-const NO_NAV = new Set(['settings', 'import', 'search', 'recurring']); // 아래 탭 막대 없는 화면
+const VIEWS = ['home', 'calendar', 'chart', 'budget', 'settings', 'import', 'search', 'recurring', 'assets', 'tax'];
+// 설정·검색·가져오기·반복·자산·세액공제는 위 메뉴에 달 이동이 없는 화면(아래 독은 어느 화면에서나 보임, #38).
+const NO_NAV = new Set(['settings', 'import', 'search', 'recurring', 'assets', 'tax']);
+const headerBack = (view) => (view === 'settings' ? { to: 'home', label: '홈으로', text: '홈' } : null);
 const hashView = () => (VIEWS.includes(location.hash.slice(1)) ? location.hash.slice(1) : 'home');
-const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
+const ui = { view: hashView(), viewYm: null, selDate: null, mode: 'cal', catFilter: null, ownerFilter: null, envelopes: false, catKind: 'expense', emojiFor: null, catMenu: null, chartKind: 'expense', barYm: null, accEmojiFor: null, loginError: '', imp: null, assetOpen: null, search: { q: '', kind: '', categoryId: '', accountId: '', range: '6', min: null, max: null }, searchAll: null };
 const today = () => ymd(new Date());
 
 function model() {
-  const sd = state.profile?.monthStartDay ?? 1;
+  const storedStart = state.profile?.monthStartDay ?? 1;
+  const sd = activeStartDay(state.settings, state.profile, state.features);
   const t = today();
   const curYm = periodOf(t, sd);
   const viewYm = ui.viewYm ?? curYm;
@@ -51,16 +94,20 @@ function model() {
   const tot = totals(periodTxs);
   const prevTxs = filterPeriod(state.txs, period(shiftYm(viewYm, -1), sd));
   return {
-    sd, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
+    sd, storedStart, today: t, curYm, viewYm, p, periodTxs, tot, user: state.user, budget: state.budget, txLoaded: state.txLoaded,
     categories: state.categories, accounts: state.accounts, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, kept: state.kept, keptBusy: !!ui.keptBusy, txs: state.txs,
+    assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null,
     searchPool: ui.searchAll ?? state.txs, searchLoading: ui.view === 'search' && !ui.searchAll,
     catMap: new Map(state.categories.map((c) => [c.id, c])), accMap: new Map(state.accounts.map((a) => [a.id, a])),
+    monthLeft: monthBudgetLeft({ budget: state.budget, periodTxs, categories: state.categories }),
+    budgetOpen: localStorage.getItem('homeBudgetOpen') === '1',
     weather: moneyWeather({ budget: state.budget?.total ?? 0, periodTxs, p, today: t }),
     trend: trend(state.txs, [-5, -4, -3, -2, -1, 0].map((d) => period(shiftYm(viewYm, d), sd))),
     streak: recordStreak(state.txs.map((x) => x.date), t),
     noSpend: viewYm === curYm ? noSpendDays(periodTxs, p, t) : 0,
     insight: topIncrease(periodTxs, prevTxs),
-    wide: window.matchMedia('(min-width: 1024px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), offline: !navigator.onLine, contentScale,
+    wide: window.matchMedia('(min-width: 768px)').matches, dark: currentTheme() === 'dark', themeMode: themeMode(), look: readLook(), offline: !navigator.onLine, contentScale, install: curInstall(),
+    mode: state.mode ?? null, legacyMode: state.legacyMode !== false && !state.mode, features: state.features, settings: state.settings ?? null,
   };
 }
 
@@ -72,16 +119,35 @@ function gateView({ caption, card }) {
   const hero = $('#boot-hero');
   if (!hero) app.innerHTML = `<main class="min-h-dvh flex justify-center px-5 pt-[12vh] pb-10"><div class="w-full max-w-sm flex flex-col gap-4">
     <h1 class="flex justify-center" id="boot-logo">${logo({ cls: 'boot-logo' })}</h1>
-    <section class="hero-card p-6" id="boot-hero"><p class="text-caption font-semibold" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
+    <section class="hero-card p-6" id="boot-hero"><p class="text-caption t-label" id="boot-cap"></p><p class="mt-2 text-title">10초 기록,<br />하루 한 번 보는 내 돈 날씨.</p></section>
     <section class="card-solid p-5 flex flex-col gap-3" id="boot-card"></section></div></main>`;
   $('#boot-cap').textContent = caption;
   $('#boot-card').innerHTML = card;
   $('main', app)?.removeAttribute('aria-busy');
 }
+function pushLook(partial) {
+  const next = applyLook(writeLook({ ...readLook(), ...partial }));
+  ensureFont(next.font)?.then?.(() => { if ($('#main')) fitNums(); });
+  if (state.user && data?.saveSettings) {
+    const patch = { mood: next.mood, font: next.font, decor: next.decor, tone: toneList(next.tone) };
+    if (state.settings) state.settings = { ...state.settings, ...patch };
+    data.saveSettings(patch);
+  }
+  render();
+}
+// 리포트 카드: 만드는 동안 또 눌러도 한 번만, 버튼은 disabled·'만드는 중…'(QA 3차 M1·4차 P4), 화면을 떠나면 취소(4차 P2). src/ui/reportRun.js
+const report = reportRunner({
+  root: app,
+  open: openAfterLoad(() => import('./ui/report.js'), { toast }),
+  onError: (err) => { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); },
+});
+const runReport = (m) => report.run(m, reportScreenKey(ui.view, m.viewYm, state.user?.uid));
 function render() {
+  if (state.user && state.settingsLoaded) adoptCloudLook(state.settings);
+  if (redirectDone) exitGuard.sync({ loggedIn: !!state.user });
   if (!isFirebaseConfigured) return gateView(setupView());
   if (!state.ready) return; // index.html 의 첫 화면(브랜드 카드)을 그대로 둠
-  if (!state.user) return gateView(loginView({ emulator: useEmulator, error: ui.loginError }));
+  if (!state.user) { report.afterRender(null); return gateView(loginView({ emulator: useEmulator, error: ui.loginError })); }
   const m = model();
   data.watchMonth(m.viewYm);
   const focusKey = document.activeElement?.dataset && Object.entries(document.activeElement.dataset)[0];
@@ -89,18 +155,20 @@ function render() {
   const mainFocused = document.activeElement?.id === 'main'; // 다시 그려도 본문 포커스 유지(PageDown·스페이스 스크롤)
   if (ui.view === 'import' && !IMP) loadImp().then(render);
   if (ui.view === 'import' && IMP && !ui.imp) ui.imp = IMP.newImport();
-  const body = ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
-    : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView }[ui.view](m, ui);
-  const nav = !NO_NAV.has(ui.view);
+  const ask = !!(state.askMode && state.settingsLoaded && ui.view === 'home');
+  const body = ask ? onboardingView() : ui.view === 'import' ? (IMP ? IMP.importView(m, ui.imp) : '<div class="max-w-[560px] mx-auto card-solid p-5" aria-busy="true"><div class="skeleton h-40 rounded-lg"></div></div>')
+    : { home: homeView, calendar: calendarView, chart: chartView, budget: budgetView, settings: settingsView, search: searchView, recurring: recurringView, assets: assetsView, tax: taxView }[ui.view](m, ui);
+  // 어느 화면에서든(연금·설정·검색 포함) 아래 메뉴로 쨈 버튼·홈에 갈 수 있게 항상 보임
+  const nav = !ask;
   // 위 메뉴 / 본문(여기만 스크롤, 글자 배율 적용) / 아래 메뉴 3줄 틀 — style.css '.app-frame'
   document.body.classList.add('has-frame');
   app.innerHTML = `
     <div class="aurora" aria-hidden="true"></div>
     <a href="#main" class="skip-link">본문으로 건너뛰기</a>
     <div class="app-frame ${nav ? 'has-nav' : ''}">
-      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view) })}</div></div>
-      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${ui.updateReady ? updateBar() : ''}${body}</div></main>
-      ${nav ? tabBar() : ''}
+      <div class="app-top"><div class="app-shell">${topBar(m, { month: !NO_NAV.has(ui.view), back: headerBack(ui.view), payday: ui.view === 'home' && m.viewYm === m.curYm && featureOn(m.features, 'monthStart') ? paydayChip(m.today, m.settings) : null })}</div></div>
+      <main id="main" class="app-main ${nav ? '' : 'no-nav'}" tabindex="-1"><div class="app-shell ${ui.view !== lastView ? 'view-enter' : ''}">${body}</div></main>
+      ${nav ? tabBar(m) : ''}
     </div>`;
   // 홈 숫자 롤링
   const hero = $('#hero-num');
@@ -109,20 +177,127 @@ function render() {
   const mainEl = $('#main');
   if (mainEl) scroller().scrollTop = ui.view === lastView ? scrollY : 0;
   fitNums(app);
-  placeToast(); // 새 버전 안내 줄이 새로 생기면 토스트가 비킴(QA 6차 1)
   syncRailShift();
   if (mainFocused && !focusKey) mainEl?.focus({ preventScroll: true });
   lastView = ui.view;
+  // 첫 데이터(기록·설정)를 그린 뒤에만 쨈 본문 .ks 를 한가할 때 받기 시작(로그인 화면·첫 데이터 전에는 안 함, 글꼴 설정이 기본일 때만, QA 3차 M5·M6)
+  prefetchAfterData(state, prefetchJjaemKs);
+  report.afterRender(reportScreenKey(ui.view, m.viewYm, state.user?.uid)); // 다른 화면·달로 갔으면 만들던 리포트 취소, 같은 화면이면 버튼 표시 유지
   renderTip();
+  renderInstallHint();
 }
-// 새 버전 안내(QA 3차 N3): 입력 중이라 바로 다시 불러오지 못할 때만 보임
-const updateBar = () => `<div class="update-bar" role="status"><span>새 버전이 있어요.</span><button class="btn-primary update-btn" data-action="apply-update">지금 적용</button></div>`;
-const tabBar = () => `<nav class="tabbar" aria-label="주요 화면">
-  <div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쓱 가계부' })}</div>
-  ${TABS.slice(0, 2).map(tabBtn).join('')}
-  <button class="fab" data-action="add" aria-label="새 기록 추가 (지출·수입)"><span aria-hidden="true">＋</span></button>
-  ${TABS.slice(2).map(tabBtn).join('')}</nav>`;
-const tabBtn = ([id, icon, label]) => `<button class="tab ${ui.view === id ? 'on' : ''}" data-nav="${id}" ${ui.view === id ? 'aria-current="page"' : ''}><span aria-hidden="true">${icon}</span><span>${label}</span></button>`;
+// 아래 독: 쨈 교무수첩과 같은 키캡 독(ui/dock.js). 칸 배치는 이 기기에만(localStorage 'dockTabs'), 가운데 '기록'(쨈 컵)은 고정
+const dockFeatures = (m) => ({ recurring: featureOn(m?.features ?? state?.features, 'recurring') });
+const tabBar = (m) => `${dockHtml({ view: ui.view, order: loadDock(localStorage, dockFeatures(m)), logo: `<div class="pclogo">${symbol('M', { cls: 'pcsym', label: '쨈 가계부' })}</div>`,
+  mid: `<button class="fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>` })}
+<button class="fab desk-fab" data-action="add" aria-label="기록 추가 (지출·수입)">${FAB_INNER}</button>`;
+
+// 대화상자(히스토리 한 칸)를 닫은 직후 화면을 옮기면, 닫기의 history.go(-1)보다 push 가 먼저 돼 뒤로 가기 순서가 꼬임.
+// → 닫기로 생긴 popstate 를 한 번 받은 뒤에(늦으면 0.4초 뒤) 이어서 함
+function afterModalPop(fn) {
+  let ran = false;
+  const run = () => { if (ran) return; ran = true; window.removeEventListener('popstate', onPop); clearTimeout(timer); setTimeout(fn, 0); };
+  const onPop = () => run();
+  window.addEventListener('popstate', onPop);
+  const timer = setTimeout(run, 400);
+}
+
+// 바닥에서 올라오는 독 대화상자(모든 메뉴·칸 배치). 뒤로 가기·Esc·바깥 누르기로 닫힘
+function dockDialog(html, labelId, onClick, { onChange } = {}) {
+  const wrap = document.createElement('div');
+  wrap.className = 'fixed inset-0 z-[70] dlg-wrap dock-dlg fade-in';
+  wrap.innerHTML = `<div role="dialog" aria-modal="true" aria-labelledby="${labelId}" class="dlg-card dock-card" tabindex="-1">${html}</div>`;
+  const card = wrap.firstElementChild;
+  const back = document.activeElement;
+  const done = attachModal(() => { wrap.remove(); unlock(); back?.isConnected && back.focus?.({ preventScroll: true }); });
+  const unlock = lockApp('dialog'); // 독 대화상자도 셈으로 잠금(겹친 창이 있으면 그것이 닫힐 때까지 유지)
+  wrap.addEventListener('click', (e) => { if (e.target === wrap) return done(); onClick(e, done, card); });
+  if (onChange) wrap.addEventListener('change', (e) => onChange(e, done, card));
+  wrap.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); return done(); }
+    if (e.key !== 'Tab') return;
+    const f = [...card.querySelectorAll('button:not([disabled]), select')];
+    if (!f.length) return;
+    if (e.shiftKey && (document.activeElement === f[0] || document.activeElement === card)) { e.preventDefault(); f.at(-1).focus(); }
+    else if (!e.shiftKey && document.activeElement === f.at(-1)) { e.preventDefault(); f[0].focus(); }
+  });
+  document.body.append(wrap);
+  (card.querySelector('[aria-current="page"]') ?? card.querySelector('button, select'))?.focus({ preventScroll: true });
+  return { done, card };
+}
+
+function openDockMenu() {
+  haptic();
+  dockDialog(dockMenuHtml({ view: ui.view, features: dockFeatures() }), 'dock-menu-t', (e, done) => {
+    const b = e.target.closest('button');
+    if (!b) return;
+    if (b.hasAttribute('data-menu-close')) return done();
+    const item = dockItem(b.dataset.menu);
+    if (!item) return;
+    done();
+    afterModalPop(() => (item.view ? go(item.view) : openCalculator()));
+  });
+}
+
+function openDockEdit() {
+  haptic(20);
+  const f = dockFeatures();
+  let draft = loadDock(localStorage, f);
+  const { card } = dockDialog(dockEditHtml({ draft, features: f }), 'dock-edit-t', (e, done, c) => {
+    const b = e.target.closest('button');
+    if (!b || b.disabled) return;
+    if (b.hasAttribute('data-dock-cancel')) return done();
+    if (b.hasAttribute('data-dock-reset')) { draft = loadDock({ getItem: () => null }, f); return paint(c, b); }
+    if (b.hasAttribute('data-dock-save')) { saveDock(draft, localStorage, Date.now(), f); done(); render(); return toast('아래 칸 배치를 저장했어요.'); }
+    if (b.dataset.move !== undefined) { draft = moveDock(draft, Number(b.dataset.move), Number(b.dataset.dir), f); return paint(c, b); }
+  }, { onChange: (e, done, c) => { const sel = e.target.closest('[data-slot]'); if (sel) { draft = pickDock(draft, Number(sel.dataset.slot), sel.value, f); paint(c, sel); } } });
+  // 다시 그려도 누르던 칸에 초점을 둠(키보드로 ‹ › 를 연달아 누를 수 있게)
+  function paint(c, from) {
+    const sel = from?.dataset?.slot ?? from?.dataset?.move;
+    const which = from?.dataset?.slot !== undefined ? `[data-slot="${sel}"]` : from?.dataset?.move !== undefined ? `[data-move="${Number(sel) + Number(from.dataset.dir)}"][data-dir="${from.dataset.dir}"]` : from?.hasAttribute?.('data-dock-reset') ? '[data-dock-reset]' : null;
+    c.innerHTML = dockEditHtml({ draft, features: f });
+    const target = which && c.querySelector(which);
+    (target && !target.disabled ? target : c.querySelector(`[data-slot="${from?.dataset?.move ?? 0}"]`) ?? c)?.focus({ preventScroll: true });
+  }
+  return card;
+}
+
+// 계산기: 독·'더' 메뉴에서 열면 결과를 복사하거나 바로 기록(금액 넣은 기록 시트)
+function openCalculator() {
+  haptic();
+  openCalc({ mode: 'free', onRecord: (won) => afterModalPop(() => openSheet(null, { digits: String(won) })) });
+}
+
+// 독 칸 길게 누르기(0.52초) → 칸 배치 바꾸기. 손가락이 10px 넘게 움직이면 취소, 길게 누른 뒤 따라오는 click 은 버림
+let dockHold = null, dockHeldAt = 0;
+document.addEventListener('pointerdown', (e) => {
+  const k = e.target.closest?.('.dock-key');
+  if (!k || e.button) return;
+  k.classList.add('is-squish');
+  clearTimeout(dockHold?.timer);
+  dockHold = { k, x: e.clientX, y: e.clientY, timer: setTimeout(() => { dockHeldAt = Date.now(); k.classList.remove('is-squish'); dockHold = null; openDockEdit(); }, HOLD_MS) };
+});
+document.addEventListener('pointermove', (e) => {
+  if (dockHold && Math.hypot(e.clientX - dockHold.x, e.clientY - dockHold.y) > MOVE_PX) { clearTimeout(dockHold.timer); dockHold.k.classList.remove('is-squish'); dockHold = null; }
+});
+['pointerup', 'pointercancel'].forEach((ev) => document.addEventListener(ev, () => {
+  if (dockHold) { clearTimeout(dockHold.timer); dockHold = null; }
+  document.querySelectorAll('.dock-key.is-squish').forEach((k) => k.classList.remove('is-squish'));
+}));
+document.addEventListener('contextmenu', (e) => {
+  const k = e.target.closest?.('.dock-key');
+  if (!k) return;
+  e.preventDefault(); // 휴대폰 길게 누르기 기본 메뉴 대신. 키보드 메뉴 키(Shift+F10)로도 배치 바꾸기
+  if (Date.now() - dockHeldAt < 600) return; // 길게 누르기 타이머가 이미 열었음
+  if (dockHold) { clearTimeout(dockHold.timer); dockHold = null; }
+  k.classList.remove('is-squish');
+  dockHeldAt = Date.now();
+  openDockEdit();
+});
+// 길게 누른 뒤 손을 떼면 오는 click 은 이동하지 않음(캡처 단계에서 먼저 끊음)
+document.addEventListener('click', (e) => {
+  if (Date.now() - dockHeldAt < 700 && e.target.closest?.('.dock-key')) { e.preventDefault(); e.stopImmediatePropagation(); }
+}, true);
 
 // ── 구석 팁 ─────────────────────────────────────────
 const tipState = () => { try { return JSON.parse(localStorage.getItem('tips')) ?? emptyTipState(); } catch { return emptyTipState(); } };
@@ -131,16 +306,28 @@ let currentTip = null;
 function pickTip() {
   const r = nextTip(tipState(), today());
   saveTipState(r.state);
-  currentTip = r.tip ? { text: r.tip, key: r.key } : null;
+  currentTip = r.tip ? { text: r.tip, index: r.index } : null;
 }
 function renderTip() {
   const slot = $('#tip-slot');
   if (!slot) return;
-  slot.setAttribute('aria-live', 'polite'); // 스펙 7절: aria-live="polite", 앞에 💡 붙이지 않음(QA 6차 4)
-  const html = ui.view !== 'home' || !currentTip || isSheetOpen() ? ''
-    // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
-    : `<div class="tip"><p><span class="sr-only">팁: </span>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
-  if (slot.innerHTML !== html) slot.innerHTML = html; // 같은 팁을 다시 그려 화면 읽기가 되풀이하지 않게
+  // 설치 안내가 뜨는 날(2~5번째 날)은 안내가 먼저, 팁은 안내를 닫은 뒤에(한 번에 하나만)
+  if (ui.view !== 'home' || !currentTip || isSheetOpen() || hintOn()) { slot.innerHTML = ''; return; }
+  // 홈 본문 흐름 안의 한 줄(떠 있지 않아 기록·메뉴·토스트를 가리지 않음, QA M1·L1)
+  slot.innerHTML = `<div class="tip" role="note" aria-label="팁"><span class="py-1.5" aria-hidden="true">💡</span><p>${esc(currentTip.text)}</p><button class="tip-x" data-tip-close aria-label="팁 닫기 (오늘 하루 숨김)">✕</button></div>`;
+}
+
+function hintOn() {
+  if (ui.view !== 'home' || !state.user || isSheetOpen()) return false;
+  const st = curInstall();
+  if (st === 'standalone') return false;
+  visits ??= bumpVisits(localStorage, today());
+  return shouldShowHint({ state: st, visits, dismissed: hintDismissed() });
+}
+function renderInstallHint() {
+  const slot = $('#install-slot');
+  if (!slot) return;
+  slot.innerHTML = hintOn() ? installHint(curInstall()) : '';
 }
 
 // ── 동작 ───────────────────────────────────────────
@@ -155,7 +342,7 @@ function onSave(tx, { repeat = false } = {}) {
   if (repeat && tx.amount > 0) {
     // 이번 회차는 방금 기록했으니 lastPosted = 이번 달 → 다음 달부터 자동 기록
     const ym = tx.date.slice(0, 7);
-    data.saveRecurring({ name: (tx.memo || c?.name || '반복').split(' #')[0].slice(0, 30), amount: tx.amount, kind: tx.kind, categoryId: tx.categoryId, accountId: tx.accountId, dayOfMonth: Number(tx.date.slice(8)), active: true, startYm: ym, lastPosted: ym });
+    data.saveRecurring({ name: (tx.memo || c?.name || '반복').split(' #')[0].slice(0, 30), amount: tx.amount, kind: tx.kind, categoryId: tx.categoryId, accountId: tx.accountId, dayOfMonth: Number(tx.date.slice(8)), active: true, startYm: ym, lastPosted: ym, owner: ownerToWrite(tx.owner) });
     return setTimeout(() => toast(`🔁 매달 ${Number(tx.date.slice(8))}일에 ${formatWon(tx.amount)} 자동으로 기록할게요.`, { action: '반복 보기', onAction: () => go('recurring') }), 50);
   }
   // 분류를 고치면 규칙 제안: 앞으로 같은 가맹점은 이 카테고리로('10월' 같은 일반어·이미 맞는 규칙은 묻지 않음)
@@ -164,15 +351,15 @@ function onSave(tx, { repeat = false } = {}) {
     const old = sug.existing, oc = old && state.categories.find((x) => x.id === old.categoryId);
     const q = old ? `'${sug.key}' 규칙(${oc?.name ?? '다른 카테고리'})을 ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 바꿀까요?`
       : `앞으로 ${josa(`'${sug.key}'`, '은는')} ${c?.emoji ?? ''} ${josa(c?.name ?? '', '으로')} 분류할까요?`;
-    return setTimeout(() => toast(`고쳤어요 · ${q}`, {
+    return setTimeout(() => toast(`고쳤어요. ${q}`, {
       action: old ? '바꾸기' : '그렇게 하기', duration: 6000,
       onAction: () => { data.saveRule({ id: old?.id, match: sug.key, categoryId: tx.categoryId }); toast(old ? '규칙을 바꿨어요.' : '규칙을 만들었어요. 설정에서 고칠 수 있어요.'); },
     }), 50);
   }
   setTimeout(() => {
     const m = model();
-    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` · 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
-    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요' : '남겼어요'}${extra}`, {
+    const extra = tx.kind === 'expense' && m.weather.hasBudget && tx.date === m.today ? ` 오늘 쓸 돈 ${formatWon(m.weather.available)}` : '';
+    toast(`${c?.name ?? ''} ${tx.amount < 0 ? '환불 ' : ''}${formatWon(Math.abs(tx.amount))} ${isEdit ? '고쳤어요.' : '기록!'}${extra}`, {
       action: '되돌리기', onAction: () => (before ? data.restoreTx(before) : data.deleteTx(id)),
     });
   }, 50);
@@ -185,7 +372,7 @@ function onDelete(id) {
   const before = findTx(id);
   data.deleteTx(id);
   if (ui.searchAll) { ui.searchAll = ui.searchAll.filter((t) => t.id !== id); if (ui.view === 'search') schedule(); }
-  toast('지웠어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
+  toast('삭제했어요.', { action: '되돌리기', onAction: () => before && data.restoreTx(before) });
 }
 function download(name, text, type = 'text/csv;charset=utf-8') {
   const url = URL.createObjectURL(new Blob([text], { type }));
@@ -194,10 +381,12 @@ function download(name, text, type = 'text/csv;charset=utf-8') {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function go(view, extra = {}) {
-  if (ui.view === 'import' && view !== 'import') ui.imp = null; // 가져오기에서 나가면 읽은 파일을 메모리에서 버림
-  if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
+  const from = ui.view;
+  if (from === 'import' && view !== 'import') ui.imp = null; // 가져오기에서 나가면 읽은 파일을 메모리에서 버림
+  if (view === 'search' && from !== 'search') { ui.searchAll = null; refreshSearch(); }
   Object.assign(ui, { view, emojiFor: null }, extra);
-  history.replaceState(null, '', view === 'home' ? location.pathname : `#${view}`);
+  if (from !== view) nav.show(view);
+  exitGuard.noteStay(location.href);
   render();
   $('#main')?.focus({ preventScroll: true });
   scrollMainTop();
@@ -222,8 +411,9 @@ async function editRecurring(r) {
       { name: 'categoryId', label: '카테고리', type: 'select', value: r?.categoryId ?? state.categories.find((c) => c.kind === 'expense')?.id, options: catOptions() },
       { name: 'dayOfMonth', label: '매달 며칠', type: 'select', value: r?.dayOfMonth ?? Number(t.slice(8)), options: Array.from({ length: 31 }, (_, i) => [i + 1, `${i + 1}일`]) },
       { name: 'accountId', label: '결제수단', type: 'select', value: r?.accountId ?? '', options: [['', '지정 안 함'], ...state.accounts.map((a) => [a.id, `${a.emoji || ''} ${a.name}`])] },
+      ...(state.features?.txOwner ? [{ name: 'owner', label: '누구 돈', type: 'select', value: r?.owner === '배우자' || r?.owner === '공동' ? r.owner : '', options: [['', '나'], ['배우자', spouseLabel(state.settings)], ['공동', '공동']], hint: '나는 기록에 누구 돈을 적지 않아요. 배우자 입금이면 배우자를 고르세요.' }] : []),
     ],
-    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 먼저 적어 주세요.' : x.amount > 1_000_000_000 ? '한 번에 10억 원까지 적을 수 있어요.' : null),
+    validate: (x) => (!x.name ? '이름을 적어 주세요.' : x.name.length > 30 ? '이름은 30자까지예요.' : !x.amount ? '금액을 입력해 주세요.' : x.amount > 1_000_000_000 ? '10억 원까지 입력할 수 있어요.' : null),
   });
   if (!v) return;
   const c = state.categories.find((x) => x.id === v.categoryId);
@@ -231,16 +421,45 @@ async function editRecurring(r) {
   // 새로 만들 때: 오늘이 이미 지난 날이면 이번 달은 건너뜀(직접 기록했을 수 있음) → 다음 달부터
   const ym = t.slice(0, 7);
   const lastPosted = isNew ? (day <= Number(t.slice(8)) ? ym : undefined) : r.lastPosted;
-  data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted });
+  const pickedOwner = state.features?.txOwner ? v.owner : r?.owner;
+  data.saveRecurring({ ...(r ?? {}), name: v.name, amount: v.amount, kind: c?.kind === 'income' ? 'income' : 'expense', categoryId: v.categoryId, accountId: v.accountId || undefined, dayOfMonth: day, active: r?.active ?? true, startYm: r?.startYm ?? ym, lastPosted, owner: pickedOwner === '나' ? '나' : ownerToWrite(pickedOwner) });
   setTimeout(() => data.postRecurring(today()), 300);
-  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요');
+  toast(isNew ? `🔁 매달 ${day}일에 ${formatWon(v.amount)} 기록할게요.${lastPosted === ym ? ' 이번 달 것은 건너뛰었어요.' : ''}` : '고쳤어요.');
 }
 const GOAL_EMOJI = ['🎯', '✈️', '🏠', '🚗', '💍', '🎓', '🛟', '💻', '🎁', '🐷'];
-async function editGoal(g) {
+function applyModeChoice(mode) {
+  const next = settingsForMode(mode);
+  data.saveSettings(next);
+  if (next.features.studentIncome) data.ensureStudentIncome();
+  if (next.features.recurring) setTimeout(() => data.postRecurring(today()), 300);
+  const leaveRecurring = ui.view === 'recurring' && !next.features.recurring;
+  const label = MODES.find((x) => x.id === mode)?.label ?? '';
+  toast(`${label}에 맞춰 메뉴를 골랐어요. 설정에서 기능을 더 켜고 끌 수 있어요.`);
+  if (leaveRecurring) go('settings');
+  else render();
+}
+async function editAllowance() {
+  const a = allowanceFrom(state.settings);
   const v = await formDialog({
-    title: g ? '저축 목표 고치기' : '저축 목표 추가',
+    title: '용돈', body: '다음 용돈날까지 남은 돈을 남은 일수로 나눈 하루 몫이에요. 홈의 큰 숫자와는 계산이 달라요.',
     fields: [
-      { name: 'emoji', label: '아이콘', type: 'select', value: g?.emoji ?? '🎯', options: GOAL_EMOJI.map((e) => [e, e]) },
+      { name: 'amount', label: '한 번에 받는 용돈', type: 'amount', value: a.amount },
+      { name: 'cycle', label: '주기', type: 'select', value: a.cycle, options: [['month', '매달'], ['week', '매주']] },
+      { name: 'day', label: '매달 며칠 (1~28일)', type: 'select', value: a.day, options: Array.from({ length: 28 }, (_, i) => [i + 1, `${i + 1}일`]) },
+      { name: 'weekday', label: '매주 요일', type: 'select', value: a.weekday, options: ['일', '월', '화', '수', '목', '금', '토'].map((l, i) => [i, `${l}요일`]) },
+    ],
+    validate: (x) => (x.amount > 10_000_000_000 ? '100억 원까지예요.' : null),
+  });
+  if (!v) return;
+  data.saveSettings({ allowanceAmount: v.amount, allowanceCycle: v.cycle === 'week' ? 'week' : 'month', allowanceDay: Number(v.day) || 1, allowanceWeekday: Number(v.weekday) || 0 });
+  toast('용돈을 정했어요.');
+}
+async function editGoal(g) {
+  const piggy = !!(state.mode && state.features?.piggy);
+  const v = await formDialog({
+    title: piggy ? (g ? '저금통 고치기' : '저금통에 넣기') : (g ? '저축 목표 고치기' : '저축 목표 추가'),
+    fields: [
+      { name: 'emoji', label: '아이콘', type: 'select', value: g?.emoji ?? (piggy ? '🐷' : '🎯'), options: GOAL_EMOJI.map((e) => [e, e]) },
       { name: 'name', label: '이름', value: g?.name ?? '', maxlength: 30, hint: '예: 제주 여행, 비상금' },
       { name: 'target', label: '목표 금액', type: 'amount', value: g?.target ?? 0 },
       { name: 'saved', label: '지금까지 모은 돈', type: 'amount', value: g?.saved ?? 0 },
@@ -250,7 +469,7 @@ async function editGoal(g) {
   });
   if (!v) return;
   data.saveGoal({ ...(g ?? { order: state.goals.length }), ...v, due: v.due || undefined });
-  toast(g ? '고쳤어요' : `🎯 '${v.name}' 목표를 만들었어요.`);
+  toast(g ? '고쳤어요.' : `🎯 '${v.name}' 목표를 만들었어요.`);
 }
 async function editRule() {
   const v = await formDialog({
@@ -264,13 +483,168 @@ async function editRule() {
   toast(old ? '같은 글자의 규칙을 바꿨어요.' : '규칙을 만들었어요.');
 }
 
+const TYPE_OPTIONS = [['stock', '일반 주식'], ['pension', '연금저축'], ['irp', 'IRP'], ['isa', 'ISA'], ['dc', 'DC'], ['civil', '공무원연금']];
+const KIND_OPTIONS = [['stock', '주식'], ['etf', 'ETF'], ['fund', '펀드'], ['deposit', '예금']];
+function assetById(id) { return state.assetAccounts.find((a) => a.id === id); }
+async function editAssetAccount(a) {
+  const v = await formDialog({
+    title: a ? '계좌 고치기' : '계좌 추가',
+    body: '계좌번호는 저장하지 않아요. 기관 이름과 별명만 적어 주세요.',
+    fields: [
+      { name: 'type', label: '종류', type: 'select', value: a?.type ?? 'pension', options: TYPE_OPTIONS },
+      { name: 'institution', label: '금융기관', value: a?.institution ?? '', maxlength: 40, hint: '예: 삼성증권, 공무원연금공단' },
+      { name: 'name', label: '이름', value: a?.name ?? '', maxlength: 40, hint: '예: 직장인 연금' },
+      { name: 'opened', label: '개설일', type: 'date', value: a?.opened ?? today() },
+      { name: 'maturity', label: 'ISA 만기일', type: 'date', value: a?.maturity ?? '', hint: 'ISA만 필요해요.' },
+      { name: 'expectedPension', label: '공무원연금 예상 월액', type: 'amount', value: a?.expectedPension ?? 0, hint: '공무원연금만 써요. 총자산에는 더하지 않아요.' },
+    ],
+    validate: (x) => validateAssetAccount(x),
+  });
+  if (!v) return;
+  const id = data.saveAssetAccount({ ...(a ?? { order: state.assetAccounts.length }), ...v, maturity: v.type === 'isa' ? v.maturity : undefined, expectedPension: v.type === 'civil' ? v.expectedPension : undefined });
+  ui.assetOpen = id;
+  toast(a ? '계좌를 고쳤어요.' : '계좌를 추가했어요.');
+  render();
+}
+async function editHolding(accountId, h) {
+  const v = await formDialog({
+    title: h ? '종목 고치기' : '종목 추가',
+    body: '주식·ETF 코드는 6자리예요. 펀드 기준가와 예금은 여기서 직접 적어요.',
+    fields: [
+      { name: 'kind', label: '종류', type: 'select', value: h?.kind ?? 'stock', options: KIND_OPTIONS },
+      { name: 'name', label: '이름', value: h?.name ?? '', maxlength: 80 },
+      { name: 'code', label: '종목 코드', value: h?.code ?? '', maxlength: 12, hint: '예: 005930. 펀드·예금은 비워도 돼요.' },
+      { name: 'qty', label: '수량', value: h ? formatQty(h.qtyE4) : '', inputmode: 'decimal', hint: '소수 넷째 자리까지' },
+      { name: 'avgPrice', label: '평균 단가', type: 'amount', value: h?.avgPrice ?? 0 },
+      { name: 'lastPrice', label: '현재 가격', type: 'amount', value: h?.lastPrice ?? 0, hint: '0원이면 시세 없음으로 둬요.' },
+      { name: 'priceDate', label: '시세 기준일', type: 'date', value: h?.priceDate || (h?.lastPrice ? today() : '') },
+    ],
+    validate: (x) => validateHolding({ ...x, priceDate: x.lastPrice > 0 ? x.priceDate : '' }),
+  });
+  if (!v) return;
+  const qtyE4 = parseQtyE4(v.qty);
+  const code = normalizeCode(v.code);
+  const priced = v.lastPrice > 0;
+  data.saveHolding({
+    ...(h ?? {}), assetAccountId: accountId, kind: v.kind, name: v.name, code: code || undefined, qtyE4,
+    avgPrice: v.avgPrice, lastPrice: priced ? v.lastPrice : undefined, priceDate: priced ? v.priceDate : undefined,
+    priceSource: priced ? 'manual' : undefined,
+  });
+  ui.assetOpen = accountId;
+  toast(h ? '종목을 고쳤어요.' : '종목을 추가했어요.');
+  render();
+}
+async function editHoldingPrice(h) {
+  const v = await formDialog({
+    title: '시세 고치기',
+    body: `${h.name}의 가격과 기준일을 적어 주세요. 0원이면 시세를 비워요. 자동 시세는 이 날짜보다 더 새로운 날만 덮어써요.`,
+    fields: [
+      { name: 'lastPrice', label: '현재 가격', type: 'amount', value: h.lastPrice || 0 },
+      { name: 'priceDate', label: '시세 기준일', type: 'date', value: h.priceDate || today() },
+    ],
+    validate: (x) => (x.lastPrice < 0 || x.lastPrice > 10_000_000_000 ? '가격은 0원~100억 원이에요.' : x.lastPrice > 0 && !isYmd(x.priceDate) ? '기준일을 확인해 주세요.' : null),
+  });
+  if (!v) return;
+  const priced = v.lastPrice > 0;
+  data.saveHolding({ ...h, lastPrice: priced ? v.lastPrice : undefined, priceDate: priced ? v.priceDate : undefined, priceSource: priced ? 'manual' : undefined });
+  toast('시세를 고쳤어요.', { action: '되돌리기', onAction: () => data.saveHolding(h) });
+}
+async function editContribution(account) {
+  const deductible = account.type === 'pension' || account.type === 'irp' || account.type === 'dc';
+  const v = await formDialog({
+    title: '납입 추가',
+    body: '세액공제에 체크한 연금저축·IRP·DC만 올해 환급 계산에 들어가요.',
+    fields: [
+      { name: 'date', label: '날짜', type: 'date', value: today() },
+      { name: 'amount', label: '금액', type: 'amount', value: 0 },
+      { name: 'deductible', label: '세액공제 대상', type: 'checkbox', value: deductible },
+    ],
+    validate: (x) => validateContribution(x),
+  });
+  if (!v) return;
+  data.saveContribution({ assetAccountId: account.id, date: v.date, amount: v.amount, deductible: v.deductible });
+  ui.assetOpen = account.id;
+  toast('납입을 적었어요.');
+  render();
+}
+async function editTaxPrefs() {
+  const p = taxPrefs(state.assetPrefs);
+  const v = await formDialog({
+    title: '세액공제 한도·세율',
+    body: '기본은 연금저축 600만 원, 연금저축+IRP+DC 900만 원, 16.5%와 13.2%예요.',
+    fields: [
+      { name: 'pensionLimit', label: '연금저축 한도', type: 'amount', value: p.pensionLimit },
+      { name: 'combinedLimit', label: '합산 한도', type: 'amount', value: p.combinedLimit },
+      { name: 'rateHigh', label: '높은 세율 (%)', value: formatRateBp(p.rateHigh).replace('%', '') },
+      { name: 'rateLow', label: '낮은 세율 (%)', value: formatRateBp(p.rateLow).replace('%', '') },
+    ],
+    validate: (x) => validateTaxPrefs(x),
+  });
+  if (!v) return;
+  data.saveAssetPrefs({ ...p, pensionLimit: v.pensionLimit, combinedLimit: v.combinedLimit, rateHigh: parseRateBp(v.rateHigh), rateLow: parseRateBp(v.rateLow) });
+  toast('한도와 세율을 저장했어요.');
+}
+async function onAssetClick(d) {
+  if (d.assetAdd !== undefined) return editAssetAccount(null);
+  if (d.assetOpen) { ui.assetOpen = ui.assetOpen === d.assetOpen ? null : d.assetOpen; return render(); }
+  if (d.assetEdit) return editAssetAccount(assetById(d.assetEdit));
+  if (d.assetDel) {
+    const a = assetById(d.assetDel);
+    if (!a) return;
+    const holdings = state.holdings.filter((h) => h.assetAccountId === a.id);
+    const contributions = state.contributions.filter((c) => c.assetAccountId === a.id);
+    if (!(await confirmDialog({ title: `'${a.name}' 계좌를 지울까요?`, body: '이 계좌의 종목과 납입 기록도 함께 지워져요. 가계부 거래는 그대로예요.', ok: '지우기', danger: true }))) return;
+    try { await data.deleteAssetAccount(a.id); } catch { return toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
+    if (ui.assetOpen === a.id) ui.assetOpen = null;
+    return toast('지웠어요.', { action: '되돌리기', onAction: () => { data.saveAssetAccount(a); holdings.forEach((h) => data.saveHolding(h)); contributions.forEach((c) => data.saveContribution(c)); } });
+  }
+  if (d.holdingAdd) return editHolding(d.holdingAdd, null);
+  if (d.holdingEdit) { const h = state.holdings.find((x) => x.id === d.holdingEdit); return h && editHolding(h.assetAccountId, h); }
+  if (d.holdingPrice) { const h = state.holdings.find((x) => x.id === d.holdingPrice); return h && editHoldingPrice(h); }
+  if (d.holdingDel) {
+    const h = state.holdings.find((x) => x.id === d.holdingDel);
+    if (!h || !(await confirmDialog({ title: `'${h.name}' 종목을 지울까요?`, ok: '지우기', danger: true }))) return;
+    data.deleteHolding(h.id);
+    return toast('지웠어요.', { action: '되돌리기', onAction: () => data.saveHolding(h) });
+  }
+  if (d.contribAdd) { const a = assetById(d.contribAdd); return a && editContribution(a); }
+  if (d.contribDel) {
+    const c = state.contributions.find((x) => x.id === d.contribDel);
+    if (!c) return;
+    data.deleteContribution(c.id);
+    return toast('납입을 지웠어요.', { action: '되돌리기', onAction: () => data.saveContribution(c) });
+  }
+  if (d.taxRate) {
+    const p = taxPrefs(state.assetPrefs);
+    if (p.rateChoice === d.taxRate) return;
+    data.saveAssetPrefs({ ...p, rateChoice: d.taxRate === 'low' ? 'low' : 'high' });
+    return;
+  }
+  if (d.taxEdit !== undefined) return editTaxPrefs();
+}
+
 // ── 가져오기 동작 ──────────────────────────────────
 const impCtx = () => ({ categories: state.categories, rules: state.rules, txsInRange: data.txsInRange, importTxs: data.importTxs });
 async function impLoad(bytes, name, enc) {
   const imp = ui.imp ?? (ui.imp = IMP.newImport());
+  const before = imp.step;
+  if (before < 2) nav.pushStep(2);
   imp.busy = true; render();
   await IMP.loadFile(imp, bytes, name, enc);
+  if (imp.step < 2) nav.undoStep();
   render(); $('#main')?.focus({ preventScroll: true });
+}
+async function restoreFile(file) {
+  if (!file) return;
+  let parsed;
+  try { parsed = parseBackup(JSON.parse(await file.text())); }
+  catch (e) { return toast(e?.message || '백업 파일을 읽지 못했어요.'); }
+  const ok = await confirmDialog({ title: '백업을 더할까요?', body: '파일에 있는 기록만 같은 칸에 넣어요. 파일에 없는 기록은 지우지 않아요. 예전 백업에 없는 항목도 그대로 둡니다.', ok: '더하기' });
+  if (!ok) return;
+  try {
+    const result = await data.restoreBackup(parsed);
+    toast(restoreMessage({ online: navigator.onLine, queued: !!result?.queued }));
+  } catch { toast('복원하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
 }
 async function impFile(file) {
   if (!file) return;
@@ -285,8 +659,7 @@ async function onImportClick(d) {
   if (!imp) return;
   if (d.impRestart !== undefined) { ui.imp = IMP.newImport(); render(); scrollMainTop(); return $('#main')?.focus({ preventScroll: true }); }
   if (d.impBack !== undefined) {
-    if (imp.step === 2) { ui.imp = IMP.newImport(); return render(); }
-    if (imp.step === 3 || imp.step === 4) { imp.step--; imp.error = ''; return render(); }
+    if (imp.step > 1) { history.back(); return; }
     return go('settings');
   }
   if (d.impSample !== undefined) {
@@ -306,15 +679,20 @@ async function onImportClick(d) {
   if (d.impSkipall !== undefined) { imp.choice = {}; return render(); }
   if (d.impChoice) { imp.choice[d.impChoice] = d.v; return render(); }
   if (d.impNext !== undefined) {
+    const before = imp.step;
+    if (imp.step === 2) nav.pushStep(3);
+    else if (imp.step === 3) nav.pushStep(4);
+    else if (imp.step === 4) nav.pushStep(5);
     if (imp.step === 2) { imp.busy = true; render(); await IMP.checkDuplicates(imp, impCtx()); }
     else if (imp.step === 3) imp.step = 4;
     else if (imp.step === 4) { imp.busy = true; render(); await IMP.commit(imp, impCtx()); if (imp.step === 5) haptic(20); }
+    if (imp.step === before) nav.undoStep();
     render(); scrollMainTop(); $('#main')?.focus({ preventScroll: true });
   }
 }
 
 async function editBudget(m) {
-  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 꺼요.', value: m.budget?.total ?? 0 });
+  const v = await promptAmount({ title: `${monthLabel(m.viewYm, m.sd)} 예산`, body: '한 달 동안 쓸 총액을 정해 주세요. 0원이면 예산을 끕니다.', value: m.budget?.total ?? 0 });
   if (v == null) return;
   const pr = state.budget?.byCategory ? pruneLimits(state.budget.byCategory, state.categories).by : undefined;
   data.setBudget(m.viewYm, v, pr && Object.keys(pr).length ? pr : undefined);
@@ -329,14 +707,23 @@ app.addEventListener('click', async (e) => {
   const d = t.dataset;
   if (d.scaleStep !== undefined) return setScale(stepScale(contentScale, Number(d.scaleStep)));
   if (d.scaleReset !== undefined) return setScale(1);
+  if (d.startDay !== undefined) {
+    const n = Number(d.startDay);
+    if (!Number.isInteger(n) || n < 1 || n > 31) return;
+    state.settings = { ...(state.settings || {}), monthStartDay: n };
+    data.saveSettings({ monthStartDay: n });
+    ui.viewYm = null;
+    render();
+    return toast(`한 달 시작일을 ${n}일로 바꿨어요.`);
+  }
   const m = state.user ? model() : null;
+  if (d.assetAdd !== undefined || d.assetOpen || d.assetEdit || d.assetDel || d.holdingAdd || d.holdingEdit || d.holdingPrice || d.holdingDel || d.contribAdd || d.contribDel || d.taxRate || d.taxEdit !== undefined) return onAssetClick(d);
   if (d.nav) {
     // '목록에서 보기'(가져오기 완료): 가져온 거래가 있는 달로 이동
     const ym = d.date ? periodOf(d.date, m?.sd) : null;
     return go(d.nav, { ...(d.mode ? { mode: d.mode, catFilter: null } : {}), ...(ym ? { viewYm: m && ym >= m.curYm ? null : ym, selDate: null } : {}) });
   }
   if (d.tx) { const tx = findTx(d.tx); return tx && openSheet(tx); }
-  if (d.action === 'apply-update') return updater.apply();
   if (Object.keys(d).some((k) => k.startsWith('imp'))) return onImportClick(d);
   // 검색
   if (d.searchKind !== undefined) { ui.search.kind = d.searchKind; if (ui.search.categoryId && m.catMap.get(ui.search.categoryId)?.kind !== d.searchKind && d.searchKind) ui.search.categoryId = ''; return render(); }
@@ -344,6 +731,18 @@ app.addEventListener('click', async (e) => {
   if (d.searchTry) { ui.search.q = d.searchTry; render(); return $('[data-search-q]')?.focus(); }
   // 반복 거래
   if (d.recEdit) return editRecurring(state.recurring.find((r) => r.id === d.recEdit));
+  if (d.pickMode) return applyModeChoice(d.pickMode);
+  if (d.modeLater !== undefined) { data.saveSettings({ askMode: false }); return toast('지금 메뉴를 그대로 둘게요. 설정에서 언제든 고를 수 있어요.'); }
+  if (d.setMode) return applyModeChoice(d.setMode);
+  if (d.recPreset === 'rent' || d.recPreset === 'sub') {
+    const housing = state.categories.some((c) => c.id === 'housing') ? 'housing' : 'etc';
+    const telecom = state.categories.some((c) => c.id === 'telecom') ? 'telecom' : 'etc';
+    const profileDay = state.profile?.monthStartDay;
+    const payday = monthStartDayOf(state.settings) ?? (Number.isInteger(profileDay) && profileDay >= 1 && profileDay <= 31 ? profileDay : 1);
+    return editRecurring(d.recPreset === 'rent'
+      ? { name: '월세', amount: 0, kind: 'expense', categoryId: housing, dayOfMonth: payday, active: true }
+      : { name: '구독', amount: 0, kind: 'expense', categoryId: telecom, dayOfMonth: 1, active: true });
+  }
   if (d.recFrom) {
     const ids = new Set(state.categories.map((x) => x.id));
     const categoryId = ids.has(d.cat) ? d.cat : classify({ desc: d.recFrom, kind: 'expense' }, state.rules, ids).categoryId;
@@ -377,10 +776,13 @@ app.addEventListener('click', async (e) => {
   }
   if (d.date) { ui.selDate = ui.selDate === d.date ? null : d.date; return render(); }
   if (d.addOn) return openSheet(null, { date: d.addOn });
+  if (d.ownerFilter !== undefined) { ui.ownerFilter = d.ownerFilter || null; return render(); }
   if (d.mode) { ui.mode = d.mode; return render(); }
   if (d.clearFilter !== undefined) { ui.catFilter = null; return render(); }
   if (d.filterCat) return go('calendar', { mode: 'list', catFilter: d.filterCat });
   if (d.theme) { setThemeMode(d.theme); return render(); }
+  if (d.mood) return pushLook({ mood: d.mood });
+  if (d.fontPick) return pushLook({ font: d.fontPick });
   if (d.catKind) { ui.catKind = d.catKind; ui.emojiFor = null; return render(); }
   if (d.accEmoji) { ui.accEmojiFor = ui.accEmojiFor === d.accEmoji ? null : d.accEmoji; return render(); }
   if (d.accPick) { const a = state.accounts.find((x) => x.id === ui.accEmojiFor); ui.accEmojiFor = null; if (a) data.saveAccount({ ...a, emoji: d.accPick }); return render(); }
@@ -416,7 +818,7 @@ app.addEventListener('click', async (e) => {
   if (d.env) {
     const c = state.categories.find((x) => x.id === d.env);
     const cur = state.budget?.byCategory?.[d.env] ?? 0;
-    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없애요.', value: cur });
+    const v = await promptAmount({ title: `${c.emoji} ${c.name} 한도`, body: '0원이면 한도를 없앱니다.', value: cur });
     if (v == null) return;
     const by = { ...(state.budget?.byCategory ?? {}) };
     v ? (by[d.env] = v) : delete by[d.env];
@@ -426,15 +828,53 @@ app.addEventListener('click', async (e) => {
     if (!pr.ok) return toast('카테고리 한도는 30개까지 정할 수 있어요. 안 쓰는 카테고리 한도를 눌러 0원으로 지운 뒤 다시 해 주세요.', { duration: 6000 });
     return data.setBudget(m.viewYm, state.budget?.total ?? 0, Object.keys(pr.by).length ? pr.by : undefined);
   }
-  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.key, today())); currentTip = null; return renderTip(); }
+  if (d.installHintClose !== undefined) {
+    // 닫은 뒤 초점이 body 로 떨어지지 않게 다음 칸(팁 닫기, 없으면 본문)으로
+    dismissHint(); renderInstallHint(); renderTip();
+    return ($('#tip-slot .tip-x') ?? $('#main'))?.focus({ preventScroll: true });
+  }
+  if (d.budgetToggle !== undefined) { localStorage.setItem('homeBudgetOpen', localStorage.getItem('homeBudgetOpen') === '1' ? '0' : '1'); return render(); }
+  if (d.tipClose !== undefined) { saveTipState(dismissTip(tipState(), currentTip.index, today())); currentTip = null; return renderTip(); }
   switch (d.action) {
-    case 'add': haptic(); return openSheet();
+    case 'add': if (t.matches('.fab')) return addPop(t); haptic(); return openSheet(); // 쨈 컵: '탁' 연출 뒤 시트(연달아 눌러도 한 번), 진동·소리는 누를 때(feel.js)
     case 'add-rec': return editRecurring(null);
+    case 'calc': return openCalculator();
+    case 'dock-more': return openDockMenu();
+    case 'install-app': {
+      if (installer.busy()) return; // 설치 창이 떠 있는 동안 또 누르면 무시
+      haptic();
+      app.querySelectorAll('[data-action="install-app"]').forEach((b) => { b.disabled = true; });
+      const r = await installer.prompt();
+      if (r === 'unavailable') toast('지금은 설치 창을 띄울 수 없어요. 설정의 \'앱으로 설치\' 안내를 봐 주세요.');
+      return render();
+    }
     case 'add-goal': return editGoal(null);
     case 'add-rule': return editRule();
-    case 'report':
-      try { const { openReport } = await import('./ui/report.js'); await openReport(m, { toast }); } catch (err) { console.error(err); toast('리포트 이미지를 만들지 못했어요.'); }
+    case 'allowance': return editAllowance();
+    case 'share-text':
+      try {
+        const { reportData, drawReport } = await import('./ui/report.js');
+        const { monthSummaryText, shareSummary } = await import('./lib/shareSummary.js');
+        const d = reportData(m);
+        const text = monthSummaryText(d);
+        const blob = await drawReport(d, { dark: m.dark });
+        const file = new File([blob], `쨈가계부_${d.ym}_요약.png`, { type: 'image/png' });
+        const r = await shareSummary({ text, file, title: `${d.month}월 요약` });
+        if (r === 'shared') toast('요약을 공유했어요.');
+        else if (r === 'copied') toast('글을 복사하고 이미지를 저장했어요.');
+        else if (r === 'downloaded') toast('이미지를 저장했어요.');
+        else if (r !== 'abort') toast('공유하지 못했어요.');
+      } catch (err) { console.error(err); toast('요약을 만들지 못했어요.'); }
       return;
+    case 'json-in': {
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'application/json,.json';
+      input.onchange = () => restoreFile(input.files?.[0]);
+      input.click();
+      return;
+    }
+    case 'report': return runReport(m);
     case 'theme': toggleTheme(); return render();
     case 'budget': return editBudget(m);
     case 'login':
@@ -453,10 +893,10 @@ app.addEventListener('click', async (e) => {
       if (!r.left) return toast(r.saved > 1 ? `보관해 둔 기록 ${r.saved}건을 모두 저장했어요.` : '보관해 둔 기록을 저장했어요.');
       return toast(`${r.saved ? `${r.saved}건은 저장했지만 ` : ''}${r.left}건은 아직 저장하지 못했어요. 기록은 이 기기에 그대로 있으니, CSV로 받아 두면 직접 옮겨 적을 수 있어요.`, { duration: 7000 });
     }
-    case 'kept-csv': return download(`쓱가계부_보관기록_${m.today}.csv`, toCSV(state.kept, state));
-    case 'csv-month': return download(`쓱가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
+    case 'kept-csv': return download(`쨈가계부_보관기록_${m.today}.csv`, toCSV(state.kept, state));
+    case 'csv-month': return download(`쨈가계부_${m.viewYm}.csv`, toCSV(m.periodTxs, state));
     case 'csv-all':
-      try { download(`쓱가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
+      try { download(`쨈가계부_전체_${m.today}.csv`, toCSV(await data.allTransactions(), state)); }
       catch { toast('내보내지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'add-acc': {
@@ -473,13 +913,13 @@ app.addEventListener('click', async (e) => {
     case 'json-all':
       try {
         // 규칙·반복·목표·모든 달 예산·가져오기 기록까지(QA M4)
-        const [txs, budgets] = await Promise.all([data.allTransactions(), data.allBudgets()]);
-        const b = buildBackup({ profile: { monthStartDay: m.sd }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports });
-        download(`쓱가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
+        const [txs, budgets, assets] = await Promise.all([data.allTransactions(), data.allBudgets(), data.assetExport()]);
+        const b = buildBackup({ profile: { monthStartDay: m.storedStart ?? state.profile?.monthStartDay ?? 1 }, categories: state.categories, accounts: state.accounts, transactions: txs, budgets, rules: state.rules, recurring: state.recurring, goals: state.goals, imports: state.imports, settings: state.settings, ...assets });
+        download(`쨈가계부_백업_${m.today}.json`, JSON.stringify(b, null, 2), 'application/json');
       } catch { toast('백업하지 못했어요. 인터넷 연결을 확인해 주세요.'); }
       return;
     case 'delete-all':
-      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 다 지워지고, 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
+      if (!(await confirmDialog({ title: '정말 모두 지울까요?', body: '모든 기록·카테고리·예산과 계정이 지워지고 되돌릴 수 없어요. 먼저 CSV로 내보내 두면 안심이에요.', ok: '삭제', danger: true, typeToConfirm: '삭제' }))) return;
       try { const r = await data.deleteEverything(); toast(r === 'deleted' ? '모두 지웠어요.' : '기록을 지웠어요. 계정 삭제는 다시 로그인한 뒤 해 주세요.'); }
       catch { toast('지우지 못했어요. 인터넷 연결을 확인해 주세요.'); }
   }
@@ -496,12 +936,38 @@ app.addEventListener('change', (e) => {
   if (t.dataset.accName) {
     const a = state.accounts.find((x) => x.id === t.dataset.accName), name = t.value.trim();
     if (!name || name.length > 20) { toast('이름은 1~20자로 적어 주세요.'); t.value = a?.name ?? ''; return; }
-    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 안 받아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
+    if (/\d{4}[- ]?\d{4}/.test(name)) { toast('카드·계좌 번호는 저장하지 않아요. 이름만 적어 주세요.'); t.value = a?.name ?? ''; return; }
     if (a && a.name !== name) data.saveAccount({ ...a, name });
   }
   if (t.dataset.accType) { const a = state.accounts.find((x) => x.id === t.dataset.accType); if (a) data.saveAccount({ ...a, type: t.value }); }
-  if (t.dataset.startDay !== undefined) { data.setProfile({ monthStartDay: Number(t.value) }); ui.viewYm = null; toast(`한 달 시작일을 ${t.value}일로 바꿨어요.`); }
+  if (t.dataset.feat) {
+    const id = t.dataset.feat;
+    if (!state.mode && LEGACY_FEATURES[id] && !t.checked) {
+      t.checked = true;
+      return toast('방식을 고르기 전에는 지금 메뉴를 끄지 않아요.');
+    }
+    const features = { ...(state.features ?? {}), [id]: t.checked };
+    data.saveSettings(state.mode ? { mode: state.mode, features } : { features });
+    if (id === 'studentIncome' && t.checked) data.ensureStudentIncome();
+    if (id === 'recurring' && t.checked) setTimeout(() => data.postRecurring(today()), 300);
+    return;
+  }
+  if (t.dataset.spouseName !== undefined) {
+    const name = t.value.trim();
+    if (name.length > 20) { toast('배우자 이름은 20자까지예요.'); t.value = state.settings?.spouseName || ''; return; }
+    data.saveSettings({ spouseName: name || null });
+    toast(name ? `배우자 이름을 ${name}(으)로 보여 줄게요.` : '배우자 이름을 기본으로 돌렸어요.');
+    return;
+  }
+  if (t.dataset.splitMe !== undefined) {
+    const n = Number(t.value);
+    if (Number.isInteger(n) && n >= 0 && n <= 100) data.saveSettings({ splitMe: n });
+    return;
+  }
   if (t.dataset.haptic !== undefined) localStorage.setItem('haptic', t.checked ? 'on' : 'off');
+  if (t.dataset.btnSound !== undefined) localStorage.setItem('btnSound', t.checked ? 'on' : 'off');
+  if (t.dataset.decor !== undefined && t.type === 'checkbox') return pushLook({ decor: t.checked });
+  if (t.dataset.tonePart && t.type === 'checkbox') return pushLook({ tone: { ...readLook().tone, [t.dataset.tonePart]: t.checked } });
   // 가져오기
   if (t.dataset.impFile !== undefined) { impFile(t.files?.[0]); t.value = ''; return; }
   if (t.dataset.impCol && ui.imp) { IMP.setCol(ui.imp, Number(t.dataset.impCol), t.value); return render(); }
@@ -530,6 +996,14 @@ app.addEventListener('change', (e) => {
 let searchTimer;
 app.addEventListener('input', (e) => {
   if (e.target.dataset?.contentScale !== undefined) return setScale(Number(e.target.value) / 100);
+  if (e.target.dataset?.splitMe !== undefined) {
+    const n = Number(e.target.value);
+    const who = spouseLabel(state.settings);
+    const out = $('[data-split-out]');
+    if (out && Number.isInteger(n)) out.textContent = `나 ${n}% · ${who} ${100 - n}%`;
+    e.target.setAttribute('aria-valuetext', `나 ${n}퍼센트`);
+    return;
+  }
   if (e.target.dataset?.searchQ === undefined) return;
   ui.search.q = e.target.value;
   clearTimeout(searchTimer);
@@ -551,7 +1025,7 @@ app.addEventListener('keydown', (e) => {
   if (e.key === 'Enter' && (e.target.dataset?.nameFor || e.target.dataset?.accName || e.target.dataset?.ruleMatch)) e.target.blur();
   if ((e.key === 'Enter' || e.key === ' ') && e.target.dataset?.bar) { e.preventDefault(); ui.barYm = e.target.dataset.bar; render(); }
 });
-window.matchMedia('(min-width: 1024px)').addEventListener?.('change', () => state.user && render());
+['(min-width: 768px)', '(min-width: 1024px)', '(min-width: 1280px)'].forEach((q) => window.matchMedia(q).addEventListener?.('change', () => state.user && render()));
 document.addEventListener('keydown', (e) => {
   if (!state.user || isSheetOpen() || e.target.matches('input,select,textarea') || document.querySelector('[role=alertdialog],[role=dialog]:not(.sheet)')) return;
   if ((e.key === 'n' || e.key === '+') && !e.metaKey && !e.ctrlKey) { e.preventDefault(); openSheet(); }
@@ -668,8 +1142,106 @@ const dayCheck = () => {
 };
 document.addEventListener('visibilitychange', () => { if (!document.hidden) dayCheck(); });
 setInterval(dayCheck, 60_000);
-window.addEventListener('hashchange', () => { if (hashView() !== ui.view) go(hashView()); });
-window.addEventListener('offline', () => { render(); toast('인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 알아서 올릴게요.', { duration: 5000 }); });
+// 종료 확인: 로그인된 뒤에, 사용자의 첫 입력에서만 센티널 히스토리를 하나 둔다.
+// 페이지 로드·로그인 콜백에서 pushState 하면 Chrome 이 그 기록을 뒤로가기에서 건너뛰고
+// Android 는 확인 없이 앱을 닫는다. 취소한 뒤에 다시 깔 때도 그 클릭·Escape 안에서 넣는다.
+// 시트·확인 창·하위 화면은 뒤로 가기에서 먼저 닫고, 홈에서만 종료를 묻는다. Google 리다이렉트가 끝나기 전에는 켜지 않는다.
+const exitGuard = createExitGuard({
+  history,
+  confirm: () => confirmDialog({ title: EXIT_CONFIRM_TITLE, ok: '종료', cancel: '취소', history: false }),
+  closeWindow: () => window.close(),
+  isHidden: () => document.visibilityState === 'hidden',
+});
+const navUrl = (view) => {
+  const base = location.href.split('#')[0];
+  return view === 'home' ? base : `${base}#${view}`;
+};
+const nav = createNavHistory(history, navUrl, { onStay: () => exitGuard.noteStay(location.href) });
+nav.adopt(ui.view);
+bindModalHistory({
+  open: () => nav.pushModal('dialog'),
+  close: () => nav.closeModal(),
+});
+// 종료 센티널은 홈(빈 스택)에서만 얹는다. 하위 화면·시트 위의 첫 탭에 얹으면
+// 뒤로 가기가 부모 대신 종료 확인을 연다(새로고침 직후가 그 경우).
+const onNavGesture = () => {
+  if (state.user && nav.prepareFreshTrail(history.length)) {
+    exitGuard.claimPushed();
+    return;
+  }
+  if (!nav.atExitRoot()) return;
+  exitGuard.onUserGesture();
+};
+document.addEventListener('pointerdown', onNavGesture, true);
+if (import.meta.env.MODE === 'test') globalThis.__gagyebuNav = { nav, exitGuard };
+document.addEventListener('keydown', (e) => {
+  onNavGesture();
+  if (exitGuard.isConfirming() && isExitDismissGesture(e)) exitGuard.rearm();
+}, true);
+document.addEventListener('click', (e) => {
+  if (exitGuard.isConfirming() && isExitDismissGesture(e)) exitGuard.rearm();
+}, true);
+let redirectDone = false;
+let suppressViewHash = false;
+function showPlannedView(view) {
+  if (ui.view === 'import' && view !== 'import') ui.imp = null;
+  if (view === 'search' && ui.view !== 'search') { ui.searchAll = null; refreshSearch(); }
+  ui.view = view;
+  ui.emojiFor = null;
+  if (hashView() !== view) history.replaceState(history.state, '', navUrl(view));
+  exitGuard.noteStay(location.href);
+  render();
+  $('#main')?.focus({ preventScroll: true });
+  scrollMainTop();
+}
+window.addEventListener('popstate', () => {
+  const plan = nav.onPop({
+    sheet: isSheetOpen(),
+    dialog: hasModal(),
+    exitReady: exitGuard.willTrap() && !exitGuard.isLeaving(),
+    landed: hashView(),
+  });
+  if (plan.dropExit) exitGuard.forgetSentinel();
+  if (plan.kind !== 'exit' && exitGuard.isConfirming()) dismissTopModal();
+  if (plan.kind === 'ignore') return;
+  if (plan.kind === 'dialog') { dismissTopModal(); return; }
+  if (plan.kind === 'sheet') { closeSheet({ fromPop: true }); return; }
+  if (plan.kind === 'import-reset') {
+    ui.imp = IMP ? IMP.newImport() : null;
+    render();
+    return;
+  }
+  if (plan.kind === 'import-step') {
+    if (ui.imp) { ui.imp.step = plan.step; ui.imp.error = ''; }
+    render();
+    return;
+  }
+  if (plan.kind === 'view') { showPlannedView(plan.view); return; }
+  if (plan.kind === 'exit') {
+    // 시트가 아직 열려 있으면 종료 확인을 그 위에 띄우지 않고 시트만 닫는다.
+    if (isSheetOpen()) { closeSheet({ fromPop: true }); exitGuard.forgetSentinel(); return; }
+    if (hasModal()) { dismissTopModal(); exitGuard.forgetSentinel(); return; }
+    if (hashView() !== 'home' || ui.view !== 'home') {
+      exitGuard.forgetSentinel();
+      showPlannedView(hashView());
+      return;
+    }
+    if (exitGuard.willTrap() || exitGuard.isLeaving() || exitGuard.isConfirming()) suppressViewHash = true;
+    exitGuard.onPopState();
+    queueMicrotask(() => { suppressViewHash = false; });
+  }
+});
+window.addEventListener('hashchange', () => {
+  if (suppressViewHash) return;
+  if (exitGuard.isConfirming()) dismissTopModal();
+  const view = hashView();
+  exitGuard.noteStay(location.href);
+  if (view === ui.view) return;
+  nav.adopt(view);
+  ui.view = view;
+  render();
+});
+window.addEventListener('offline', () => { render(); toast('☁️ 인터넷이 끊겼어요. 기록은 저장해 두고, 연결되면 자동으로 올릴게요.', { duration: 5000 }); });
 window.matchMedia?.('(prefers-color-scheme: dark)').addEventListener?.('change', () => state.user && render());
 
 // 거래 밀어서 지우기 (왼쪽으로 40% 이상 밀면 삭제 + 되돌리기). 키보드·스크린리더는 거래를 눌러 시트의 🗑️ 사용
@@ -708,28 +1280,16 @@ app.addEventListener('click', (e) => { if (Date.now() - swipedAt < 300 && e.targ
 let raf = 0;
 const schedule = () => { if (!raf) raf = requestAnimationFrame(() => { raf = 0; if (!isSheetOpen() || ui.view) render(); }); };
 
-// 새 버전 적용(QA 3차 N3, src/lib/pwa.js). 입력 중인 내용이 있으면 바로 다시 불러오지 않고 안내만
-// 빈 시트(늘 DOM에 있음)는 '입력 중'이 아님(QA 4차 4-1). 판단은 src/lib/busy.js
-const isBusy = () => isBusyNow({ doc: document, signedIn: !!state?.user, sheetOpen: isSheetOpen(),
-  importing: ui.view === 'import' && (ui.imp?.step ?? 1) > 1 });
-const updater = createUpdater({ base: import.meta.env.BASE_URL, isBusy, canApplyAnytime: () => !state?.user,
-  onReady: () => { ui.updateReady = true; render(); } });
-if ('serviceWorker' in navigator && import.meta.env.PROD) {
-  window.addEventListener('load', () => updater.register().catch((e) => console.error(e)));
-}
-// 빌드 표시(검사·문의 때 어느 빌드인지 확인용, 값이 있을 때만)
-if (import.meta.env.VITE_BUILD_TAG) document.documentElement.dataset.build = import.meta.env.VITE_BUILD_TAG;
-// 배포로 예전 조각 파일이 사라졌을 때(이전 버전 화면에서 늦게 불러오는 조각): 입력 중이 아니면 한 번만 다시 불러오고, 아니면 안내
-window.addEventListener('vite:preloadError', (e) => {
-  const k = 'preloadReloadAt', last = Number(sessionStorage.getItem(k) || 0);
-  if (!isBusy() && Date.now() - last > 60_000) { e.preventDefault(); sessionStorage.setItem(k, String(Date.now())); return location.reload(); }
-  ui.updateReady = true; render();
-});
-
 if (isFirebaseConfigured) {
   data = await import('./data.js');
   state = data.state;
-  initSheet({ getState: () => state, onSave, onDelete });
+  initSheet({
+    getState: () => state, onSave, onDelete,
+    onHistory(ev) {
+      if (ev === 'open') nav.pushModal('sheet');
+      if (ev === 'close') nav.closeModal();
+    },
+  });
   data.onWriteError((e, retry) => {
     if (e?.code === 'restored-as-new') return toast(e.message || '새 기록으로 살렸어요.');
     // 반복 자동 기록이 거부됐고, 서버에서 확인해 보니 정말 없는 달(QA 3차 N1): 그 달은 다음에 열 때 다시 시도
@@ -737,21 +1297,25 @@ if (isFirebaseConfigured) {
     if (e?.code === 'kept-locally') return toast(e.message, { action: '설정 열기', onAction: () => go('settings'), duration: 8000 });
     if (e?.code === 'permission-denied') {
       // 로그인 만료와 규칙 거부를 구분(반복 id 거부 때 '다시 로그인'은 틀린 안내였음, QA R1)
-      // 앱 안에 문의 창구가 없으므로 사용자가 직접 할 수 있는 일을 안내(QA R8)
       const signedIn = !!data.state?.user;
-      return signedIn
-        ? toast('이번 기록은 저장하지 못했어요. 새로 고친 뒤 다시 해 주세요.', { action: '새로 고침', onAction: () => updater.refresh(), duration: 8000 })
-        : toast('다시 로그인해 주세요. 이번 기록은 저장하지 못했어요.');
+      return toast(signedIn
+        ? '저장이 거부됐어요. 문제가 계속되면 알려 주세요.'
+        : '로그인이 만료됐어요. 다시 로그인해 주세요.');
     }
-    // 스펙 8절: [다시 하기] — 같은 쓰기를 한 번 더(묶음 쓰기처럼 다시 할 수 없는 건 버튼 없이)
-    return toast('저장하지 못했어요. 잠시 후 다시 해 주세요.', retry ? { action: '다시 하기', onAction: retry, duration: 8000 } : {});
+    return toast('저장하지 못했어요. 잠시 후 다시 시도해 주세요.', retry ? { action: '다시 하기', onAction: retry, duration: 8000 } : {});
   });
   data.onLoginError((e) => { ui.loginError = data.loginErrorText(e); render(); });
   data.subscribe(schedule);
   data.initAuth();
+  data.whenAuthRedirectSettled().then(() => {
+    redirectDone = true;
+    exitGuard.noteStay(location.href);
+    exitGuard.sync({ loggedIn: !!state.user });
+  });
   pickTip();
 }
 render();
+document.fonts?.ready?.then(() => { if ($('#main')) fitNums(); });
 
 // 에뮬레이터 전용 데모 데이터 (스크린샷·수동 검증용)
 if (import.meta.env.VITE_USE_EMULATOR === 'true') {

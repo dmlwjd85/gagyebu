@@ -4,7 +4,7 @@
  - scale : 폭 160~1920px × 본문 글자 85~160%
  - tip   : 팁이 메뉴·기록·토스트를 가리지 않는지
  - huge  : 아주 큰 금액(9억대 수입·1억대 지출)을 더해서 검사
- 화면마다 아래 메뉴 5개(화면 안·눌림), 금액·날짜 줄갈림/말줄임/잘림, 팁 가림, 가로 넘침, 낮은 화면 메뉴 비율(맨 위·실제 휠로 160px 내린 뒤·60px 올린 뒤)을 잼.
+ 화면마다 아래 메뉴 5개(화면 안·눌림), 금액·날짜 줄갈림/말줄임/잘림, 팁 가림, 가로 넘침, 낮은 화면 메뉴 비율(맨 위·실제 휠로 160px 내린 뒤·60px 올린 뒤)을 잰다.
  scale 에서는 큰 숫자(data-fit)의 글자 크기를 (폭·화면·순번)별로 배율 순서대로 비교해, 배율을 올렸는데 작아지거나 도넛 금액이 라벨보다 작으면 실패.
  QA 108조합(줌 ≤200%)·scale 에서 하나라도 문제가 있으면 종료 코드 1. 에뮬레이터는 이 실행 전용 프로젝트만 씀(emu.py).
 """
@@ -175,4 +175,5 @@ for r in (bad_tabs[:4] + bad_amt[:12] + bad_tip[:4] + over[:4] + hdr2[:6]):
     print(' ', r['tag'], r['view'], 'tabs', [t['n'] for t in (r['tabs'] or []) if not t['ok']], 'amt', r['amt'], 'tip', r['tip'], 'over', r['docOver'], 'hdr', r['hdrLines'])
 qa = [r for r in res if MODE != 'matrix' or int(r['tag'].split('@')[1][:-1]) <= 200]
 fail = [r for r in qa if (r['tabs'] and not all(t['ok'] for t in r['tabs'])) or r['amtN'] or r['docOver'] > 0 or (r['tip'] and (r['tip']['pos'] == 'fixed' or r['tip']['overHeader'] or r['tip']['overTab'] or r['tip']['covered']))]
+fail += [r for r in bad_tabs if r not in fail]  # 300·400% 에서도 아래 메뉴가 가려지면 실패(PR #29 QA: 쨈 컵이 '차트' 탭을 덮음)
 sys.exit(1 if fail or shrink or labelbad else 0)

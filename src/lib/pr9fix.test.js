@@ -72,8 +72,9 @@ describe('줌·글자 배율 QA 지적', () => {
     expect(css).not.toMatch(/\.stat-v \{[^}]*truncate/);
     expect(css).toMatch(/\.stat-grid > \* \{[^}]*min-width: min\(100%, max-content\)/);
   });
-  it('H1 좁은 폭에서도 아래 메뉴 5칸이 모두 들어감(칸을 똑같이 나눔)', () => {
-    expect(css).toMatch(/max-width: 339px\)[\s\S]{0,200}grid-template-columns: repeat\(5, minmax\(0, 1fr\)\)/);
+  it('H1 좁은 폭에서도 아래 메뉴(독: 옆 3칸 + 가운데 + 옆 3칸)가 모두 들어감(옆 칸을 똑같이 나눔)', () => {
+    expect(css).toMatch(/max-width: 340px\)[\s\S]{0,300}grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) 44px repeat\(3, minmax\(0, 1fr\)\)/);
+    expect(css).toMatch(/max-width: 300px\)[\s\S]{0,200}grid-template-columns: repeat\(3, minmax\(0, 1fr\)\) 40px repeat\(3, minmax\(0, 1fr\)\)/);
   });
   it('M4 날짜·금액 고정 폭 없음', () => {
     const ui = src('ui/views.js') + src('ui/m2views.js') + src('ui/importer.js');

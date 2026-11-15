@@ -10,6 +10,7 @@ service cloud.firestore {
     function optInt(k, min, max) { return !(k in d()) || (d()[k] is int && d()[k] >= min && d()[k] <= max); }
     function optBool(k) { return !(k in d()) || d()[k] is bool; }
     function optTs(k) { return !(k in d()) || d()[k] is timestamp; }
+    function toneOk() { return !('tone' in d()) || (d().tone is list && d().tone.size() <= 3 && d().tone.hasOnly(['menu', 'accent', 'card'])); }
     // 실제 있는 날짜만(2026-13-45, 2026-02-30 거부). 윤년 계산 포함
     function leap(y) { return (y % 4 == 0 && y % 100 != 0) || y % 400 == 0; }
     function mdays(y, m) { return m == 2 ? (leap(y) ? 29 : 28) : (m in [4, 6, 9, 11] ? 30 : 31); }
@@ -54,9 +55,8 @@ service cloud.firestore {
     }
     // 카테고리별 예산: 카테고리 30개까지(규칙 식 1000개 한도), 키는 id 형식(join 한 번으로 검사), 값은 0원 ~ 100억 원 정수.
     // 키 안에 쉼표가 있으면 join 뒤 조각 수가 키 수보다 많아짐 → 거부('1234,5678,9012,3456' 한 키가 네 키처럼 통과하던 틈)
-    // 카드번호 모양: id()의 looksLikeCard와 같은 한 패턴(숫자 13개 이상, 사이에 영문·밑줄 섞여도) → 거부.
-    // 밑줄만·영문만 따로 보던 때는 '1234a5678_9012b3456'처럼 섞은 키가 통과했음(QA R6). 쉼표 join이라 키 경계를 넘지 않음.
-    // 규칙 식 한도 때문에 칸마다 id()는 안 씀.
+    // 카드번호 모양: looksLikeCard와 같은 한 패턴(숫자 13개 이상, 사이에 영문·밑줄 섞여도) → 거부. 밑줄만·영문만 따로 보던 때는 '1234a5678_9012b3456'이 통과했음(QA R6).
+    // 쉼표 join이라 키 경계를 넘지 않음. 규칙 식 한도 때문에 칸마다 id()는 안 씀.
     // 규칙 언어에 반복문이 없어 값은 칸 번호로 하나씩 검사
     function limitsOk(m) {
       return m is map && m.size() <= 30
@@ -79,6 +79,23 @@ service cloud.firestore {
     }
     // 가져오기 묶음 id: 'imp-' + 시각(36진수 6~12자). 12자 넘는 숫자열(카드번호 모양)은 못 들어감
     function batchId(v) { return v is string && v.matches('^imp-[0-9a-z]{6,12}$'); }
+    // 계좌번호(숫자 10개 이상)는 기관·이름에 넣지 않음
+    function noAcctNo(v) { return !v.matches('.*[0-9]{10}.*'); }
+    // 쓰는 방식. 키는 고정, 값은 불리언만. 테마 같은 다른 키는 거부.
+    function featuresOk(m) {
+      return m is map && m.size() <= 10
+        && m.keys().hasOnly(['recurring', 'monthStart', 'weekDaily', 'sms', 'allowance', 'piggy', 'categoryLimits', 'studentIncome', 'monthShare', 'txOwner'])
+        && (!('recurring' in m) || m.recurring is bool)
+        && (!('monthStart' in m) || m.monthStart is bool)
+        && (!('weekDaily' in m) || m.weekDaily is bool)
+        && (!('sms' in m) || m.sms is bool)
+        && (!('allowance' in m) || m.allowance is bool)
+        && (!('piggy' in m) || m.piggy is bool)
+        && (!('categoryLimits' in m) || m.categoryLimits is bool)
+        && (!('studentIncome' in m) || m.studentIncome is bool)
+        && (!('monthShare' in m) || m.monthShare is bool)
+        && (!('txOwner' in m) || m.txOwner is bool);
+    }
 
     // 사용자 설정 문서
     match /users/{uid} {
@@ -91,32 +108,16 @@ service cloud.firestore {
         && optBool('seeded') && optTs('createdAt') && optTs('updatedAt');
 
       // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
+      // 업데이트에 owner가 이미 있으면 요청에도 있어야 한다. 예전 앱의 set()은 그 칸을 몰라 통째로 지운다.
       match /transactions/{docId} {
         allow read, delete: if isOwner(uid);
-        // 새로 만들기: 반복 자동 기록 id(rec-…)는 사용자가 지운 달(반복 문서의 skipped)이면 거부 → 지운 자동 기록이 다시 살아나지 않음(QA D1).
-        // getAfter: 되돌리기는 skipped에서 그 달을 빼는 쓰기와 한 묶음으로 오므로 묶음 뒤 상태로 봄
-        allow create: if isOwner(uid) && txOk(docId) && (!isRecTxId(docId) || recMonthOpen(uid, docId));
-        // 고치기: 자동 기록은 '없을 때만 만들기'. 이미 있는 문서를 자동 기록이 덮어쓰지 못하게(QA D1: 오프라인 대기열은 트랜잭션이 안 돼 규칙으로 막음)
-        //  - origin == 'auto'(이 버전의 자동 기록)인 쓰기는, 원래 문서도 자동 기록일 때만(카테고리 옮기기 같은 부분 고치기용)
-        //  - rec- 문서에 createdAt이 이번 요청 시각(serverTimestamp)인 쓰기 = 새로 만든다는 쓰기 → 이미 있으면 거부(예전 버전 앱의 자동 기록도 여기서 막힘)
-        //    자동 기록은 rec- id에만 쓰므로 이 검사는 rec- 문서에만 둠. 일반 기록은 본인이 고치는 것이라 막을 까닭이 없고,
-        //    막으면 예전 앱이 createdAt 없는 기록을 되돌릴 때 같은 칸에 못 써서 새 기록을 하나 더 만듦(QA 3차 한계 ④: 금액이 두 번 잡힘)
-        //  사용자 고치기는 origin을 빼고, createdAt은 원래 값(또는 없음)을 그대로 보냄
-        allow update: if isOwner(uid) && txOk(docId)
-          && !(d().get('origin', '') == 'auto' && resource.data.get('origin', '') != 'auto')
-          && (!isRecTxId(docId) || d().get('createdAt', null) != request.time);
-      }
-      // 반복 자동 기록 문서의 그 달이 반복 문서에서 '지운 달'로 표시돼 있지 않은지
-      function recMonthOpen(uid, docId) {
-        let p = /databases/$(database)/documents/users/$(uid)/recurring/$(docId[4:docId.size() - 8]);
-        return !existsAfter(p) || !(docId[docId.size() - 7:docId.size()] in getAfter(p).data.get('skipped', []));
-      }
-      // 거래: 금액은 1원 ~ 10억 원 정수. 음수는 카드 환불(지출 차감)만: 가져온 지출(importHash 있음)일 때만 허용
-      function txOk(docId) {
-        return txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
+        // 새로 만들기: 자동 기록 id(rec-…)는 사용자가 지운 달(반복 문서 skipped)이면 거부 → 지운 자동 기록이 다시 살아나지 않음(QA D1)
+        allow create: if isOwner(uid)
+          && (!isRecTxId(docId) || recMonthOpen(uid, docId))
+          && txDocId(docId) // 일반 id 또는 rec-{반복id}-{YYYY-MM}(쓰기만, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
           && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
-                                 'importHash', 'importBatch', 'recurringId', 'card4', 'origin'])
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner', 'origin'])
           && d().amount is int && d().amount <= 1000000000
           && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
           && d().kind in ['expense', 'income']
@@ -129,8 +130,39 @@ service cloud.firestore {
           && (!('importBatch' in d()) || batchId(d().importBatch))
           && (!('recurringId' in d()) || id(d().recurringId))
           && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
           && (!('origin' in d()) || d().origin == 'auto') // 자동 기록 표식
           && optTs('createdAt') && optTs('updatedAt');
+        // 고치기: 자동 기록(origin 'auto')은 원래도 자동 기록인 문서만, rec- 문서에 createdAt=요청 시각(새로 만든다는 쓰기)이면 거부(QA D1)
+        allow update: if isOwner(uid)
+          && !(d().get('origin', '') == 'auto' && resource.data.get('origin', '') != 'auto')
+          // 업데이트 전 앱(main)은 이미 있는 달에도 createdAt=요청 시각을 merge로 씀: createdAt·updatedAt 말고 바뀌는 칸이 없을 때만 허용(내용은 그대로)
+          && (!isRecTxId(docId) || d().get('createdAt', null) != request.time
+              || d().diff(resource.data).affectedKeys().hasOnly(['createdAt', 'updatedAt']))
+          && txDocId(docId)
+          && d().keys().hasAll(['date', 'amount', 'kind', 'categoryId'])
+          && d().keys().hasOnly(['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'createdAt', 'updatedAt',
+                                 'importHash', 'importBatch', 'recurringId', 'card4', 'owner', 'origin'])
+          && d().amount is int && d().amount <= 1000000000
+          && (d().amount > 0 || (d().amount < 0 && d().amount >= -1000000000 && d().kind == 'expense' && 'importHash' in d()))
+          && d().kind in ['expense', 'income']
+          && ymd(d().date)
+          && id(d().categoryId)
+          && (!('accountId' in d()) || id(d().accountId)) && optStr('memo', 200)
+          && (!('tags' in d()) || tagsOk(d().tags))
+          && (!('importHash' in d()) || (d().importHash is string && d().importHash.matches('^[0-9a-f]{16}$')))
+          && (!('importBatch' in d()) || batchId(d().importBatch))
+          && (!('recurringId' in d()) || id(d().recurringId))
+          && (!('card4' in d()) || (d().card4 is string && d().card4.matches('^[0-9]{4}$')))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && (!('origin' in d()) || d().origin == 'auto') // 자동 기록 표식
+          && (!('owner' in resource.data) || 'owner' in d())
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 반복 자동 기록 문서의 그 달이 반복 문서에서 '지운 달'로 표시돼 있지 않은지(getAfter: 되돌리기 묶음 뒤 상태)
+      function recMonthOpen(uid, docId) {
+        let p = /databases/$(database)/documents/users/$(uid)/recurring/$(docId[4:docId.size() - 8]);
+        return !existsAfter(p) || !(docId[docId.size() - 7:docId.size()] in getAfter(p).data.get('skipped', []));
       }
 
       // 카테고리
@@ -181,12 +213,13 @@ service cloud.firestore {
       }
 
       // 반복 거래(월세·구독): 매달 dayOfMonth일에 자동 기록
+      // 거래와 같이, 이미 있는 owner를 업데이트에서 빼면 거부한다.
       match /recurring/{docId} {
         allow read, delete: if isOwner(uid);
-        allow create, update: if isOwner(uid)
+        allow create: if isOwner(uid)
           && id(docId) // 문서 id도 같은 형식(쓰기만 검사, 예전 문서 읽기·삭제는 그대로)
           && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active', 'startYm'])
-          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'createdAt', 'updatedAt'])
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'owner', 'createdAt', 'updatedAt'])
           && str(d().name, 1, 30)
           && d().amount is int && d().amount > 0 && d().amount <= 1000000000
           && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
@@ -198,6 +231,27 @@ service cloud.firestore {
           && (!('skipped' in d()) || (d().skipped is list && d().skipped.size() <= 24
               && (d().skipped.size() == 0 || (d().skipped.join(',').matches('^[0-9]{4}-(0[1-9]|1[0-2])(,[0-9]{4}-(0[1-9]|1[0-2]))*$')
                   && d().skipped.join(',').split(',').size() == d().skipped.size()))))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && optTs('createdAt') && optTs('updatedAt');
+        allow update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['name', 'amount', 'kind', 'categoryId', 'dayOfMonth', 'active'])
+          // 예전 반복 문서는 startYm이 없을 수 있음: 원래 없던 문서만 계속 없어도 됨
+          && ('startYm' in d() || !('startYm' in resource.data))
+          && d().keys().hasOnly(['name', 'amount', 'kind', 'categoryId', 'accountId', 'dayOfMonth', 'active', 'startYm', 'lastPosted', 'skipped', 'owner', 'createdAt', 'updatedAt'])
+          && str(d().name, 1, 30)
+          && d().amount is int && d().amount > 0 && d().amount <= 1000000000
+          && d().kind in ['expense', 'income'] && id(d().categoryId) && (!('accountId' in d()) || id(d().accountId))
+          && d().dayOfMonth is int && d().dayOfMonth >= 1 && d().dayOfMonth <= 31
+          && d().active is bool
+          && (!('startYm' in d()) || ym(d().startYm))
+          && (!('lastPosted' in d()) || ym(d().lastPosted))
+          // 사용자가 지운 자동 기록의 달(YYYY-MM) 최근 24개: 이 달은 다시 자동 기록하지 않음(QA D1)
+          && (!('skipped' in d()) || (d().skipped is list && d().skipped.size() <= 24
+              && (d().skipped.size() == 0 || (d().skipped.join(',').matches('^[0-9]{4}-(0[1-9]|1[0-2])(,[0-9]{4}-(0[1-9]|1[0-2]))*$')
+                  && d().skipped.join(',').split(',').size() == d().skipped.size()))))
+          && (!('owner' in d()) || d().owner in ['나', '배우자', '공동'])
+          && (!('owner' in resource.data) || 'owner' in d())
           && optTs('createdAt') && optTs('updatedAt');
       }
 
@@ -223,6 +277,89 @@ service cloud.firestore {
           && d().count is int && d().count >= 0 && d().count <= 100000
           && (!('from' in d()) || ymd(d().from)) && (!('to' in d()) || ymd(d().to))
           && optStr('label', 20) && d().at is timestamp;
+      }
+      // 주식·연금 계좌. 결제수단(accounts: cash|card|bank)과 다른 컬렉션이라 기존 결제수단 형식은 그대로.
+      match /assetAccounts/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['type', 'institution', 'name', 'opened'])
+          && d().keys().hasOnly(['type', 'institution', 'name', 'opened', 'maturity', 'expectedPension', 'order', 'archived', 'createdAt', 'updatedAt'])
+          && d().type in ['stock', 'pension', 'irp', 'isa', 'dc', 'civil']
+          && str(d().institution, 1, 40) && noAcctNo(d().institution)
+          && str(d().name, 1, 40) && noAcctNo(d().name)
+          && ymd(d().opened)
+          && (!('maturity' in d()) || ymd(d().maturity))
+          && optInt('expectedPension', 0, 10000000000)
+          && optInt('order', 0, 1000) && optBool('archived')
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 보유. qtyE4 = 수량 × 10000(소수 넷째 자리). 시세는 종가·기준일만.
+      match /holdings/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['assetAccountId', 'name', 'kind', 'qtyE4', 'avgPrice'])
+          && d().keys().hasOnly(['assetAccountId', 'code', 'name', 'kind', 'qtyE4', 'avgPrice', 'lastPrice', 'priceDate', 'priceSource', 'createdAt', 'updatedAt'])
+          && id(d().assetAccountId)
+          && str(d().name, 1, 80) && noAcctNo(d().name)
+          && (!('code' in d()) || (d().code is string && d().code.matches('^[A-Za-z0-9]{1,12}$')))
+          && d().kind in ['stock', 'etf', 'fund', 'deposit']
+          && ((d().kind != 'stock' && d().kind != 'etf') || ('code' in d() && d().code.matches('^[A-Za-z0-9]{1,12}$')))
+          && d().qtyE4 is int && d().qtyE4 > 0 && d().qtyE4 <= 1000000000000
+          && d().avgPrice is int && d().avgPrice >= 0 && d().avgPrice <= 10000000000
+          && optInt('lastPrice', 0, 10000000000)
+          && (!('priceDate' in d()) || ymd(d().priceDate))
+          && (!('priceSource' in d()) || d().priceSource in ['manual', 'dataGoKr'])
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      match /contributions/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && id(docId)
+          && d().keys().hasAll(['assetAccountId', 'date', 'amount', 'deductible'])
+          && d().keys().hasOnly(['assetAccountId', 'date', 'amount', 'deductible', 'createdAt', 'updatedAt'])
+          && id(d().assetAccountId)
+          && ymd(d().date)
+          && d().amount is int && d().amount > 0 && d().amount <= 10000000000
+          && d().deductible is bool
+          && optTs('createdAt') && optTs('updatedAt');
+      }
+      // 세액공제 한도·세율. 문서 id는 tax 하나.
+      match /assetPrefs/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && docId == 'tax'
+          && d().keys().hasAll(['pensionLimit', 'combinedLimit', 'rateHigh', 'rateLow', 'rateChoice'])
+          && d().keys().hasOnly(['pensionLimit', 'combinedLimit', 'rateHigh', 'rateLow', 'rateChoice', 'updatedAt'])
+          && d().pensionLimit is int && d().pensionLimit >= 0 && d().pensionLimit <= 100000000000
+          && d().combinedLimit is int && d().combinedLimit >= 0 && d().combinedLimit <= 100000000000
+          && d().rateHigh is int && d().rateHigh >= 0 && d().rateHigh <= 10000
+          && d().rateLow is int && d().rateLow >= 0 && d().rateLow <= 10000
+          && d().rateChoice in ['high', 'low']
+          && optTs('updatedAt');
+      }
+      // 쓰는 방식(1인 가구·부부·학생). 문서 id는 prefs 하나. 없어도 기존 화면은 그대로.
+      match /settings/{docId} {
+        allow read, delete: if isOwner(uid);
+        allow create, update: if isOwner(uid)
+          && docId == 'prefs'
+          && d().keys().hasOnly(['mode', 'askMode', 'features', 'allowanceAmount', 'allowanceCycle', 'allowanceWeekday', 'allowanceDay', 'monthStartDay', 'spouseName', 'splitMe', 'mood', 'font', 'decor', 'tone', 'updatedAt'])
+          && (!('mode' in d()) || d().mode in ['single', 'couple', 'student'])
+          && optBool('askMode')
+          && (!('features' in d()) || featuresOk(d().features))
+          && optInt('allowanceAmount', 0, 10000000000)
+          && (!('allowanceCycle' in d()) || d().allowanceCycle in ['week', 'month'])
+          && optInt('allowanceWeekday', 0, 6)
+          && optInt('allowanceDay', 1, 28)
+          && optInt('monthStartDay', 1, 31)
+          && (!('spouseName' in d()) || str(d().spouseName, 1, 20))
+          && optInt('splitMe', 0, 100)
+          && (!('mood' in d()) || d().mood in ['default', 'sakura', 'ocean', 'maple', 'snow', 'retro'])
+          && (!('font' in d()) || d().font in ['system', 'pretendard', 'gaegu'])
+          && optBool('decor')
+          && toneOk()
+          && optTs('updatedAt');
       }
       // 그 밖의 하위 컬렉션: 규칙 없음 = 거부
     }

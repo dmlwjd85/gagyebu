@@ -1,4 +1,4 @@
-// PR #9 3차 재검수(9.5점 합격) 낮음 결함 재발 방지 — 실제 스크롤 위치·글자 크기는 브라우저 측정(검증 기록)에서 잼
+// PR #9 3차 재검수(9.5점 합격) 낮음 결함 재발 방지 — 실제 스크롤 위치·글자 크기는 브라우저 측정(검증 기록)에서 잰다
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'node:fs';
 

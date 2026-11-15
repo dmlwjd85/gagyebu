@@ -3,7 +3,7 @@ import { isRuleId, isTxDocId, fixedId, fixedRecId } from './ids.js';
 import { recTxId } from './recurring.js';
 import { FALLBACK_CATEGORY } from './defaults.js';
 
-const TX_KEYS = ['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'importHash', 'importBatch', 'recurringId', 'card4'];
+const TX_KEYS = ['date', 'amount', 'kind', 'categoryId', 'accountId', 'memo', 'tags', 'importHash', 'importBatch', 'recurringId', 'card4', 'owner'];
 const pick = (tx) => Object.fromEntries(TX_KEYS.filter((k) => tx[k] !== undefined && tx[k] !== '').map((k) => [k, tx[k]]));
 
 /**

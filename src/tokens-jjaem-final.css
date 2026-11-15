@@ -1,0 +1,214 @@
+/*
+ * 쨈 가계부 확정 색 토큰 — B「사파이어 밤」(Sapphire Night) · 2026-11-10 확정
+ * 깊은 남색 보석 위에 은박 결이 비치는 홈 카드, 쨈 컵 은박과 짝을 이루는 사파이어 강조색.
+ * 불러오는 순서: design/tokens-a.css → src/style.css → 이 파일(맨 뒤).
+ * design/ 새 파일 금지 규칙 때문에 확정 토큰은 src/ 에 둡니다. tokens-a 의 글자·지출/수입은 두고, 바탕·면·강조·차트·독·대화상자는 남색 계열로 덮어씀
+ * 이 파일이 바꾸는 것: 홈 카드(--hero-*), 기록 버튼·도크(--fab-*), 강조색(--primary·--on-primary·--nav-accent),
+ *   열지도(--heat-*), 차트 7색(--chart-*), 스위치·세그 상태 색(--switch-*·--seg-on-ring), 배경 오로라.
+ * 맨 아래 '적용 규칙'은 지금 앱(src/style.css)의 색 자리를 위 토큰에 묶는 선택자뿐이며, 크기·배치·움직임은 건드리지 않음.
+ * 실측(2x 화면, 글자 4.5:1 · 그래픽 3:1): design-spec.md 16절, jjaem-color/screens/contrast-final.md
+ */
+:root {
+  /* 홈 카드 (라이트) 정지점 #141A46 → #23359A → #0B5560 · OKLCH 보간 */
+  --hero-1: #141A46;
+  --hero-2: #23359A;
+  --hero-3: #0B5560;
+  --hero-base: linear-gradient(135deg, #141A46 0%, #182058 12%, #1C266B 25%, #1F2C7E 38%, #223292 50%, #043F93 62%, #004B82 75%, #005271 88%, #0B5560 100%);
+  --hero-gradient: linear-gradient(112deg, transparent 34%, rgba(214,224,255,.07) 44%, rgba(255,255,255,.13) 50%, rgba(214,224,255,.06) 56%, transparent 66%), var(--hero-base);
+  --hero-texture: repeating-linear-gradient(100deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);
+  --hero-texture-size: auto;
+  --hero-ink: #FFFFFF;               /* 카드 위 글자 */
+  --hero-ink-sub: #FFFFFF;           /* 카드 위 보조 글자 */
+  --hero-shadow: 0 1px 2px rgba(0,0,0,.35);
+  --hero-track: rgba(255,255,255,.22);           /* 예산 막대 바탕 */
+  --hero-fill: linear-gradient(90deg,#DDE3F0,#FFFFFF 45%,#C9D1E0);             /* 예산 막대 채움 */
+  --hero-chip: rgba(255,255,255,.12);             /* '항목별 남은 예산' 접기 단추 바탕 */
+  --hero-btn-ink: #1A2470;       /* 카드 안 흰 단추 글자 */
+  --hero-btn-ring: none;  /* 밝은 카드에서 흰 단추 윤곽 */
+  --hero-edge: inset 0 0 0 1px rgba(205,214,235,.30), inset 0 1px 0 rgba(255,255,255,.38);
+  --glow: rgba(20,26,70,.40);
+
+  /* 기록 버튼(쨈 컵 키캡)의 테두리·옆면. 컵 안 쨈 맛(--cup-*)은 그대로 둔다 */
+  --fab-1: #23359A;                /* 키캡 테두리 고리 */
+  --fab-2: #141A46;                /* 키캡 옆면(두께) */
+  --fab-3: #4560D0;                /* 지금 화면 키캡 윗면 빛 */
+
+  /* 관련 강조색 */
+  --primary: #2B44C4;
+  --on-primary: #FFFFFF;
+  --nav-accent: #2B44C4;
+  --aurora-1: #DCE1F7;          /* 예전 분홍 #FFD6E8 자리 */
+  --aurora-2: #D5DDF3;
+  --aurora-3: #D3E9EA;
+  --heat-1: rgba(43,68,196, 0.10);
+  --heat-2: rgba(43,68,196, 0.22);
+  --heat-3: rgba(43,68,196, 0.38);
+  --heat-4: rgba(43,68,196, 0.62); /* 0.58은 흰 면 2.92:1 → 0.62로 3.20:1 */
+  /* 차트 색 (확정 B) — 큰 조각부터 1→6, 그 밖의 = 7. 분홍(#D63F73) 빼고 사파이어·청록·호박·보라·하늘·코코아로 */
+  --chart-1: #2B44C4; /* 사파이어 (지출 막대·가장 큰 조각, 글자로도 씀 7.70:1) */
+  --chart-2: #0E8A7E; /* 청록 (옛 분홍 #D63F73 자리) */
+  --chart-3: #B0520C; /* 호박 (한도 가까움 경고 글자로도 씀 5.17:1, 옛 #C4621A 4.11:1 미달 고침) */
+  --chart-4: #6D4AFF; /* 보라 (아이콘 보라) */
+  --chart-5: #0089B6; /* 하늘 */
+  --chart-6: #5E4630; /* 코코아 (옛 황토 #9A7414 — 호박과 색약에서 겹쳐 바꿈) */
+  --chart-7: #7A7694; /* 그 밖의 (회보라, 그대로) */
+  --toast-action: #93A4FF; /* 진한 토스트(#1E1B3A) 위 '되돌리기' · 옛 #A994FF 보라 → 사파이어 7.07:1 */
+  /* 상태 표시 (확정 B에서 새로 추가) */
+  --switch-off: #8A87A0;  /* 꺼진 스위치 바탕 · 흰 면 3.47:1 (옛 --line 1.17:1) */
+  --switch-thumb-on: #FFFFFF; /* 켜진 스위치 손잡이 · 사파이어 위 7.70:1 */
+  --seg-on-ring: var(--primary); /* 고른 세그 칸 테두리 · 세그 바탕 위 5.97:1 */
+}
+
+.dark {
+  /* 홈 카드 (다크) 정지점 #1B2260 → #2A3FA8 → #0E5F6A · OKLCH 보간 */
+  --hero-1: #1B2260;
+  --hero-2: #2A3FA8;
+  --hero-3: #0E5F6A;
+  --hero-base: linear-gradient(135deg, #1B2260 0%, #1F2870 12%, #232F80 25%, #263590 38%, #293CA1 50%, #0C49A0 62%, #00558F 75%, #005C7C 88%, #0E5F6A 100%);
+  --hero-gradient: linear-gradient(112deg, transparent 34%, rgba(214,224,255,.06) 44%, rgba(255,255,255,.11) 50%, rgba(214,224,255,.05) 56%, transparent 66%), var(--hero-base);
+  --hero-texture: repeating-linear-gradient(100deg, rgba(255,255,255,.028) 0 1px, transparent 1px 3px);
+  --hero-texture-size: auto;
+  --hero-ink: #FFFFFF;               /* 카드 위 글자 */
+  --hero-ink-sub: #FFFFFF;           /* 카드 위 보조 글자 */
+  --hero-shadow: 0 1px 2px rgba(0,0,0,.40);
+  --hero-track: rgba(255,255,255,.22);           /* 예산 막대 바탕 */
+  --hero-fill: linear-gradient(90deg,#DDE3F0,#FFFFFF 45%,#C9D1E0);             /* 예산 막대 채움 */
+  --hero-chip: rgba(255,255,255,.10);             /* '항목별 남은 예산' 접기 단추 바탕 */
+  --hero-btn-ink: #1A2470;       /* 카드 안 흰 단추 글자 */
+  --hero-btn-ring: none;  /* 밝은 카드에서 흰 단추 윤곽 */
+  --hero-edge: inset 0 0 0 1px rgba(205,214,235,.26), inset 0 1px 0 rgba(255,255,255,.30);
+  --glow: rgba(0,0,0,.50);
+
+  /* 기록 버튼(쨈 컵 키캡)의 테두리·옆면. 컵 안 쨈 맛(--cup-*)은 그대로 둔다 */
+  --fab-1: #7B8CF0;                /* 키캡 테두리 고리 */
+  --fab-2: #1A2470;                /* 키캡 옆면(두께) */
+  --fab-3: #A3B0FF;                /* 지금 화면 키캡 윗면 빛 */
+
+  /* 관련 강조색 */
+  --primary: #93A4FF;
+  --on-primary: #0E1440;
+  --nav-accent: #93A4FF;
+  --aurora-1: #151B42;          /* 예전 분홍 #FFD6E8 자리 */
+  --aurora-2: #0F1F3C;
+  --aurora-3: #0B2A2E;
+  --heat-1: rgba(147,164,255, 0.10);
+  --heat-2: rgba(147,164,255, 0.22);
+  --heat-3: rgba(147,164,255, 0.38);
+  --heat-4: rgba(147,164,255, 0.58);
+  /* 차트 색 (확정 B · 다크) */
+  --chart-1: #93A4FF;
+  --chart-2: #34BFAE;
+  --chart-3: #FFA25E;
+  --chart-4: #9A7BFF;
+  --chart-5: #63D0F5;
+  --chart-6: #C49A6C;
+  --chart-7: #8E8AAA;
+  --toast-action: #2B44C4; /* 밝은 토스트(#F3F1FF) 위 · 옛 #6D4AFF → 사파이어 6.91:1 */
+  --switch-off: #6B7390; /* 다크 면 #161C38 위 3.56:1, 흰 손잡이 4.69:1 (#39 테두리 검사와 맞춤) */
+  --switch-thumb-on: #0E1440; /* 다크: 흰 손잡이는 #93A4FF 위 2.33:1 → 남색 손잡이 7.54:1 */
+  --seg-on-ring: var(--primary); /* 다크 세그 바탕 위 6.20:1 */
+}
+
+/* ── 적용 규칙: 토큰만 바꿔도 되도록 지금 앱(src/style.css)의 해당 부분을 토큰으로 묶음 ── */
+.hero-card { background-image: var(--hero-texture), var(--hero-gradient); background-size: var(--hero-texture-size), 100% 100%;
+  color: var(--hero-ink); text-shadow: var(--hero-shadow); box-shadow: 0 12px 30px var(--glow), var(--hero-edge); }
+.hero-card .text-caption, .hero-card .text-body:not(.hero-cat) { color: var(--hero-ink-sub); }
+.hero-card .text-display { color: var(--hero-ink); }
+.hero-card [role="progressbar"] { background: var(--hero-track); }
+.hero-card .bar-fill { background: var(--hero-fill); }
+.hero-card .hero-fold { background: var(--hero-chip); color: var(--hero-ink); }
+.hero-card .hero-fold:focus-visible { outline-color: var(--hero-ink); }
+.hero-btn { color: var(--hero-btn-ink); box-shadow: var(--hero-btn-ring); }
+.tabbar .fab-disc { box-shadow: 0 0 0 3px var(--fab-1), inset 0 4px 3px #fff, inset 0 -5px 8px rgba(30, 27, 58, .16), 0 3px 0 3px var(--fab-1), 0 6px 0 3px var(--fab-2), 0 11px 0 3px color-mix(in srgb, var(--fab-2) 75%, #000), 0 20px 28px rgba(30, 27, 58, .35); }
+.tabbar .fab.is-pressed .fab-disc { box-shadow: 0 0 0 3px var(--fab-1), inset 0 6px 10px rgba(30, 27, 58, .3), 0 1px 0 2px var(--fab-1), 0 2px 0 2px var(--fab-2), 0 4px 8px rgba(30, 27, 58, .28); }
+.tabbar .tab.on .dock-well { background: linear-gradient(180deg, color-mix(in srgb, var(--fab-2) 55%, #fff), color-mix(in srgb, var(--fab-1) 25%, #fff)); }
+.dark .tabbar .tab.on .dock-well { background: linear-gradient(180deg, color-mix(in srgb, var(--fab-2) 70%, #000), color-mix(in srgb, var(--fab-1) 35%, #141A32)); }
+.tabbar .tab.on .dock-cap { background: linear-gradient(180deg, rgba(255, 255, 255, .40) 0%, transparent 32%), linear-gradient(180deg, var(--fab-3), var(--fab-1) 50%, var(--fab-2));
+  box-shadow: inset 0 4px 6px rgba(255, 255, 255, .35), inset 0 -4px 6px rgba(0, 0, 0, .32), 0 1px 0 var(--fab-2), 0 2px 5px rgba(20, 10, 40, .4); }
+.tabbar .tab.on .dock-label { color: var(--nav-accent); }
+.dark .tabbar .tab.on .dock-label { color: #FFFFFF; }
+/* .fab-disc::after 는 style.css 의 --cup-j1(테마 쨈 맛)을 씀. --fab-1 로 덮으면 움직임 줄이기에서 접시 깜빡임이 남색 고리가 됨 */
+/* 상태 표시 3:1 — 스위치·세그 (색만 바꿈, 크기·움직임 그대로) */
+.switch input:not(:checked) + span { background: var(--switch-off); }
+.switch input:checked + span::after { background: var(--switch-thumb-on); }
+.seg > button[aria-checked="true"] { color: var(--primary); box-shadow: inset 0 0 0 1.5px var(--seg-on-ring), 0 1px 3px rgba(0,0,0,.12); }
+
+
+/* ── 추가: 바탕·면·독·대화상자를 남색 계열 토큰으로 (style.css 하드코딩 보라 제거) ── */
+:root {
+  --bg: #F2F5FA;                       /* 연보라 #F6F4FF → 차가운 남색 흰 바탕 */
+  --surface: rgba(255, 255, 255, 0.78);
+  --surface-solid: #FFFFFF;
+  --dlg-surface: #FFFFFF;
+  --dock-face-1: #F7F8FC;              /* 독 알약 윗면 */
+  --dock-face-2: #D5DAE8;              /* 독 알약 아랫면 (옛 #DAD6E6 보라 기운) */
+  --dock-well-1: #C5CAD8;
+  --dock-well-2: #E4E7F0;
+  --dock-cap-1: #FFFEFF;
+  --dock-cap-2: #ECEFF5;
+  --dock-cap-3: #C8CEDC;
+  --dock-thickness: #9AA3B8;           /* 독 옆 두께(옛 #A7A2BC) */
+  --dock-muted: #3A425C;               /* 고르지 않은 칸 이름 */
+  --dock-menu-face: #F0F3FA;           /* 독 메뉴 칸 (옛 #F6F4FB) */
+  --cup-ink: #1F3280;                  /* 독 '기록' 글자: #2B3FA0(실측 4.55) → 4.8 이상 */
+  --ctl-line: #7A8496;                 /* 옛 연보라 #85809F → 남색 회색, 흰 면 3.77:1 · 바탕 #F2F5FA 3.45:1 */
+}
+
+.dark {
+  --bg: #0C1228;                       /* 옛 #0F0E1A 보라 기운 → 밤 남색 */
+  --surface: rgba(22, 28, 56, 0.72);
+  --surface-solid: #161C38;            /* 옛 #1C1A2E */
+  --dlg-surface: #2A3568;              /* 옛 대화상자 #3A3460 보라 → 사파이어 면 */
+  --dock-face-1: #2A3568;              /* 옛 #3A3460 */
+  --dock-face-2: #1E2A50;              /* 옛 #2A2548 */
+  --dock-well-1: #141A32;
+  --dock-well-2: #1E2A50;
+  --dock-cap-1: #5A6BB0;
+  --dock-cap-2: #3A4A88;
+  --dock-cap-3: #2A3568;
+  --dock-thickness: #0B0A16;
+  --dock-muted: #D5DBF0;
+  --dock-menu-face: #1E2A50;           /* 옛 #2A2548 */
+  --ctl-line: #8B93A8;                 /* 옛 연보라 #8A84B0 → 남색 회색, 대화상자 #2A3568 위 3.78:1 */
+  --cup-j1: #6B84E0;                   /* 기본 블루베리 다크 접시 고리: 독 막대 #2A3568 대비 3.32:1(옛 #2E43A8 약 1.37). 다른 테마는 html[data-theme]가 이김 */
+}
+
+/* 독·대화상자·책상 '기록'·독 메뉴를 토큰에 묶음 (크기·배치는 style.css 그대로) */
+.tabbar {
+  --dock-side: var(--dock-thickness);
+  --dock-label: var(--dock-muted);
+  --dock-on: var(--cup-ink);
+  background: linear-gradient(180deg, rgba(255, 255, 255, .72), transparent 42%), linear-gradient(180deg, var(--dock-face-1), var(--dock-face-2));
+}
+.dark .tabbar {
+  --dock-ink: #0B0A16;
+  --dock-side: #0B0A16;
+  --dock-label: var(--dock-muted);
+  --dock-on: #FFFFFF;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .06), transparent 40%), linear-gradient(180deg, var(--dock-face-1), var(--dock-face-2));
+}
+.dock-well { background: linear-gradient(180deg, var(--dock-well-1), var(--dock-well-2)); }
+.dark .dock-well { background: linear-gradient(180deg, var(--dock-well-1), var(--dock-well-2)); }
+.dock-cap {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .75) 0%, transparent 38%), linear-gradient(180deg, var(--dock-cap-1) 0%, var(--dock-cap-2) 48%, var(--dock-cap-3) 100%);
+}
+.dark .dock-cap {
+  background: linear-gradient(180deg, rgba(255, 255, 255, .16) 0%, transparent 40%), linear-gradient(180deg, var(--dock-cap-1), var(--dock-cap-2) 55%, var(--dock-cap-3));
+}
+html.dark .dlg-card {
+  --dlg-surface: #2A3568;
+  background: var(--dlg-surface);
+}
+.dock-menu-item { background: var(--dock-menu-face); }
+html.dark .dock-menu-item { background: var(--dock-menu-face); }
+@media (min-width: 1024px) {
+  .fab.desk-fab {
+    background: linear-gradient(180deg, rgba(255, 255, 255, .72), transparent 42%), linear-gradient(180deg, var(--dock-face-1), var(--dock-face-2));
+    box-shadow: inset 0 2.5px 4px #fff, 0 6px 0 var(--dock-thickness), 0 16px 28px rgba(30, 27, 58, .22);
+  }
+  .dark .fab.desk-fab {
+    background: linear-gradient(180deg, var(--dock-face-1), var(--dock-face-2));
+  }
+}
+.calc-chip { box-shadow: inset 0 0 0 1.5px var(--primary), 0 2px 0 var(--dock-thickness, #9AA3B8); border: 1px solid var(--primary); }
+.dark .calc-chip, html.dark .calc-chip { box-shadow: inset 0 0 0 1.5px var(--primary), 0 2px 0 #0B1020; border-color: var(--primary); }

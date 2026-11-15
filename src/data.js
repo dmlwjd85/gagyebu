@@ -2,15 +2,22 @@
 import { onAuthStateChanged, signInWithPopup, signInWithRedirect, browserPopupRedirectResolver, getRedirectResult, signInWithCredential, signOut, GoogleAuthProvider } from 'firebase/auth';
 import { auth, googleProvider, firebaseConfig } from './firebase.js';
 import { pickLoginMode, isIOS, isStandalone, isSameOriginAuth, loginErrorMessage } from './lib/authEnv.js';
+import { LEGACY_FEATURES } from './lib/modes.js';
 
 const listeners = new Set();
+const freshMode = () => ({ settings: null, settingsLoaded: false, mode: null, legacyMode: true, askMode: false, features: { ...LEGACY_FEATURES } });
 export const state = {
   ready: false, user: null, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [],
+  assetAccounts: [], holdings: [], contributions: [], assetPrefs: null,
   txWindow: null, txLoaded: false, pendingWrites: false,
+  ...freshMode(),
 };
 const emit = () => listeners.forEach((fn) => fn(state));
 export const subscribe = (fn) => (listeners.add(fn), () => listeners.delete(fn));
 let writeErrorHandler = null;
+// Google 리다이렉트 결과가 처리되기 전에는 히스토리 센티널을 넣지 않기 위한 신호
+let redirectSettled = Promise.resolve();
+export const whenAuthRedirectSettled = () => redirectSettled;
 export const onWriteError = (fn) => (writeErrorHandler = fn);
 let loginErrorHandler = null;
 export const onLoginError = (fn) => (loginErrorHandler = fn);
@@ -37,7 +44,9 @@ export function initAuth() {
   // 리다이렉트로 로그인하고 돌아왔을 때만 결과 처리기를 불러옴(아이폰 홈 화면 앱, 또는 팝업이 막힌 경우)
   if (sessionStorage.getItem('authRedirect') || loginMode() === 'redirect') {
     sessionStorage.removeItem('authRedirect');
-    getRedirectResult(auth, browserPopupRedirectResolver).catch((e) => { console.error(e); loginErrorHandler?.(e); });
+    redirectSettled = Promise.resolve()
+      .then(() => getRedirectResult(auth, browserPopupRedirectResolver))
+      .catch((e) => { console.error(e); loginErrorHandler?.(e); });
   }
   onAuthStateChanged(auth, async (user) => {
     store?.stopAll();
@@ -46,7 +55,7 @@ export function initAuth() {
       try { await loadStore(); } catch (e) { console.error(e); }
       if (auth.currentUser?.uid !== user.uid) return; // 기다리는 사이 로그아웃·계정 전환됨
     } else localStorage.removeItem(SIGNED_IN);
-    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [], txWindow: null, txLoaded: false, budgetYm: null, ready: true });
+    Object.assign(state, { user, profile: null, categories: [], accounts: [], budget: null, txs: [], rules: [], recurring: [], goals: [], imports: [], kept: [], assetAccounts: [], holdings: [], contributions: [], assetPrefs: null, txWindow: null, txLoaded: false, budgetYm: null, ready: true, ...freshMode() });
     if (user && store) store.startUser();
     emit();
   });
@@ -67,6 +76,9 @@ export const deleteAccount = call('deleteAccount');
 export const reorderCategories = call('reorderCategories');
 export const setBudget = call('setBudget');
 export const setProfile = call('setProfile');
+export const saveSettings = call('saveSettings');
+export const ensureStudentIncome = call('ensureStudentIncome');
+export const restoreBackup = call('restoreBackup');
 export const allTransactions = call('allTransactions');
 export const deleteEverything = call('deleteEverything');
 export const saveRule = call('saveRule');
@@ -80,6 +92,14 @@ export const txsInRange = call('txsInRange');
 export const importTxs = call('importTxs');
 export const undoImport = call('undoImport');
 export const allBudgets = call('allBudgets');
+export const saveAssetAccount = call('saveAssetAccount');
+export const saveHolding = call('saveHolding');
+export const saveContribution = call('saveContribution');
+export const saveAssetPrefs = call('saveAssetPrefs');
+export const deleteAssetAccount = call('deleteAssetAccount');
+export const deleteHolding = call('deleteHolding');
+export const deleteContribution = call('deleteContribution');
+export const assetExport = call('assetExport');
 
 export async function login() {
   if (loginMode() === 'redirect') {

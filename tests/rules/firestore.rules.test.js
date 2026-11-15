@@ -1,7 +1,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, test, expect, beforeAll, afterAll, beforeEach } from 'vitest';
 import { initializeTestEnvironment, assertSucceeds, assertFails } from '@firebase/rules-unit-testing';
-import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, arrayUnion, arrayRemove, deleteField, disableNetwork, enableNetwork } from 'firebase/firestore';
+import { doc, getDoc, getDocs, collection, setDoc, updateDoc, deleteDoc, serverTimestamp, writeBatch, arrayUnion, arrayRemove, deleteField, disableNetwork, enableNetwork, Timestamp } from 'firebase/firestore';
 import { recTxId, skipTrim, addSkipped } from '../../src/lib/recurring.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS } from '../../src/lib/defaults.js';
 import { safeRef, fixedRecId, looksLikeCard } from '../../src/lib/ids.js';
@@ -513,6 +513,167 @@ describe('R2 N8 잔여: 영문자 끼운 카드번호 모양', () => {
   });
 });
 
+const ASSET = { type: 'pension', institution: '미래에셋', name: '내 연금', opened: '2019-01-15' };
+const HOLD = { assetAccountId: 'pension', name: '삼성전자', kind: 'stock', code: '005930', qtyE4: 100000, avgPrice: 70000, lastPrice: 71500, priceDate: '2026-10-16', priceSource: 'manual' };
+const CONTRIB = { assetAccountId: 'pension', date: '2026-03-25', amount: 500000, deductible: true };
+const TAX = { pensionLimit: 6000000, combinedLimit: 9000000, rateHigh: 1650, rateLow: 1320, rateChoice: 'high' };
+
+describe('주식·연금 계좌', () => {
+  test('본인: 계좌·보유·납입·세액 설정 쓰기와 시세만 고치기', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetAccounts/pension'), { ...ASSET, createdAt: serverTimestamp() }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetAccounts/isa'), { type: 'isa', institution: '키움', name: '중개형 ISA', opened: '2023-11-01', maturity: '2026-11-20' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetAccounts/civil'), { type: 'civil', institution: '공무원연금공단', name: '공무원연금', opened: '2015-03-01', expectedPension: 2150000 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/holdings/h1'), HOLD));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/holdings/h1'), { lastPrice: 72000, priceDate: '2026-10-17', priceSource: 'dataGoKr' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/holdings/fund'), { assetAccountId: 'pension', name: 'TDF2045', kind: 'fund', qtyE4: 1205000, avgPrice: 10200 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/contributions/c1'), CONTRIB));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/assetPrefs/tax'), { ...TAX, updatedAt: serverTimestamp() }));
+    await assertSucceeds(getDocs(collection(alice(), 'users/alice/holdings')));
+    await assertSucceeds(deleteDoc(doc(alice(), 'users/alice/contributions/c1')));
+  });
+  test('결제수단 컬렉션에는 투자 계좌를 넣지 못함', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/inv'), { name: '연금', type: 'pension' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/accounts/inv'), { ...ASSET, type: 'card' }));
+  });
+  test('계좌번호·잘못된 종류·주식 코드 누락·소수 수량·시세 원문 거부', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetAccounts/bad'), { ...ASSET, institution: '110123456789' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetAccounts/bad'), { ...ASSET, type: 'crypto' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetAccounts/bad'), { ...ASSET, opened: '2019/01/15' }));
+    const { code, ...noCode } = HOLD;
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), noCode));
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), { ...HOLD, qtyE4: 10.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), { ...HOLD, clpr: '71500', nav: '1' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/holdings/bad'), { ...HOLD, priceSource: 'yahoo' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/contributions/bad'), { ...CONTRIB, amount: 0 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/contributions/bad'), { ...CONTRIB, deductible: 'yes' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetPrefs/other'), TAX));
+    await assertFails(setDoc(doc(alice(), 'users/alice/assetPrefs/tax'), { ...TAX, rateHigh: 16.5 }));
+  });
+  test('타인·비로그인: 읽기·쓰기·삭제 거부', async () => {
+    await env.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users/alice/assetAccounts/pension'), ASSET);
+      await setDoc(doc(db, 'users/alice/holdings/h1'), HOLD);
+      await setDoc(doc(db, 'users/alice/contributions/c1'), CONTRIB);
+      await setDoc(doc(db, 'users/alice/assetPrefs/tax'), TAX);
+    });
+    for (const path of ['users/alice/assetAccounts/pension', 'users/alice/holdings/h1', 'users/alice/contributions/c1', 'users/alice/assetPrefs/tax']) {
+      await assertFails(getDoc(doc(bob(), path)));
+      await assertFails(getDoc(doc(anon(), path)));
+      await assertFails(deleteDoc(doc(bob(), path)));
+    }
+    await assertFails(getDocs(collection(bob(), 'users/alice/holdings')));
+    await assertFails(getDocs(collection(anon(), 'users/alice/contributions')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/holdings/x'), HOLD));
+    await assertFails(updateDoc(doc(bob(), 'users/alice/holdings/h1'), { lastPrice: 1 }));
+    await assertFails(setDoc(doc(bob(), 'users/alice/assetPrefs/tax'), TAX));
+  });
+});
+
+describe('쓰는 방식 settings/prefs', () => {
+  const prefs = { mode: 'single', askMode: false, features: { recurring: true, weekDaily: true, sms: true, txOwner: false }, allowanceAmount: 200000, allowanceCycle: 'month', allowanceDay: 1, updatedAt: serverTimestamp() };
+  test('본인: 만들기·읽기·고치기·삭제', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { askMode: true }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), prefs));
+    await assertSucceeds(getDoc(doc(alice(), 'users/alice/settings/prefs')));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'student', features: { allowance: true, piggy: true, categoryLimits: true, studentIncome: true, monthShare: true } }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'couple', features: { txOwner: true } }));
+    await assertSucceeds(deleteDoc(doc(alice(), 'users/alice/settings/prefs')));
+  });
+  test('다른 문서 id·잘못된 모드·테마·모르는 기능·용돈 범위 거부', async () => {
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/theme'), { mode: 'single' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'family' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { theme: 'ocean' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { features: { recurring: 'yes' } }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { features: { nope: true } }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceAmount: 10.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceDay: 31 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceCycle: 'daily' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { allowanceWeekday: 7 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 1 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 17 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 31 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 0 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 32 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: 1.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { monthStartDay: '17' }));
+  });
+  test('타인·비로그인: 읽기·쓰기·삭제 거부', async () => {
+    await env.withSecurityRulesDisabled((ctx) => setDoc(doc(ctx.firestore(), 'users/alice/settings/prefs'), { mode: 'student', askMode: false }));
+    await assertFails(getDoc(doc(bob(), 'users/alice/settings/prefs')));
+    await assertFails(getDocs(collection(bob(), 'users/alice/settings')));
+    await assertFails(setDoc(doc(bob(), 'users/alice/settings/prefs'), { mode: 'single' }));
+    await assertFails(deleteDoc(doc(bob(), 'users/alice/settings/prefs')));
+    await assertFails(getDoc(doc(anon(), 'users/alice/settings/prefs')));
+    await assertFails(setDoc(doc(anon(), 'users/alice/settings/prefs'), { askMode: true }));
+  });
+  test('분위기·글꼴·꾸미기는 설정에만 더하고 거래 필드는 그대로다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'single', askMode: false, mood: 'ocean', font: 'gaegu', decor: false }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { mood: 'maple', font: 'system', decor: true }));
+    const saved = await getDoc(doc(alice(), 'users/alice/settings/prefs'));
+    expect(saved.data()).toMatchObject({ mode: 'single', askMode: false, mood: 'maple', font: 'system', decor: true });
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mood: 'oceanx' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { font: 'comic' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { decor: 'yes' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'single', askMode: false }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['menu', 'accent'] }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['card'] }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: [] }));
+    const withTone = await getDoc(doc(alice(), 'users/alice/settings/prefs'));
+    expect(withTone.data().tone).toEqual([]);
+    expect(withTone.data().mood).toBeUndefined();
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: 'menu' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['comic'] }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { tone: ['menu', 'accent', 'card', 'menu'] }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-mood'), { ...TX, mood: 'sakura' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-tone'), { ...TX, tone: ['menu'] }));
+    const tx = await getDoc(doc(alice(), 'users/alice/transactions/t1'));
+    expect(tx.data().mood).toBeUndefined();
+    expect(tx.data()).toMatchObject({ amount: 1000, kind: 'expense', categoryId: 'food' });
+  });
+  test('배우자 이름·공동 비율', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { mode: 'couple', spouseName: '민지', splitMe: 60 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 0 }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 100, spouseName: '가'.repeat(20) }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { spouseName: '' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { spouseName: '가'.repeat(21) }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 101 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: 50.5 }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/settings/prefs'), { splitMe: -1 }));
+  });
+});
+
+describe('거래·반복의 누구 돈', () => {
+  test('나·배우자·공동만 허용하고, 없는 예전 거래는 그대로', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-me'), { ...TX, owner: '나' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-sp'), { ...TX, kind: 'income', categoryId: 'salary', owner: '배우자', memo: '배우자 월급' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-sh'), { ...TX, owner: '공동' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/t-old'), TX));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/transactions/t1'), { memo: '그대로' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-bad'), { ...TX, owner: 'bob' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-bad2'), { ...TX, owner: 'me' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/t-bad3'), { ...TX, owner: '' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/rent'), { ...REC, owner: '공동' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/pay'), { ...REC, kind: 'income', categoryId: 'salary', name: '배우자 월급', owner: '배우자' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/plain'), REC));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/bad'), { ...REC, owner: 'friend' }));
+  });
+  test('owner가 있는 거래를 예전 앱처럼 빼 덮으면 거부한다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, owner: '배우자' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, memo: '수정' }));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/transactions/tsp2'), { memo: '메모만' }));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/tsp2'), { ...TX, memo: '나로', owner: '나' }));
+  });
+  test('owner가 없는 거래는 예전 앱이 그대로 고친다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/told2'), TX));
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/transactions/told2'), { ...TX, memo: '그대로' }));
+  });
+  test('owner가 있는 반복을 빼 덮으면 거부하고, 다른 칸만 고치는 것은 된다', async () => {
+    await assertSucceeds(setDoc(doc(alice(), 'users/alice/recurring/rent2'), { ...REC, owner: '공동' }));
+    await assertFails(setDoc(doc(alice(), 'users/alice/recurring/rent2'), REC));
+    await assertSucceeds(updateDoc(doc(alice(), 'users/alice/recurring/rent2'), { lastPosted: '2026-10' }));
+  });
+});
 // ── QA 5차 R6: 예산 키에 영문·밑줄을 섞은 카드번호 모양 ──
 describe('R6 예산 키: 영문·밑줄 섞인 카드번호 모양 거부', () => {
   const b = (byCategory) => setDoc(doc(alice(), 'users/alice/budgets/2026-12'), { total: 1, byCategory });
@@ -608,7 +769,9 @@ describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시
     await assertSucceeds(setDoc(doc(alice(), p), { ...AUTO, ...ts() })); // 없을 때는 예전 앱도 그대로 만들 수 있음
     await assertSucceeds(updateDoc(doc(alice(), p), { amount: 81000 }));
     await assertFails(setDoc(doc(alice(), p), { ...AUTO, ...ts() }));
-    await assertFails(updateDoc(doc(alice(), p), { createdAt: serverTimestamp() }));
+    // 내용이 그대로인 createdAt만 바꾸는 쓰기는 허용(업데이트 전 앱의 merge 묶음, PR36 QA). 내용은 바뀌지 않음
+    await assertSucceeds(updateDoc(doc(alice(), p), { createdAt: serverTimestamp() }));
+    expect((await getDoc(doc(alice(), p))).data()).toMatchObject({ amount: 81000 });
   });
   test("자동 기록 문서의 부분 고치기(카테고리 옮기기)는 허용, origin을 'auto'로 바꾸는 고치기는 거부", async () => {
     await seed();
@@ -666,7 +829,7 @@ describe('D1 반복 자동 기록: 없을 때만 만들기, 지운 달은 다시
     expect((await getDoc(doc(db, 'users/alice/transactions/noCa1'))).data()).toMatchObject({ amount: 30000 });
     await seed();
     await assertSucceeds(setDoc(doc(db, p), { ...AUTO, ...ts() }));
-    await assertFails(setDoc(doc(db, p), { ...AUTO, ...ts() }));
+    await assertFails(setDoc(doc(db, p), { ...AUTO, amount: AUTO.amount + 1, ...ts() })); // 내용이 다르면 거부
     await assertFails(setDoc(doc(bob(), 'users/alice/transactions/noCa1'), { ...TX, ...ts() })); // 남의 기록은 그대로 거부
   });
   test('앱 생성 함수 id(rec-·자동 id·고정 id kp/tx/rx) 전부 기존대로 만들기·고치기·지우기', async () => {
@@ -772,4 +935,45 @@ describe('N2 지운 달(skipped): 넣기·빼기는 원자적으로, 두 기기(
     await seed({ skipped: ['2026-09'] });
     for (const bad of ['2026-13', '1234567890123', 202610]) await assertFails(updateDoc(doc(alice(), recPath), { skipped: arrayUnion(bad) }));
   });
+});
+
+// ── PR #36 QA(9.6점) 재현: /workspace/qa/pr36/qa36.test.js ──
+describe('PR36 QA: 업데이트 전 앱 자동 기록 묶음·startYm 없는 예전 반복', () => {
+  const ts = Timestamp.fromMillis(1760000000000);
+  const REC = { name: '월세', amount: 500000, kind: 'expense', categoryId: 'housing', dayOfMonth: 25, active: true, startYm: '2026-08', lastPosted: '2026-09' };
+  const R1 = { date: '2026-09-25', amount: 500000, kind: 'expense', categoryId: 'housing', memo: '월세', recurringId: 'r1', owner: '공동' };
+  const tx = (db, id) => doc(db, `users/alice/transactions/${id}`);
+  beforeEach(async () => env.withSecurityRulesDisabled(async (c) => {
+    const db = c.firestore();
+    await setDoc(doc(db, 'users/alice/recurring/r1'), { ...REC, owner: '공동', createdAt: ts });
+    await setDoc(doc(db, 'users/alice/recurring/rOld'), { name: '구독', amount: 9900, kind: 'expense', categoryId: 'sub', dayOfMonth: 3, active: true, lastPosted: '2026-09' });
+    await setDoc(tx(db, 'rec-r1-2026-09'), { ...R1, createdAt: ts, updatedAt: ts });
+    await setDoc(tx(db, 'rec-rOld-2026-09'), { date: '2026-09-03', amount: 9900, kind: 'expense', categoryId: 'sub', memo: '구독', recurringId: 'rOld', createdAt: ts });
+  }));
+  const oldPost = (db, id, data, lp) => { const b = writeBatch(db);
+    b.set(tx(db, id), { ...data, createdAt: serverTimestamp(), updatedAt: serverTimestamp() }, { merge: true });
+    b.update(doc(db, 'users/alice/recurring/r1'), { lastPosted: lp, updatedAt: serverTimestamp() }); return b.commit(); };
+  test('예전 앱 postRecurring: 새 달 묶음 통과', () => assertSucceeds(oldPost(alice(), 'rec-r1-2026-10', { ...R1, date: '2026-10-25' }, '2026-10')));
+  test('예전 앱 postRecurring: 이미 있는 달(내용 같음) 묶음 통과, 내용은 그대로', async () => {
+    await assertSucceeds(oldPost(alice(), 'rec-r1-2026-09', R1, '2026-09'));
+    let got;
+    await env.withSecurityRulesDisabled(async (c) => { got = (await getDoc(tx(c.firestore(), 'rec-r1-2026-09'))).data(); });
+    expect({ ...got, createdAt: undefined, updatedAt: undefined }).toEqual({ ...R1, createdAt: undefined, updatedAt: undefined });
+  });
+  test('예전 앱 postRecurring: 사용자가 고친 달(금액 다름)은 덮어쓰기 거부', async () => {
+    await env.withSecurityRulesDisabled((c) => updateDoc(tx(c.firestore(), 'rec-r1-2026-09'), { amount: 480000 }));
+    await assertFails(oldPost(alice(), 'rec-r1-2026-09', R1, '2026-09'));
+  });
+  test('새 앱 자동 기록 삭제 묶음(r1) 통과, 지운 달 재생성 거부', async () => {
+    const db = alice(), b = writeBatch(db);
+    b.delete(tx(db, 'rec-r1-2026-09')); b.update(doc(db, 'users/alice/recurring/r1'), { skipped: arrayUnion('2026-09'), updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+    await assertFails(setDoc(tx(db, 'rec-r1-2026-09'), { ...R1, origin: 'auto', createdAt: serverTimestamp() }));
+  });
+  test('새 앱 자동 기록 삭제 묶음(startYm 없는 예전 반복) 통과', async () => {
+    const db = alice(), b = writeBatch(db);
+    b.delete(tx(db, 'rec-rOld-2026-09')); b.update(doc(db, 'users/alice/recurring/rOld'), { skipped: arrayUnion('2026-09'), updatedAt: serverTimestamp() });
+    await assertSucceeds(b.commit());
+  });
+  test('startYm이 있던 반복에서 startYm 지우기는 거부', () => assertFails(updateDoc(doc(alice(), 'users/alice/recurring/r1'), { startYm: deleteField() })));
 });

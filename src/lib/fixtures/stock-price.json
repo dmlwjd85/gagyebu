@@ -1,0 +1,43 @@
+{
+  "response": {
+    "header": { "resultCode": "00", "resultMsg": "NORMAL SERVICE." },
+    "body": {
+      "numOfRows": 3,
+      "pageNo": 1,
+      "totalCount": 3,
+      "items": {
+        "item": [
+          {
+            "basDt": "20261016",
+            "srtnCd": "005930",
+            "isinCd": "KR7005930003",
+            "itmsNm": "삼성전자",
+            "mrktCtg": "KOSPI",
+            "clpr": "71500",
+            "vs": "-500",
+            "fltRt": "-0.69",
+            "mkp": "72000",
+            "hipr": "72400",
+            "lopr": "71200",
+            "trqu": "15234567",
+            "trPrc": "1092345678901",
+            "lstgStCnt": "5969782550",
+            "mrktTotAmt": "426800000000000"
+          },
+          {
+            "basDt": "20261015",
+            "srtnCd": "A005930",
+            "itmsNm": "삼성전자",
+            "clpr": "72,000"
+          },
+          {
+            "basDt": "20261016",
+            "srtnCd": "90059301",
+            "itmsNm": "다른종목",
+            "clpr": "1"
+          }
+        ]
+      }
+    }
+  }
+}

@@ -6,6 +6,9 @@ import { app, auth, useEmulator, emu } from './firebase.js';
 import { DEFAULT_CATEGORIES, DEFAULT_ACCOUNTS, FALLBACK_CATEGORY } from './lib/defaults.js';
 import { period, shiftYm, ymd, addDays } from './lib/dates.js';
 import { dueOccurrences, recParts, skipTrim, bumpLastPosted, settledLastPosted, deniedOutcome } from './lib/recurring.js';
+import { resolveMode, STUDENT_INCOME, activeStartDay } from './lib/modes.js';
+import { ownerToWrite } from './lib/couple.js';
+import { ackOrTimeout, RESTORE_ACK_MS } from './lib/restoreWait.js';
 import { safeRef, isRuleId, fixedRecId } from './lib/ids.js';
 import { restorePlans, keptList, keepTx, unkeep, keepIdOf, editTarget } from './lib/restore.js';
 
@@ -67,7 +70,24 @@ export function startUser() {
     state.goals = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
     emit();
   }));
+  unsubs.push(onSnapshot(u('settings', 'prefs'), (s) => {
+    state.settings = s.exists() ? { id: s.id, ...s.data() } : null;
+    state.settingsLoaded = true;
+    applyMode(state.settings);
+    emit();
+  }));
   let posted = false;
+  const byOrder = (s) => s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => (a.order ?? 0) - (b.order ?? 0) || String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+  unsubs.push(onSnapshot(col('assetAccounts'), (s) => { state.assetAccounts = byOrder(s); emit(); }));
+  unsubs.push(onSnapshot(col('holdings'), (s) => {
+    state.holdings = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(a.name || '').localeCompare(String(b.name || ''), 'ko'));
+    emit();
+  }));
+  unsubs.push(onSnapshot(col('contributions'), (s) => {
+    state.contributions = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+    emit();
+  }));
+  unsubs.push(onSnapshot(u('assetPrefs', 'tax'), (s) => { state.assetPrefs = s.exists() ? { id: s.id, ...s.data() } : null; emit(); }));
   unsubs.push(onSnapshot(col('recurring'), { includeMetadataChanges: true }, (s) => {
     state.recurring = s.docs.map((d) => ({ id: d.id, ...d.data() })).sort((a, b) => a.dayOfMonth - b.dayOfMonth);
     // 서버 기준 목록을 받은 뒤 한 번만 밀린 회차 기록(캐시만 보고 쓰면 다른 기기 기록을 모름)
@@ -77,6 +97,14 @@ export function startUser() {
 }
 
 // 반복 거래: 오늘까지 밀린 회차를 거래로 기록. 거래 id 고정 → 여러 기기에서 동시에 돌아도 한 번만
+function applyMode(settings) {
+  const info = resolveMode(settings);
+  state.mode = info.mode;
+  state.legacyMode = info.legacy;
+  state.features = info.features;
+  state.askMode = info.askMode;
+}
+
 // 자동 기록은 '없을 때만 만들기'(QA D1): 사용자가 고친 같은 달 기록을 덮어쓰지 않음.
 //  - 이미 있으면(서버, 오프라인이면 이 기기 캐시) 건너뜀. 지운 달(skipped)도 건너뜀
 //  - 그래도 오프라인 대기열 등으로 겹치면 규칙이 막음(origin 'auto'·새 createdAt인 쓰기는 이미 있는 문서에 거부)
@@ -85,7 +113,7 @@ export function startUser() {
 //  - 회차마다 따로 쓰고, lastPosted는 모든 회차 결과를 본 뒤 앞에서부터 이어서 처리된 달까지만 올림
 // 규칙에 맞지 않는 예전 반복 id(숫자 13개 이상)는 늘 같은 새 id로 옮긴 뒤 기록(옮기기는 한 묶음).
 const recFields = (r) => clean({ name: r.name, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-  active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, skipped: r.skipped?.length ? r.skipped : undefined, createdAt: r.createdAt });
+  active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, owner: r.owner === '나' ? '나' : ownerToWrite(r.owner), skipped: r.skipped?.length ? r.skipped : undefined, createdAt: r.createdAt });
 // 결과: 'done'(만들었음·이미 있음·지운 달) | 'gone'(반복이 지워짐) | 'failed'(다음에 다시)
 async function autoCreate(ref, data, recRef, ym) {
   try {
@@ -97,7 +125,7 @@ async function autoCreate(ref, data, recRef, ym) {
     try {
       const [t, r] = await Promise.all([getDocFromServer(ref), getDocFromServer(recRef)]);
       const out = deniedOutcome({ txExists: t.exists(), recExists: r.exists(), skipped: r.data()?.skipped, ym });
-      if (out !== 'failed') console.info('[쓱 가계부] 이미 있는(또는 지운) 달이라 자동 기록을 건너뛰었어요:', ref.id);
+      if (out !== 'failed') console.info('[쨈 가계부] 이미 있는(또는 지운) 달이라 자동 기록을 건너뛰었어요:', ref.id);
       return out;
     } catch (e2) { console.error(e2); return 'failed'; } // 확인하지 못하면 처리 못 한 것으로(다음에 다시)
   }
@@ -113,7 +141,7 @@ async function postOneNow(r, rid, due) {
   const skipped = r.skipped || [];
   const results = await Promise.all(due.map((o) => (skipped.includes(o.ym) ? 'done'
     : autoCreate(u('transactions', o.id), clean({ date: o.date, amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, memo: r.name, recurringId: rid,
-      origin: 'auto', createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), u('recurring', r.id), o.ym) // 예전 id면 옮기기 전 문서로 확인
+      owner: ownerToWrite(r.owner), origin: 'auto', createdAt: serverTimestamp(), updatedAt: serverTimestamp() }), u('recurring', r.id), o.ym) // 예전 id면 옮기기 전 문서로 확인
       .catch((e) => { console.error(e); writeErrorHandler?.(e); return 'failed'; }))));
   const failed = results.filter((x) => x === 'failed').length;
   if (failed && !pendingNoticeShown) { pendingNoticeShown = true; writeErrorHandler?.({ code: 'recurring-pending', count: failed }); }
@@ -128,6 +156,8 @@ async function postOneNow(r, rid, due) {
   fire(b.commit(), writeErrorHandler);
 }
 export function postRecurring(today) {
+  // 설정을 받기 전에는 기존과 같이 기록(모드 없는 사용자). 기능을 끄면 새 기록만 멈춘다. 이미 있는 거래는 그대로.
+  if (state.settingsLoaded && state.features && !state.features.recurring) return 0;
   let n = 0;
   for (const r of state.recurring) {
     const rid = isRuleId(r.id) ? r.id : fixedRecId(r.id);
@@ -146,12 +176,14 @@ async function seedDefaults() {
   DEFAULT_ACCOUNTS.forEach(({ id, ...a }, order) => b.set(u('accounts', id), { ...a, order }));
   b.set(u(), { displayName: state.user.displayName ?? '', currency: 'KRW', monthStartDay: 1, seeded: true, createdAt: serverTimestamp() });
   fire(b.commit(), writeErrorHandler);
+  // 첫 시작 안내. 규칙이 아직 없으면 실패해도 기본 데이터는 남고, 메뉴는 지금과 같이 모두 보인다.
+  fire(setDoc(u('settings', 'prefs'), { askMode: true, updatedAt: serverTimestamp() }), () => {});
 }
 
 // 보고 있는 달 기준 6개 기간 거래 구독(차트 추이용)
 export function watchMonth(ym) {
   if (!state.user) return;
-  const sd = state.profile?.monthStartDay ?? 1;
+  const sd = activeStartDay(state.settings, state.profile, state.features);
   const start = period(shiftYm(ym, -5), sd).start, end = period(ym, sd).end;
   const key = `${start}~${end}`;
   if (state.txWindow !== key) {
@@ -173,8 +205,15 @@ export function watchMonth(ym) {
 }
 
 const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== undefined && v !== ''));
-const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4 }) =>
-  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4 });
+const txFields = ({ date, amount, kind, categoryId, accountId, memo, tags, importHash, importBatch, recurringId, card4, owner }) =>
+  clean({ date, amount, kind, categoryId, accountId, memo, tags: tags?.length ? tags : undefined, importHash, importBatch, recurringId, card4, owner: owner === '나' ? '나' : ownerToWrite(owner) });
+// 고칠 때 비울 수 있는 칸. owner는 넣지 않는다(없으면 서버 값을 남김).
+const TX_CLEAR = ['accountId', 'memo', 'tags', 'importHash', 'importBatch', 'recurringId', 'card4'];
+const cleared = (data, keys) => {
+  const out = { ...data };
+  for (const k of keys) if (!(k in out)) out[k] = deleteField();
+  return out;
+};
 export const tagsOf = (memo = '') => [...new Set((memo.match(/#[^\s#]{1,20}/g) || []).map((t) => t.slice(1)))].slice(0, 20);
 
 // 고치기: 예전 형식 id(규칙이 늘 거부)면 늘 같은 새 id로 옮겨 쓰고 예전 문서는 같은 묶음에서 지움(QA N6, editTarget 참고)
@@ -183,7 +222,14 @@ export function saveTx(tx) {
   const data = { ...txFields({ ...tx, recurringId: t.recurringId, tags: tagsOf(tx.memo) }), updatedAt: serverTimestamp(), ...(tx.id ? {} : { createdAt: serverTimestamp() }) };
   if (tx.id && tx.createdAt) data.createdAt = tx.createdAt;
   if (tx.id) bumpRecurring(t.id);
-  if (!t.moved) { fire(() => setDoc(u('transactions', t.id), data), writeErrorHandler); return t.id; }
+  // 고치기: 아는 칸만 합친다. 이 버전이 모르는 칸과, 빠뜨린 owner는 서버에 남는다.
+  // 비운 메모·결제수단 등은 지운다(자동 기록 표식 origin도: 사용자가 고친 기록). 새 기록은 통째로 만든다.
+  if (!t.moved) {
+    const ref = u('transactions', t.id);
+    if (tx.id) fire(() => setDoc(ref, cleared(data, [...TX_CLEAR, 'origin']), { merge: true }), writeErrorHandler);
+    else fire(() => setDoc(ref, data), writeErrorHandler);
+    return t.id;
+  }
   // createdAt은 원래 값만(새로 만들지 않음): 이미 있는 문서에 새 createdAt을 보내면 규칙이 '새로 만들기'로 보고 거부
   fire(() => {
     const b = writeBatch(db);
@@ -220,7 +266,8 @@ export async function saveTxBatch(list) {
 export function restoreTx(tx, { fromKeep = false, quiet = false } = {}) {
   const uid = state.user.uid;
   const createdAt = tx.createdAt || (tx.createdAtMs ? Timestamp.fromMillis(tx.createdAtMs) : undefined);
-  const plans = restorePlans(tx);
+  // 스냅샷에 owner가 없으면 '나'. 필드를 빼면 규칙이 덮어쓰기를 거부한다. 읽는 값은 나와 같다.
+  const plans = restorePlans({ ...tx, owner: tx.owner || '나' });
   const moved = tx.id && editTarget(tx).moved ? editTarget(tx).id : null;
   const run = async () => {
     for (const [i, p] of plans.entries()) {
@@ -346,6 +393,25 @@ export function setBudget(ym, total, byCategory) {
 export function setProfile(patch) {
   fire(() => setDoc(u(), { ...patch, updatedAt: serverTimestamp() }, { merge: true }), writeErrorHandler);
 }
+export function saveSettings(patch) {
+  const data = { updatedAt: serverTimestamp() };
+  for (const [k, v] of Object.entries(patch)) {
+    if (v === null) data[k] = deleteField();
+    else if (v !== undefined && v !== '') data[k] = v;
+  }
+  fire(setDoc(u('settings', 'prefs'), data, { merge: true }), writeErrorHandler);
+}
+// 알바·심부름. 이미 있는 카테고리는 이름·이모지를 덮지 않는다.
+export async function ensureStudentIncome() {
+  for (const c of STUDENT_INCOME) {
+    const ref = u('categories', c.id);
+    let exists = state.categories?.some((x) => x.id === c.id);
+    if (!exists) {
+      try { exists = (await readDoc(ref)).exists(); } catch { exists = false; }
+    }
+    if (!exists) fire(setDoc(ref, { name: c.name, emoji: c.emoji, kind: c.kind, order: c.order }), writeErrorHandler);
+  }
+}
 // ── M2 ──
 export function saveRule(r) {
   const ref = r.id ? u('rules', r.id) : newRef('rules');
@@ -357,7 +423,7 @@ export const deleteRule = (id) => fire(() => deleteDoc(u('rules', id)), writeErr
 export function saveRecurring(r) {
   const old = r.id ? state.recurring.find((x) => x.id === r.id) : null;
   const data = clean({ name: r.name.trim(), amount: r.amount, kind: r.kind, categoryId: r.categoryId, accountId: r.accountId, dayOfMonth: r.dayOfMonth,
-    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, updatedAt: serverTimestamp(),
+    active: Boolean(r.active), startYm: r.startYm, lastPosted: r.lastPosted, owner: r.owner === '나' ? '나' : ownerToWrite(r.owner), updatedAt: serverTimestamp(),
     createdAt: r.id ? (r.createdAt ?? old?.createdAt) : serverTimestamp() });
   // 새로 만들거나 지운 반복을 되살릴 때만 '지운 달'을 함께 씀
   const skipped = r.skipped ?? old?.skipped;
@@ -388,6 +454,59 @@ export function saveGoal(g) {
   return ref.id;
 }
 export const deleteGoal = (id) => fire(() => deleteDoc(u('goals', id)), writeErrorHandler);
+
+const stamp = (id, createdAt) => ({ updatedAt: serverTimestamp(), ...(createdAt ? { createdAt } : id ? {} : { createdAt: serverTimestamp() }) });
+export function saveAssetAccount(a) {
+  const ref = a.id ? u('assetAccounts', a.id) : doc(col('assetAccounts'));
+  fire(setDoc(ref, clean({
+    type: a.type, institution: a.institution.trim(), name: a.name.trim(), opened: a.opened,
+    maturity: a.type === 'isa' ? a.maturity : undefined,
+    expectedPension: a.type === 'civil' ? a.expectedPension : undefined,
+    order: a.order ?? 0, archived: a.archived || undefined, ...stamp(a.id, a.createdAt),
+  })), writeErrorHandler);
+  return ref.id;
+}
+export function saveHolding(h) {
+  const ref = h.id ? u('holdings', h.id) : doc(col('holdings'));
+  const priced = Number.isInteger(h.lastPrice);
+  fire(setDoc(ref, clean({
+    assetAccountId: h.assetAccountId, code: h.code || undefined, name: h.name.trim(), kind: h.kind,
+    qtyE4: h.qtyE4, avgPrice: h.avgPrice,
+    lastPrice: priced ? h.lastPrice : undefined,
+    priceDate: priced ? h.priceDate : undefined,
+    priceSource: priced ? (h.priceSource === 'dataGoKr' ? 'dataGoKr' : 'manual') : undefined,
+    ...stamp(h.id, h.createdAt),
+  })), writeErrorHandler);
+  return ref.id;
+}
+export function saveContribution(c) {
+  const ref = c.id ? u('contributions', c.id) : doc(col('contributions'));
+  fire(setDoc(ref, clean({
+    assetAccountId: c.assetAccountId, date: c.date, amount: c.amount, deductible: Boolean(c.deductible),
+    ...stamp(c.id, c.createdAt),
+  })), writeErrorHandler);
+  return ref.id;
+}
+export function saveAssetPrefs(p) {
+  fire(setDoc(u('assetPrefs', 'tax'), clean({
+    pensionLimit: p.pensionLimit, combinedLimit: p.combinedLimit, rateHigh: p.rateHigh, rateLow: p.rateLow,
+    rateChoice: p.rateChoice === 'low' ? 'low' : 'high', updatedAt: serverTimestamp(),
+  })), writeErrorHandler);
+}
+export async function deleteAssetAccount(id) {
+  const refs = [
+    ...state.holdings.filter((h) => h.assetAccountId === id).map((h) => u('holdings', h.id)),
+    ...state.contributions.filter((c) => c.assetAccountId === id).map((c) => u('contributions', c.id)),
+    u('assetAccounts', id),
+  ];
+  for (let i = 0; i < refs.length; i += 400) {
+    const b = writeBatch(db);
+    refs.slice(i, i + 400).forEach((ref) => b.delete(ref));
+    await b.commit();
+  }
+}
+export const deleteHolding = (id) => fire(deleteDoc(u('holdings', id)), writeErrorHandler);
+export const deleteContribution = (id) => fire(deleteDoc(u('contributions', id)), writeErrorHandler);
 
 // 오프라인이면 서버를 기다리지 않고 이 기기 캐시에서 읽음(가져오기가 멈추지 않게)
 const read = (q) => (navigator.onLine ? getDocs(q) : getDocsFromCache(q));
@@ -427,14 +546,80 @@ export async function allBudgets() {
   const s = await read(col('budgets'));
   return s.docs.map((d) => ({ ym: d.id, ...d.data() }));
 }
+const readDoc = (ref) => (navigator.onLine ? getDoc(ref) : getDocFromCache(ref));
+export async function assetExport() {
+  try {
+    const [accounts, holdings, contributions, prefs] = await Promise.all([
+      read(col('assetAccounts')), read(col('holdings')), read(col('contributions')), readDoc(u('assetPrefs', 'tax')),
+    ]);
+    return {
+      assetAccounts: accounts.docs.map((d) => ({ id: d.id, ...d.data() })),
+      holdings: holdings.docs.map((d) => ({ id: d.id, ...d.data() })),
+      contributions: contributions.docs.map((d) => ({ id: d.id, ...d.data() })),
+      assetPrefs: prefs.exists() ? { id: prefs.id, ...prefs.data() } : null,
+    };
+  } catch {
+    return { assetAccounts: state.assetAccounts ?? [], holdings: state.holdings ?? [], contributions: state.contributions ?? [], assetPrefs: state.assetPrefs ?? null };
+  }
+}
 
 export async function allTransactions() {
   const s = await getDocs(query(col('transactions'), orderBy('date')));
   return s.docs.map((d) => ({ id: d.id, ...d.data() }));
 }
 // 모든 기록 삭제(계정 삭제 포함)
+const dropStamp = (row) => { const { id, ym, createdAt, updatedAt, at, ...rest } = row ?? {}; return rest; };
+// 오프라인이거나 서버 답이 없으면 기다리지 않고 로컬에 넣는다. 한 번 막히면 나머지는 바로 큐에 넣는다.
+async function commitTracked(promise, flags) {
+  const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
+  if (flags.queued || offline) {
+    fire(promise);
+    flags.queued = true;
+    return;
+  }
+  const result = await ackOrTimeout(promise, RESTORE_ACK_MS);
+  if (result === 'timeout') flags.queued = true;
+}
+// 백업에 있는 문서만 같은 id로 합친다. 파일에 없는 기록·예전 백업에 없는 컬렉션은 지우지 않는다.
+export async function restoreBackup(parsed) {
+  const flags = { queued: false };
+  const writeList = async (name, items, idOf) => {
+    const rows = (items ?? []).filter((x) => idOf(x));
+    for (let i = 0; i < rows.length; i += 400) {
+      const b = writeBatch(db);
+      rows.slice(i, i + 400).forEach((x) => {
+        const data = clean(dropStamp(x));
+        if (name === 'imports' && !data.at) data.at = serverTimestamp();
+        b.set(u(name, idOf(x)), data, { merge: true });
+      });
+      await commitTracked(b.commit(), flags);
+    }
+  };
+  if (Number.isInteger(parsed.profile?.monthStartDay)) {
+    await commitTracked(setDoc(u(), { monthStartDay: parsed.profile.monthStartDay, updatedAt: serverTimestamp() }, { merge: true }), flags);
+  }
+  await writeList('categories', parsed.categories, (x) => x.id);
+  await writeList('accounts', parsed.accounts, (x) => x.id);
+  await writeList('transactions', parsed.transactions, (x) => x.id);
+  await writeList('budgets', parsed.budgets, (x) => x.ym || x.id);
+  await writeList('rules', parsed.rules, (x) => x.id);
+  await writeList('recurring', parsed.recurring, (x) => x.id);
+  await writeList('goals', parsed.goals, (x) => x.id);
+  await writeList('imports', parsed.imports, (x) => x.id);
+  if (parsed.hasAssets) {
+    await writeList('assetAccounts', parsed.assetAccounts, (x) => x.id);
+    await writeList('holdings', parsed.holdings, (x) => x.id);
+    await writeList('contributions', parsed.contributions, (x) => x.id);
+    if (parsed.assetPrefs) await commitTracked(setDoc(u('assetPrefs', 'tax'), clean(dropStamp(parsed.assetPrefs)), { merge: true }), flags);
+  }
+  if (parsed.hasSettings && parsed.settings && Object.keys(parsed.settings).length) {
+    await commitTracked(setDoc(u('settings', 'prefs'), { ...parsed.settings, updatedAt: serverTimestamp() }, { merge: true }), flags);
+  }
+  return { queued: flags.queued, online: typeof navigator === 'undefined' || navigator.onLine !== false };
+}
+
 export async function deleteEverything() {
-  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports']) {
+  for (const name of ['transactions', 'categories', 'accounts', 'budgets', 'rules', 'recurring', 'goals', 'imports', 'assetAccounts', 'holdings', 'contributions', 'assetPrefs', 'settings']) {
     const s = await getDocs(col(name));
     for (let i = 0; i < s.docs.length; i += 400) {
       const b = writeBatch(db);

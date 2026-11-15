@@ -1,0 +1,22 @@
+# 평일 14:30 KST(05:30 UTC) 이후. 금요일 종가는 다음 영업일 13시 이후에 열리므로 그 다음 실행이 가져간다.
+# 공개 JSON을 만들지 않는다. 시크릿이 없으면 스크립트가 쓰기를 하지 않고 성공으로 끝난다.
+name: Sync prices
+on:
+  schedule:
+    - cron: '30 5 * * 1-5'
+  workflow_dispatch: {}
+permissions: { contents: read }
+concurrency: { group: sync-prices, cancel-in-progress: false }
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 20, cache: npm }
+      - run: npm ci
+      - run: npm install --no-save firebase-admin@13
+      - run: node tools/prices/sync-prices.mjs
+        env:
+          DATA_GO_KR_KEY: ${{ secrets.DATA_GO_KR_KEY }}
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}

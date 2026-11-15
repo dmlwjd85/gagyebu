@@ -1,4 +1,4 @@
-"""반복 자동 기록 e2e 검사 공용(deploy_order.py·multi_device.py). 에뮬레이터 주소·프로젝트는 emu.py를 따름."""
+"""반복 자동 기록 e2e 검사 공용(multi_device.py 등). 에뮬레이터 주소·프로젝트는 emu.py를 따름."""
 import json, os, sys, urllib.request as U
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__))); import emu  # noqa: E402
 from playwright.sync_api import sync_playwright  # noqa: F401,E402
