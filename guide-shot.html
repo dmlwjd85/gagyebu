@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
+  <title>설명서 화면 찍기</title>
+</head>
+<body>
+  <div id="app"></div>
+  <div id="guide-finger" hidden aria-hidden="true">
+    <svg viewBox="0 0 96 96" width="72" height="72">
+      <circle cx="28" cy="28" r="18" fill="rgba(43,68,196,0.28)" stroke="#2B44C4" stroke-width="3"/>
+      <circle cx="28" cy="28" r="7" fill="#2B44C4"/>
+      <g transform="translate(36,36)">
+        <path d="M8 22c0-7 1.2-16 4-22 1-2.2 4-2 4 .4V18l1.2-14c.3-2.4 3.6-2.2 3.8.3l.4 12.4 1.4-10.2c.4-2.4 3.7-2 3.8.5l.2 10 1.2-7.2c.5-2.3 3.6-1.8 3.5.6L30 26c0 8-2 16-11 18.5C10.2 47 8 38 8 30z" fill="#FFE7C2" stroke="#3A2A18" stroke-width="2.2" stroke-linejoin="round"/>
+      </g>
+    </svg>
+  </div>
+  <p id="guide-caption" hidden></p>
+  <script type="module" src="/src/dev/guide-shot.js"></script>
+</body>
+</html>

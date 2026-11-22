@@ -887,3 +887,92 @@ html.dark .sync-banner.is-info { background: var(--surface-solid); color: inheri
 .acct-ava { position: relative; flex: none; display: inline-grid; place-items: center; width: 44px; height: 44px; border-radius: 999px; overflow: hidden; background: var(--primary); color: var(--on-primary, #fff); font-weight: 800; }
 .acct-ava-sm { width: 22px; height: 22px; font-size: 12px; }
 .acct-ava > img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+
+/* 한눈에 보는 설명서(설정에서 열림). 본문 글자 배율을 따름 */
+.guide-root {
+  position: fixed;
+  inset: 0;
+  z-index: 80;
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  padding: max(8px, env(safe-area-inset-top)) 8px max(8px, env(safe-area-inset-bottom));
+  background: color-mix(in srgb, var(--ink, #1A1730) 46%, transparent);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+.guide-sheet {
+  --fs: var(--content-scale, 1);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: min(100%, 28rem);
+  max-height: 100%;
+  margin: auto;
+  padding: 12px 12px 14px;
+  border-radius: 20px;
+  background: var(--surface-solid, #fff);
+  color: var(--ink, #1A1730);
+  box-shadow: 0 16px 40px rgba(0, 0, 0, .22);
+  min-width: 0;
+}
+.guide-head { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.guide-title {
+  flex: 1;
+  min-width: 0;
+  margin: 0;
+  font-size: calc(18px * var(--fs, 1));
+  line-height: calc(24px * var(--fs, 1));
+  font-weight: 800;
+  word-break: keep-all;
+}
+.guide-x { flex-shrink: 0; min-width: 44px; min-height: 44px; }
+.guide-num {
+  margin: 0;
+  font-size: calc(13px * var(--fs, 1));
+  line-height: calc(18px * var(--fs, 1));
+  font-weight: 700;
+  color: var(--ink-sub, #5B5775);
+}
+.guide-frame {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 16px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--ink, #1A1730) 8%, transparent);
+}
+.guide-frame img {
+  display: block;
+  width: 100%;
+  height: auto;
+  max-height: min(68dvh, 720px);
+  object-fit: contain;
+  background: #111;
+}
+.guide-cap {
+  margin: 0;
+  font-size: calc(15px * var(--fs, 1));
+  line-height: calc(22px * var(--fs, 1));
+  font-weight: 700;
+  word-break: keep-all;
+}
+.guide-note {
+  margin: 0;
+  font-size: calc(12px * var(--fs, 1));
+  line-height: calc(18px * var(--fs, 1));
+  color: var(--ink-sub, #5B5775);
+  word-break: keep-all;
+}
+.guide-nav { display: flex; gap: 8px; }
+.guide-nav > button {
+  flex: 1;
+  min-height: max(44px, calc(44px * var(--fs, 1)));
+  min-width: 44px;
+}
+html.dark .guide-sheet { background: var(--surface-solid, #1C1A2C); color: var(--ink, #F3F1FF); }
+@media (prefers-reduced-motion: reduce) {
+  .guide-root, .guide-root * { transition: none !important; }
+}
