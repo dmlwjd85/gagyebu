@@ -852,6 +852,10 @@ app.addEventListener('click', async (e) => {
       if (r === 'unavailable') toast('지금은 설치 창을 띄울 수 없어요. 설정의 \'앱으로 설치\' 안내를 봐 주세요.');
       return render();
     }
+    case 'open-guide': {
+      const { openGuide } = await import('./ui/guide.js');
+      return openGuide();
+    }
     case 'add-goal': return editGoal(null);
     case 'add-rule': return editRule();
     case 'allowance': return editAllowance();

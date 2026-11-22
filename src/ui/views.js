@@ -569,6 +569,7 @@ export function settingsView(m, ui) {
     ${accountCard(m)}
     <p class="glass px-4 py-3 text-caption">🔒 광고 0 · 알림 스팸 0 · 내 데이터는 내 것. 기록은 내 계정에만 저장돼요.</p>
     ${installCard(m.install)}
+    <button type="button" class="set-link" data-action="open-guide"><span aria-hidden="true">📖</span><span class="flex-1 text-left min-w-0">한눈에 보는 설명서<span class="block text-caption text-ink-sub break-words">한 달 흐름을 움직이는 그림으로 따라 해요</span></span><span aria-hidden="true">›</span></button>
     <div class="view-grid">
     <div class="flex flex-col gap-3">
     ${modeSettings(m)}

@@ -84,7 +84,7 @@ export default defineConfig({
         importScripts: ['sw-cleanup.js'],
         cacheId: 'gagyebu-v2',
         // 폰트 조각(woff2)은 설치 때 다 받지 않고, 쓰는 것만 처음 볼 때 저장
-        runtimeCaching: [FONT_RUNTIME_CACHE],
+        runtimeCaching: [FONT_RUNTIME_CACHE, { urlPattern: ({ url }) => url.pathname.includes('/guide/'), handler: 'CacheFirst', options: { cacheName: 'guide-v1', expiration: { maxEntries: 20, maxAgeSeconds: 31536000 } } }],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
         navigateFallback: '/gagyebu/index.html',
         // 처리방침·계정 삭제 안내는 따로 있는 문서라 앱 화면(index.html)으로 바꿔 주지 않는다(스토어 심사에서 여는 주소).
